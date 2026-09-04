@@ -299,6 +299,77 @@ describe("ApuEditorSheet", () => {
     );
   });
 
+  it("renders the docked presentation inline with Excel metadata and an independent scroll shell", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const root = createRoot(container);
+    (container as HTMLDivElement & { __root?: typeof root }).__root = root;
+
+    await act(async () => {
+      root.render(
+        <FormattingSettingsProvider settings={createSettings()}>
+          <AppViewModeProvider initialViewMode="excel">
+            <ApuEditorSheet
+              item={createBudgetItem()}
+              open
+              onClose={vi.fn()}
+              onUpdate={vi.fn()}
+              resourcesCatalog={[]}
+              catalogPartidas={[]}
+              densityMode="comfortable"
+              presentation="docked"
+            />
+          </AppViewModeProvider>
+        </FormattingSettingsProvider>,
+      );
+    });
+
+    const panel = document.querySelector<HTMLElement>("[data-testid='apu-editor-sheet-panel']");
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("data-apu-presentation")).toBe("docked");
+    expect(panel?.getAttribute("data-view-mode")).toBe("excel");
+    expect(panel?.getAttribute("data-density-mode")).toBe("compact");
+    expect(panel?.getAttribute("data-excel-field-border-scope")).toBe("apu-editor");
+    const table = panel?.querySelector("table");
+    expect(table?.className).toContain("table-fixed");
+    const columns = [...(panel?.querySelectorAll("col") ?? [])].map((column) => column.className);
+    expect(columns).toEqual(["w-[5%]", "w-[35%]", "w-[7%]", "w-[8%]", "w-[14%]", "w-[14%]", "w-[14%]", "w-[3%]"]);
+    expect(panel?.querySelector("thead")?.textContent).toContain("PU");
+    expect(panel?.querySelector("thead")?.textContent).toContain("Cant.");
+    expect(panel?.querySelector("thead")?.querySelector("th")?.className).toContain("!text-[0.65rem]");
+    expect(panel?.querySelector("thead")?.querySelector("th")?.className).not.toContain("text-[11px]");
+    expect(panel?.querySelector("tbody")?.className).not.toContain("overflow-x-auto");
+
+    const firstResourceRow = panel?.querySelector("tbody tr");
+    expect(firstResourceRow).not.toBeNull();
+    expect(firstResourceRow?.children[3]?.className).toContain("text-right");
+    expect(firstResourceRow?.children[4]?.className).toContain("text-right");
+    expect(firstResourceRow?.children[5]?.className).toContain("text-right");
+    expect(firstResourceRow?.children[7]?.className).toContain("!p-0");
+    const dockedInputs = [...(firstResourceRow?.querySelectorAll<HTMLInputElement>("input") ?? [])];
+    expect(dockedInputs.length).toBeGreaterThan(0);
+    expect(dockedInputs.every((input) => input.className.includes("!px-0"))).toBe(true);
+    expect(document.querySelector("[data-radix-dialog-overlay]")).toBeNull();
+    expect(panel?.textContent).toContain("Partida demo");
+    expect(panel?.textContent).toContain("Insumo");
+
+    const headerTitle = panel?.querySelector<HTMLElement>("[data-testid='apu-header-title']");
+    expect(headerTitle?.className).toContain("text-sm");
+    expect(headerTitle?.className).toContain("leading-tight");
+
+    const headerActions = panel?.querySelector<HTMLElement>("[data-testid='apu-header-actions']");
+    const headerButtons = [...(headerActions?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    expect(headerButtons).toHaveLength(4);
+    expect(headerButtons.map((button) => button.getAttribute("title"))).toEqual([
+      "Explicar partida",
+      "Generar APU con IA",
+      "Abrir generador de partidas",
+      "Abrir en Khipu",
+    ]);
+    expect(headerButtons.every((button) => !button.textContent?.trim())).toBe(true);
+  });
+
   it("inherits excel view-mode and apu-editor field border scope on the main sheet wrapper", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

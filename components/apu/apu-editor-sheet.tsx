@@ -2,9 +2,9 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
-import type { CSSProperties } from "react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BotMessageSquare, GitCompareArrows, GripVertical, PenLine, Search, Sparkles } from "lucide-react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { BotMessageSquare, ExternalLink, GitCompareArrows, GripVertical, PenLine, Search, Sparkles, Trash2 } from "lucide-react";
 import { useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { useFormattingSettings } from "@/components/providers/formatting-settings-provider";
@@ -38,6 +38,8 @@ import { useEditSession } from "@/hooks/use-edit-session";
 import { useBudgetPresenceHeartbeat } from "@/hooks/use-budget-presence-heartbeat";
 import type { PartidaGenerationSaveResult } from "@/types/partida-generation";
 
+export type ApuEditorPresentation = "sheet" | "docked";
+
 type ApuEditorSheetProps = {
   item: BudgetItemRecord | null;
   open: boolean;
@@ -51,6 +53,7 @@ type ApuEditorSheetProps = {
   restoreFocusElement?: HTMLElement | null;
   densityMode: "compact" | "comfortable";
   budgetId?: string;
+  presentation?: ApuEditorPresentation;
 };
 type ResourceMenuState = {
   rowId: string;
@@ -72,8 +75,10 @@ export function ApuEditorSheet({
   restoreFocusElement,
   densityMode,
   budgetId,
+  presentation = "sheet",
 }: ApuEditorSheetProps) {
   const { isExcelMode } = useBudgetViewMode();
+  const isDocked = presentation === "docked";
   const { currencyDecimals, excelRowHeight, excelShowFieldBorders } = useFormattingSettings();
   const addResourceSearchRef = useRef<HTMLInputElement | null>(null);
   const addResourceBlurTimeoutRef = useRef<number | null>(null);
@@ -176,6 +181,12 @@ export function ApuEditorSheet({
   );
 
   useEffect(() => {
+    if (isDocked) {
+      previousActiveElementRef.current = null;
+      wasOpenRef.current = false;
+      return;
+    }
+
     if (open && item?.apu) {
       previousActiveElementRef.current = restoreFocusElement ?? previousActiveElementRef.current;
       wasOpenRef.current = true;
@@ -192,7 +203,31 @@ export function ApuEditorSheet({
 
     previousActiveElementRef.current = null;
     wasOpenRef.current = false;
-  }, [item, open, restoreFocusElement]);
+  }, [isDocked, item, open, restoreFocusElement]);
+
+  useEffect(() => {
+    if (!isDocked || !item?.id) return;
+
+    const resetTimeout = window.setTimeout(() => {
+      setAddResourceQuery("");
+      setAddResourceHighlightedIndex(0);
+      setAddResourceMenuOpen(false);
+      setAddResourceMenuPosition(null);
+      setDraggedResourceId(null);
+      setEditingResourceRowId(null);
+      setEditingResourceQuery("");
+      setResourceHighlightedIndex(0);
+      setResourceMenu(null);
+      setAiApuResult(null);
+      setAiApuError("");
+      setAiApuLoading(false);
+      setAddSubpartidaOpen(false);
+      setPartidaGeneratorOpen(false);
+      setSubpartidaApuPreview(null);
+    }, 0);
+
+    return () => window.clearTimeout(resetTimeout);
+  }, [isDocked, item?.id]);
 
   useEffect(() => {
     return () => {
@@ -535,35 +570,50 @@ export function ApuEditorSheet({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
+    <Dialog.Root open={open} modal={!isDocked} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <ApuPresentationBoundary docked={isDocked}>
+        {!isDocked ? <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" /> : null}
         <Dialog.Content
           asChild
           onOpenAutoFocus={(event) => {
+            if (isDocked) {
+              event.preventDefault();
+              return;
+            }
+
             event.preventDefault();
             closeButtonRef.current?.focus();
           }}
         >
           <div
             className={cn(
-              "theme-surface-card fixed inset-y-0 right-0 z-50 ml-auto h-full w-full overflow-y-auto shadow-2xl outline-none",
-              isExcelMode ? "max-w-6xl p-5 shadow-none" : "max-w-6xl p-5",
+              "theme-surface-card outline-none",
+              isDocked
+                ? "relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-auto rounded-md border border-[var(--app-border-strong)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.18)]"
+                : "fixed inset-y-0 right-0 z-50 ml-auto h-full w-full overflow-y-auto shadow-2xl",
+              !isDocked && (isExcelMode ? "max-w-6xl p-5 shadow-none" : "max-w-6xl p-5"),
+              isDocked && "p-3 sm:p-4 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)]",
             )}
+            data-apu-presentation={presentation}
             data-excel-field-border-scope="apu-editor"
             data-view-mode={isExcelMode ? "excel" : "modern"}
             data-density-mode={effectiveDensityMode}
             data-testid="apu-editor-sheet-panel"
             style={excelCssVariables}
           >
-            <div className={cn("flex items-start justify-between gap-4", isExcelMode ? "mb-3" : "mb-5")}>
-              <div>
+            <div className={cn("flex items-start justify-between gap-4", isExcelMode ? "mb-3" : "mb-5", isDocked && "gap-2")}>
+              <div className={cn("min-w-0", isDocked && "max-w-[42%]")}>
                 <p className={cn("theme-muted-text", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Editor APU</p>
                 <Dialog.Title asChild>
-                  <h3 className={cn("theme-strong-text font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>{currentItemRecord.description}</h3>
+                  <h3
+                    data-testid="apu-header-title"
+                    className={cn("theme-strong-text font-semibold", isDocked ? "text-sm leading-tight" : isExcelMode ? "text-xl" : "text-2xl")}
+                  >
+                    {currentItemRecord.description}
+                  </h3>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className={cn("theme-muted-text mt-1", isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
+                  <p className={cn("theme-muted-text mt-1", isDocked ? "text-[10px]" : isExcelMode ? "text-xs" : "text-sm")}>Unidad: {currentItemRecord.unit}</p>
                 </Dialog.Description>
                 {activeSession ? (
                   <p className="mt-1 flex items-center gap-1 text-[11px] text-sky-600">
@@ -572,13 +622,28 @@ export function ApuEditorSheet({
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div
+                data-testid="apu-header-actions"
+                className={cn("flex flex-wrap justify-end gap-2", isDocked && "max-w-[58%] gap-1")}
+              >
                 {canUseKhipu ? (
                   <Link href={buildAiHref("chat", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice, "Explica tecnicamente esta partida y valida su rendimiento.")}>
-                    <Button variant="ghost" className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}>
-                      <BotMessageSquare className="h-4 w-4" />
-                      Explicar partida
-                    </Button>
+                    {isDocked ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-7 w-7 rounded-md p-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
+                        aria-label="Explicar partida"
+                        title="Explicar partida"
+                      >
+                        <BotMessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" className="gap-2">
+                        <BotMessageSquare className="h-4 w-4" />
+                        Explicar partida
+                      </Button>
+                    )}
                   </Link>
                 ) : (
                   <Button
@@ -586,12 +651,15 @@ export function ApuEditorSheet({
                     variant="ghost"
                     disabled
                     aria-disabled="true"
+                    aria-label="Explicar partida — Disponible en Pro"
                     title="Explicar partida — Disponible en Pro"
-                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn(
+                      "cursor-not-allowed border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
+                      isDocked ? "h-7 w-7 rounded-md p-0" : "gap-2 whitespace-nowrap",
+                    )}
                   >
-                    <BotMessageSquare className="h-4 w-4" />
-                    Explicar partida
-                    <ProLockBadge />
+                    <BotMessageSquare className={cn("h-4 w-4", isDocked && "h-3.5 w-3.5")} aria-hidden="true" />
+                    {!isDocked ? <><span>Explicar partida</span><ProLockBadge /></> : null}
                   </Button>
                 )}
                 <Button
@@ -600,28 +668,30 @@ export function ApuEditorSheet({
                   className={cn(
                     "gap-2",
                     !canUseKhipu && "cursor-not-allowed whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
-                    isExcelMode && "h-8 px-3 text-xs",
+                    isDocked ? "h-7 w-7 rounded-md p-0" : isExcelMode && "h-8 px-3 text-xs",
                   )}
                   onClick={() => {
                     if (canUseKhipu) void generateAiApuSuggestion();
                   }}
                   disabled={!canUseKhipu || aiApuLoading}
                   aria-disabled={!canUseKhipu ? "true" : undefined}
+                  aria-label={canUseKhipu ? "Generar APU con IA" : "Generar APU con IA — Disponible en Pro"}
                   title={canUseKhipu ? "Generar APU con IA" : "Generar APU con IA — Disponible en Pro"}
                 >
-                  <Sparkles className="h-4 w-4" />
-                  {aiApuLoading ? "Generando..." : "Generar con IA"}
-                  {!canUseKhipu ? <ProLockBadge /> : null}
+                  <Sparkles className={cn("h-4 w-4", isDocked && "h-3.5 w-3.5")} aria-hidden="true" />
+                  {!isDocked ? <>{aiApuLoading ? "Generando..." : "Generar con IA"}{!canUseKhipu ? <ProLockBadge /> : null}</> : null}
                 </Button>
                 {canUsePartidaGenerator ? (
                   <Button
                     type="button"
                     variant="ghost"
                     onClick={() => setPartidaGeneratorOpen(true)}
-                    className={cn("gap-2", isExcelMode && "h-8 px-3 text-xs")}
+                    aria-label="Abrir generador de partidas"
+                    title="Abrir generador de partidas"
+                    className={cn("gap-2", isDocked ? "h-7 w-7 rounded-md p-0" : "", isExcelMode && !isDocked && "h-8 px-3 text-xs")}
                   >
-                    <GitCompareArrows className="h-4 w-4" />
-                    Generador de partidas
+                    <GitCompareArrows className={cn("h-4 w-4", isDocked && "h-3.5 w-3.5")} aria-hidden="true" />
+                    {!isDocked ? "Generador de partidas" : null}
                   </Button>
                 ) : (
                   <Button
@@ -629,19 +699,34 @@ export function ApuEditorSheet({
                     variant="ghost"
                     disabled
                     aria-disabled="true"
+                    aria-label="Generador de partidas — Disponible en Pro"
                     title="Generador de partidas — Disponible en Pro"
-                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn(
+                      "cursor-not-allowed border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
+                      isDocked ? "h-7 w-7 rounded-md p-0" : "gap-2 whitespace-nowrap",
+                    )}
                   >
-                    <GitCompareArrows className="h-4 w-4" />
-                    Generador
-                    <ProLockBadge />
+                    <GitCompareArrows className={cn("h-4 w-4", isDocked && "h-3.5 w-3.5")} aria-hidden="true" />
+                    {!isDocked ? <><span>Generador</span><ProLockBadge /></> : null}
                   </Button>
                 )}
                 {canUseKhipu ? (
                   <Link href={buildAiHref("apu", currentItemRecord.description, currentItemRecord.unit, currentItemRecord.unitPrice)}>
-                    <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
-                      Abrir en Khipu
-                    </Button>
+                    {isDocked ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-7 w-7 rounded-md p-0 text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]"
+                        aria-label="Abrir en Khipu"
+                        title="Abrir en Khipu"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+                        Abrir en Khipu
+                      </Button>
+                    )}
                   </Link>
                 ) : (
                   <Button
@@ -649,18 +734,24 @@ export function ApuEditorSheet({
                     variant="ghost"
                     disabled
                     aria-disabled="true"
+                    aria-label="Abrir en Khipu — Disponible en Pro"
                     title="Abrir en Khipu — Disponible en Pro"
-                    className={cn("cursor-not-allowed gap-2 whitespace-nowrap border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]", isExcelMode && "h-8 px-3 text-xs")}
+                    className={cn(
+                      "cursor-not-allowed border-[var(--app-border)] bg-[var(--app-surface-muted)] text-[var(--app-text-muted)] opacity-90 hover:bg-[var(--app-surface-muted)]",
+                      isDocked ? "h-7 w-7 rounded-md p-0" : "gap-2 whitespace-nowrap",
+                    )}
                   >
-                    Khipu
-                    <ProLockBadge />
+                    {!isDocked ? "Khipu" : <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {!isDocked ? <ProLockBadge /> : null}
                   </Button>
                 )}
-                <Dialog.Close asChild>
-                  <Button ref={closeButtonRef} variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
-                    Cerrar
-                  </Button>
-                </Dialog.Close>
+                {!isDocked ? (
+                  <Dialog.Close asChild>
+                    <Button ref={closeButtonRef} variant="outline" className={cn(isExcelMode && "h-8 px-3 text-xs")}>
+                      Cerrar
+                    </Button>
+                  </Dialog.Close>
+                ) : null}
               </div>
             </div>
 
@@ -867,28 +958,35 @@ export function ApuEditorSheet({
           </div>
         ) : null}
 
-        <div className={getTableFrameClassName(isExcelMode)} data-density-mode={effectiveDensityMode}>
-          <Table className="table-auto">
+        <div
+          className={cn(
+            getTableFrameClassName(isExcelMode),
+            isDocked &&
+              "[&_th]:min-w-0 [&_th]:px-1 [&_th]:py-1 [&_th]:!text-[0.65rem] [&_td]:min-w-0 [&_td]:px-1 [&_td]:py-1 [&_td]:text-[9px] [&_input]:min-w-0 [&_input]:!px-0 [&_input]:text-[9px] [&_button]:min-w-0 [&_button]:text-[9px]",
+          )}
+          data-density-mode={effectiveDensityMode}
+        >
+          <Table className={cn(isDocked ? "table-fixed text-[10px]" : "table-auto")}>
             <colgroup>
-              <col className="w-[36px]" />
-              <col className="w-[440px]" />
-              <col className="w-[84px]" />
-              <col className="w-[76px]" />
-              <col className="w-[112px]" />
-              <col className="w-[128px]" />
-              <col className="w-[104px]" />
-              <col className="w-[84px]" />
+              <col className={isDocked ? "w-[5%]" : "w-[36px]"} />
+              <col className={isDocked ? "w-[35%]" : "w-[440px]"} />
+              <col className={isDocked ? "w-[7%]" : "w-[84px]"} />
+              <col className={isDocked ? "w-[8%]" : "w-[76px]"} />
+              <col className={isDocked ? "w-[14%]" : "w-[112px]"} />
+              <col className={isDocked ? "w-[14%]" : "w-[128px]"} />
+              <col className={isDocked ? "w-[14%]" : "w-[104px]"} />
+              <col className={isDocked ? "w-[3%]" : "w-[84px]"} />
             </colgroup>
-            <THead className={cn(isExcelMode && "[&_th]:theme-muted-panel [&_th]:text-[11px] [&_th]:font-semibold")}>
+            <THead className={cn(isExcelMode && !isDocked && "[&_th]:theme-muted-panel [&_th]:text-[11px] [&_th]:font-semibold")}>
               <TR className={cn("theme-muted-panel hover:theme-muted-panel", isExcelMode ? "theme-muted-panel hover:theme-muted-panel" : "")}>
-                <TH className={getHeaderCellClass(isExcelMode, "w-[36px]")} />
-                <TH className={getHeaderCellClass(isExcelMode)}>Insumo</TH>
-                <TH className={getHeaderCellClass(isExcelMode, "text-center")}>Unidad</TH>
-                <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Cuadrilla</TH>
-                <TH className={getHeaderCellClass(isExcelMode, "text-right")}>Cantidad</TH>
-                <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Precio unitario</TH>
-                <TH className={getHeaderCellClass(isExcelMode, "whitespace-nowrap text-right")}>Subtotal</TH>
-                <TH />
+                <TH className={getHeaderCellClass(isExcelMode, isDocked ? "text-center" : "w-[36px]", isDocked)} />
+                <TH className={getHeaderCellClass(isExcelMode, undefined, isDocked)}>Insumo</TH>
+                <TH className={getHeaderCellClass(isExcelMode, "text-center", isDocked)}>Und.</TH>
+                <TH className={getHeaderCellClass(isExcelMode, "text-right", isDocked)}>Cuad.</TH>
+                <TH className={getHeaderCellClass(isExcelMode, "text-right", isDocked)}>Cant.</TH>
+                <TH className={getHeaderCellClass(isExcelMode, "text-right", isDocked)}>{isDocked ? "PU" : "Precio unitario"}</TH>
+                <TH className={getHeaderCellClass(isExcelMode, "text-right", isDocked)}>{isDocked ? "Subtotal" : "Subtotal"}</TH>
+                <TH className={getHeaderCellClass(isExcelMode, undefined, isDocked)} />
               </TR>
             </THead>
             <TBody>
@@ -998,17 +1096,19 @@ export function ApuEditorSheet({
                         />
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
+                          <div className={cn("flex items-center", isDocked ? "gap-1" : "gap-2")}>
+
                         <button
                           type="button"
                           draggable={false}
                           data-excel-field-trigger="true"
                           data-testid={`apu-resource-picker-${resource.id}`}
-                          className={cn(
-                            "theme-surface-card theme-strong-text flex min-w-0 flex-1 items-center rounded-sm border px-2 text-left text-xs shadow-none transition hover:border-sky-400 hover:bg-[var(--app-primary-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
-                            effectiveDensityMode === "compact" ? "h-8" : "h-9 text-sm",
-                            !resource.resourceId && "theme-muted-text",
-                          )}
+                            className={cn(
+                              "theme-surface-card theme-strong-text flex min-w-0 flex-1 items-center overflow-hidden rounded-sm border px-2 text-left text-xs shadow-none transition hover:border-sky-400 hover:bg-[var(--app-primary-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/20",
+                              effectiveDensityMode === "compact" ? "h-8" : "h-9 text-sm",
+                              isDocked && "h-6 px-1 text-[9px]",
+                              !resource.resourceId && "theme-muted-text",
+                            )}
                           onMouseDown={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1022,7 +1122,7 @@ export function ApuEditorSheet({
                             type="button"
                             size="sm"
                             variant="outline"
-                            className={cn("shrink-0", effectiveDensityMode === "compact" ? "h-8 px-2 text-[11px]" : "h-9 px-2 text-xs")}
+                            className={cn("shrink-0", effectiveDensityMode === "compact" ? "h-8 px-2 text-[11px]" : "h-9 px-2 text-xs", isDocked && "h-6 px-1 text-[9px]")}
                             onClick={() =>
                               setSubpartidaApuPreview({
                                 resourceIndex: index,
@@ -1039,14 +1139,18 @@ export function ApuEditorSheet({
                     )}
                   </TD>
                   <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-center")}>{calculatedResource.resource?.unit ?? resource.catalogPartida?.unit ?? "-"}</TD>
-                  <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
+                  <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-right")}>
                     {canEditCrew ? (
                       <BufferedInput
                         data-testid={`apu-row-crew-${resource.id}`}
                         type="number"
                         step="0.0001"
                         value={resource.crew ?? ""}
-                        className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums")}
+                        className={cn(
+                          getInputDensityClass(effectiveDensityMode, isExcelMode),
+                          "text-right tabular-nums",
+                          isDocked && "!px-0",
+                        )}
                         onCommit={(value) => {
                           const resources = [...currentApuRecord.resources];
                           resources[index] = {
@@ -1073,13 +1177,18 @@ export function ApuEditorSheet({
                       </span>
                     )}
                   </TD>
-                  <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
+                  <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-right")}>
                     <BufferedInput
                       type="number"
                       step="0.01"
                       value={calculatedResource.quantity}
                       readOnly={isCrewDriven}
-                      className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums", isCrewDriven ? readonlyInputClass : undefined)}
+                      className={cn(
+                        getInputDensityClass(effectiveDensityMode, isExcelMode),
+                        "text-right tabular-nums",
+                        isDocked && "!px-0",
+                        isCrewDriven ? readonlyInputClass : undefined,
+                      )}
                       onCommit={(value) => {
                         const resources = [...currentApuRecord.resources];
                         resources[index] = {
@@ -1096,13 +1205,18 @@ export function ApuEditorSheet({
                       }}
                     />
                   </TD>
-                  <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
+                  <TD className={cn(getCellPadding(effectiveDensityMode, isExcelMode), "text-right")}>
                     <BufferedInput
                       type="number"
                       step="0.01"
                       value={calculatedResource.unitPrice}
                       readOnly={isPercentageBased}
-                      className={cn(getInputDensityClass(effectiveDensityMode, isExcelMode), "text-right tabular-nums", isPercentageBased ? readonlyInputClass : undefined)}
+                      className={cn(
+                        getInputDensityClass(effectiveDensityMode, isExcelMode),
+                        "text-right tabular-nums",
+                        isDocked && "!px-0",
+                        isPercentageBased ? readonlyInputClass : undefined,
+                      )}
                       onCommit={(value) => {
                         const resources = [...currentApuRecord.resources];
                         resources[index] = {
@@ -1127,11 +1241,21 @@ export function ApuEditorSheet({
                   >
                     {formatCurrency(calculatedResource.subtotal, "PEN", currencyDecimals)}
                   </TD>
-                  <TD className={getCellPadding(effectiveDensityMode, isExcelMode)}>
+                  <TD
+                    className={cn(
+                      getCellPadding(effectiveDensityMode, isExcelMode),
+                      isDocked && "!p-0",
+                    )}
+                  >
                     <Button
                       size="sm"
                       variant="ghost"
-                      className={cn(effectiveDensityMode === "compact" ? "h-8 px-2 text-xs" : "h-9 px-2 text-sm")}
+                      aria-label={`Quitar recurso ${resourceLabel}`}
+                      title={`Quitar ${resourceLabel}`}
+                      className={cn(
+                        effectiveDensityMode === "compact" ? "h-8 px-2 text-xs" : "h-9 px-2 text-sm",
+                        isDocked && "!p-0",
+                      )}
                       onClick={() =>
                         onUpdate({
                           ...currentItemRecord,
@@ -1142,7 +1266,7 @@ export function ApuEditorSheet({
                         })
                       }
                     >
-                      Quitar
+                      {isDocked ? <Trash2 className="h-3 w-3" aria-hidden="true" /> : "Quitar"}
                     </Button>
                   </TD>
                 </TR>
@@ -1218,15 +1342,21 @@ export function ApuEditorSheet({
         ) : null}
           </div>
         </Dialog.Content>
-      </Dialog.Portal>
+      </ApuPresentationBoundary>
     </Dialog.Root>
   );
 }
 
-function getHeaderCellClass(isExcelMode: boolean, className?: string) {
+function ApuPresentationBoundary({ docked, children }: { docked: boolean; children: ReactNode }) {
+  if (docked) return <Fragment>{children}</Fragment>;
+  return <Dialog.Portal>{children}</Dialog.Portal>;
+}
+
+function getHeaderCellClass(isExcelMode: boolean, className?: string, isDocked = false) {
   return cn(
-    "budget-sticky-header sticky top-0 h-10 text-xs uppercase tracking-wide",
-    isExcelMode ? "z-30 theme-muted-panel border-b border-[var(--app-border-strong)] text-[11px] font-semibold text-[var(--app-text)]" : "z-20 theme-muted-panel",
+    "budget-sticky-header sticky uppercase tracking-wide",
+    isDocked ? "h-7 min-w-0 break-words px-1 py-1 !text-[0.65rem] leading-tight" : "h-10 text-xs",
+    isExcelMode ? "z-30 theme-muted-panel border-b border-[var(--app-border-strong)] font-semibold text-[var(--app-text)]" : "z-20 theme-muted-panel",
     className,
   );
 }

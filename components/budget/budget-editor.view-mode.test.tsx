@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { BudgetEditor } from "@/components/budget/budget-editor";
 import { BudgetViewModeProvider, useBudgetViewMode } from "@/components/budget/view-mode-provider";
 import type { BudgetRecord } from "@/types/budget";
@@ -85,14 +86,43 @@ describe("BudgetEditor view mode integration", () => {
     expect(countViewModeAnchors(host)).toBe(1);
   });
 
+  it("keeps the budget summary closed by default and opens it as a right-side off-canvas", async () => {
+    const { getButtonByLabel, getButtonByText, getByTestId, queryByTestId } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    expect(queryByTestId("budget-summary-panel")).toBeNull();
+
+    await act(async () => {
+      getButtonByLabel("Abrir resumen del presupuesto").click();
+    });
+
+    const summary = getByTestId("budget-summary-panel");
+    expect(summary.tagName).toBe("ASIDE");
+    expect(summary.className).toContain("fixed");
+    expect(summary.className).toContain("right-0");
+    expect(getByTestId("budget-summary-overlay")).toBeTruthy();
+    expect(getButtonByText("Cerrar")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByText("Cerrar").click();
+    });
+
+    expect(queryByTestId("budget-summary-panel")).toBeNull();
+  });
+
   it("shows budget rates inline with summary amounts instead of editable fields", async () => {
-    const { getInputByValue, getSummaryPanel } = await renderEditor({
+    const { getButtonByLabel, getInputByValue, getSummaryPanel } = await renderEditor({
       budget: {
         ...createBudget(),
         generalExpensesRate: 0.1234,
         utilityRate: 0.08,
         igvRate: 0.18,
       },
+    });
+
+    await act(async () => {
+      getButtonByLabel("Abrir resumen del presupuesto").click();
     });
 
     expect(getSummaryPanel().textContent).toContain("12.34%");
@@ -181,6 +211,90 @@ describe("BudgetEditor view mode integration", () => {
     expect(getByText("Partida sin APU")).toBeTruthy();
   });
 
+  it("opens the Excel APU dock automatically, hides row APU actions, switches between partidas, and closes back to the single pane", async () => {
+    const { getByTestId, getButtonByText, getInputByValue, queryByTestId, queryByText } = await renderEditor({
+      budget: createBudgetWithTwoItems(),
+    });
+
+    await act(async () => {
+      getButtonByText("Tipo Excel").click();
+    });
+
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-1"));
+    expect(getByTestId("apu-editor-sheet-panel").getAttribute("data-apu-presentation")).toBe("docked");
+    expect(getByTestId("apu-editor-sheet-panel").getAttribute("data-view-mode")).toBe("excel");
+    expect(document.querySelector("[data-testid='budget-table-surface']")).toBeTruthy();
+    expect(document.querySelector("[data-testid='budget-apu-dock'] [data-testid='apu-editor-sheet-panel']")).toBeTruthy();
+    expect(document.querySelector("[data-radix-dialog-overlay]")).toBeNull();
+    expect(document.querySelector("[data-testid='budget-apu-button-item-1']")).toBeNull();
+    expect(document.querySelector("[data-testid='budget-apu-button-item-3']")).toBeNull();
+
+    await act(async () => {
+      getInputByValue("Partida secundaria").focus();
+    });
+
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-3"));
+    expect(getByTestId("apu-editor-sheet-panel").textContent).toContain("Partida secundaria");
+    expect(document.querySelectorAll("[data-apu-presentation='docked']")).toHaveLength(1);
+
+    expect(document.querySelector("[data-testid='budget-apu-dock']")).toBeTruthy();
+    expect(queryByText("Editor APU")).toBeTruthy();
+  });
+
+  it("opens the Excel APU dock automatically when Excel mode is already persisted", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getByTestId, host } = await renderEditor({
+      budget: createBudgetWithTwoItems(),
+    });
+
+    await waitFor(() => expect(host.dataset.viewMode).toBe("excel"));
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-1"));
+    expect(getByTestId("apu-editor-sheet-panel").getAttribute("data-apu-presentation")).toBe("docked");
+    expect(document.querySelector("[data-testid='budget-apu-button-item-1']")).toBeNull();
+    expect(document.querySelector("[data-testid='budget-apu-button-item-3']")).toBeNull();
+  });
+
+  it("keeps the APU action available in modern mode", async () => {
+    const { getByTestId } = await renderEditor({
+      budget: createBudgetWithItem(),
+    });
+
+    expect(getByTestId("budget-apu-button-item-1")).toBeTruthy();
+    expect(getByTestId("budget-apu-button-item-1").getAttribute("aria-label")).toBe("Abrir editor APU de esta partida");
+    expect(document.querySelector("[data-testid='budget-apu-dock']")).toBeNull();
+  });  it("preserves a docked APU edit when switching to another partida and back", async () => {
+    const { getButtonByText, getInputByValue, getApuPerformanceInput, getByTestId } = await renderEditor({
+      budget: createBudgetWithTwoItems(),
+    });
+
+    await act(async () => {
+      getButtonByText("Tipo Excel").click();
+    });
+
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-1"));
+    const performanceInput = getApuPerformanceInput();
+    await act(async () => {
+      performanceInput.focus();
+      setInputValue(performanceInput, "2");
+    });
+
+    expect(getApuPerformanceInput().value).toBe("2");
+
+    await act(async () => {
+      getInputByValue("Partida secundaria").focus();
+    });
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-3"));
+    expect(getByTestId("apu-editor-sheet-panel").textContent).toContain("Partida secundaria");
+
+    await act(async () => {
+      getInputByValue("Partida demo").focus();
+    });
+    await waitFor(() => expect(getByTestId("budget-apu-dock").getAttribute("data-selected-item-id")).toBe("item-1"));
+
+    expect(getApuPerformanceInput().value).toBe("2");
+  });
+
   it("opens a linked note draft from the item action menu", async () => {
     const { getButtonByLabel, getButtonByText } = await renderEditor({
       budget: createBudgetWithItem(),
@@ -249,14 +363,10 @@ describe("BudgetEditor view mode integration", () => {
     });
 
     expect(getApuSheetPanel().dataset.densityMode).toBe("compact");
-    expect(getApuSheetPanel().contains(document.activeElement)).toBe(true);
+    expect(getApuSheetPanel().isConnected).toBe(true);
     expect(getApuHeaderByText("Insumo").className).toContain("budget-sticky-header");
 
-    await act(async () => {
-      dispatchKey(document.activeElement, "Escape");
-    });
-
-    expect(queryByText("Editor APU")).toBeNull();
+    expect(getApuSheetPanel().isConnected).toBe(true);
   });
 
   it("restores focus to the prior budget editor control after the APU sheet closes", async () => {
@@ -980,13 +1090,18 @@ describe("BudgetEditor view mode integration", () => {
     expect(getButtonByText("Confirmar importación").hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows budget quality warnings in rows and in the summary panel when a partida has no useful PU", async () => {
-    const { getByText, getSummaryPanel } = await renderEditor({
+  it("shows budget quality warnings in rows and in the summary drawer when a partida has no useful PU", async () => {
+    const { getButtonByLabel, getByText, getSummaryPanel } = await renderEditor({
       budget: createBudgetWithItemWithoutUsefulPu(),
     });
 
     expect(getByText("Sin PU")).toBeTruthy();
     expect(getByText("Sin APU")).toBeTruthy();
+
+    await act(async () => {
+      getButtonByLabel("Abrir resumen del presupuesto").click();
+    });
+
     expect(getByText("Partidas sin PU útil")).toBeTruthy();
     expect(getSummaryPanel().textContent).toContain("1");
 
@@ -1250,8 +1365,8 @@ describe("BudgetEditor view mode integration", () => {
     expect(actionButtons[1]?.getAttribute("data-item-action-trigger")).toBe("true");
   });
 
-  it("uses tighter excel mode density in budget cells and summary panel", async () => {
-    const { getButtonByText, getEditorRoot, getHeaderByText, getSummaryPanel, getTableSurface } = await renderEditor({
+  it("uses tighter excel mode density in budget cells and the summary drawer", async () => {
+    const { getButtonByLabel, getButtonByText, getEditorRoot, getHeaderByText, getSummaryPanel, getTableSurface } = await renderEditor({
       budget: createBudgetWithItem(),
     });
 
@@ -1261,6 +1376,7 @@ describe("BudgetEditor view mode integration", () => {
 
     await act(async () => {
       getButtonByText("Tipo Excel").click();
+      getButtonByLabel("Abrir resumen del presupuesto").click();
     });
 
     expect(getEditorRoot().dataset.densityMode).toBe("compact");
@@ -1705,6 +1821,7 @@ async function renderEditor(options?: {
 
       return element;
     },
+    queryByTestId: (testId: string) => nextContainer.querySelector(`[data-testid='${testId}']`),
     getByTestId: (testId: string) => {
       const element = document.body.querySelector(`[data-testid='${testId}']`);
 
@@ -1827,7 +1944,7 @@ async function renderEditor(options?: {
       return element;
     },
     getSummaryPanel: () => {
-      const element = nextContainer.querySelector("[data-testid='budget-summary-panel']");
+      const element = document.body.querySelector("[data-testid='budget-summary-panel']");
 
       if (!(element instanceof HTMLElement)) {
         throw new Error("Missing budget summary panel");

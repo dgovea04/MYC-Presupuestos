@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpenCheck, BotMessageSquare, Check, ChevronLeft, ChevronRight, ClipboardCheck, Copy, ExternalLink, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles } from "lucide-react";
+import { Activity, BookOpenCheck, BotMessageSquare, Check, ClipboardCheck, Copy, GripVertical, MoreHorizontal, Plus, Rows3, Ruler, Sparkles, StickyNote, Trash2, Type, WandSparkles, X } from "lucide-react";
 import { buildDisplayRows, levelTypeLabel, type BudgetDisplayRow } from "@/lib/budget/structure";
 import {
   attachPartidaSuggestionsToGuidedPaste,
@@ -363,7 +363,6 @@ export function BudgetEditor({
   const [densityMode, setDensityMode] = useState<DensityMode>("compact");
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [activeColumn, setActiveColumn] = useState<ActiveColumn>(null);
-  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [catalogSelectorRowId, setCatalogSelectorRowId] = useState<string | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogHighlightedIndex, setCatalogHighlightedIndex] = useState(0);
@@ -383,6 +382,7 @@ export function BudgetEditor({
   const [clearSubBudgetDialogOpen, setClearSubBudgetDialogOpen] = useState(false);
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
   const [apuSheetSession, setApuSheetSession] = useState<ApuSheetSession | null>(null);
+  const [excelSelectedItemId, setExcelSelectedItemId] = useState<string | null>(null);
   const deferredCatalogQuery = useDeferredValue(catalogQuery);
   const deferredCatalogInsertQuery = useDeferredValue(catalogInsertQuery);
   const indexedPartidasCatalog = useMemo(
@@ -606,6 +606,12 @@ export function BudgetEditor({
         }),
       };
     });
+
+    setApuSheetSession((current) =>
+      current && current.item.id === updatedItem.id
+        ? { ...current, item: updatedItem }
+        : current,
+    );
   }, []);
 
   useEffect(() => {
@@ -1927,7 +1933,14 @@ export function BudgetEditor({
   const handleRowFocus = useCallback((rowId: string) => {
     activeRowIdRef.current = rowId;
     setActiveRowId(rowId);
-  }, []);
+
+    if (!isExcelMode) return;
+
+    const focusedRow = rows.find((row) => getRowId(row) === rowId);
+    if (focusedRow?.kind === "item") {
+      setExcelSelectedItemId(focusedRow.item.id);
+    }
+  }, [isExcelMode, rows]);
 
   const handleCellFocus = useCallback(
     (rowId: string, column: ActiveColumn) => {
@@ -1935,8 +1948,14 @@ export function BudgetEditor({
       activeColumnRef.current = column;
       setActiveRowId(rowId);
       setActiveColumn(column);
+
+      if (!isExcelMode) return;
+      const focusedRow = rows.find((row) => getRowId(row) === rowId);
+      if (focusedRow?.kind === "item") {
+        setExcelSelectedItemId(focusedRow.item.id);
+      }
     },
-    [],
+    [isExcelMode, rows],
   );
 
   useEffect(() => {
@@ -1990,10 +2009,6 @@ export function BudgetEditor({
   ]);
 
   applyBudgetFillDownRef.current = applyBudgetFillDown;
-
-  const toggleSummaryCollapsed = useCallback(() => {
-    setSummaryCollapsed((current) => !current);
-  }, []);
 
   const clearDragState = useCallback(() => {
     setDragState(null);
@@ -2080,20 +2095,31 @@ export function BudgetEditor({
     if (item) openApuSheet(item);
   }, [openApuSheet, summary.items]);
 
+  const isExcelApuDocked = isExcelMode && summary.items.length > 0;
+  const activeItem = rows.find((row) => getRowId(row) === activeRowId && row.kind === "item");
+  const dockedApuItem = summary.items.find((item) => item.id === excelSelectedItemId)
+    ?? (activeItem?.kind === "item" ? activeItem.item : null)
+    ?? summary.items[0]
+    ?? null;
+
   return (
     <KhipuActionRegistryProvider
       onNavigate={(href) => router.push(href)}
-      onOpenApuEditor={openApuEditorById}
+      onOpenApuEditor={(partidaId) => openApuEditorById(partidaId)}
     >
-    <div
+      <div
       ref={editorRootRef}
       className={cn(
         "grid gap-5",
         isExcelMode ? "budget-excel-flow" : "budget-modern-flow",
-        summaryCollapsed ? "xl:grid-cols-[minmax(0,1fr)_64px]" : "xl:grid-cols-[minmax(0,1fr)_320px]",
+        isExcelApuDocked
+          ? "xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:items-start"
+          : "grid-cols-1",
       )}
       data-view-mode-scope="budget-flow"
       data-density-mode={effectiveDensityMode}
+      data-apu-selected={isExcelApuDocked ? "true" : "false"}
+      data-apu-selected-item-id={isExcelApuDocked ? dockedApuItem?.id : undefined}
       onBlurCapture={(event) => {
         const nextTarget = event.relatedTarget;
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
@@ -2150,6 +2176,19 @@ export function BudgetEditor({
                   <ClipboardCheck className="h-4 w-4" />
                   Revisión
                 </Link>
+                <div className="flex items-center gap-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-1 py-1 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.22)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)]">
+                  <BudgetSummaryDrawer
+                    budgetId={budget.id}
+                    currency={budget.currency}
+                    densityMode={effectiveDensityMode}
+                    isExcelMode={isExcelMode}
+                    generalExpensesRate={state.generalExpensesRate}
+                    utilityRate={state.utilityRate}
+                    igvRate={state.igvRate}
+                    totals={summary.totals}
+                    qualitySummary={qualitySummary}
+                  />
+                </div>
                 <div className="inline-flex flex-wrap items-center gap-2 self-end rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 shadow-[0_12px_26px_-24px_rgba(15,23,42,0.26)] transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface-hover)] focus-within:border-[var(--app-border-strong)] focus-within:bg-[var(--app-surface-hover)]">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--app-text-muted)]">Densidad</p>
                       <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.24)]">
@@ -2323,6 +2362,7 @@ export function BudgetEditor({
           onScheduleCatalogClose={scheduleCatalogClose}
           onApplyCatalogPartida={applyCatalogPartidaToItem}
           onOpenApuSheet={openApuSheet}
+          apuSelectedItemId={isExcelApuDocked ? dockedApuItem?.id : null}
           onRunAiItemAction={(kind, itemId) => void runAiItemAction(kind, itemId)}
           canUseKhipu={canUseKhipu}
           itemQualityStateById={itemQualityStateById}
@@ -2365,21 +2405,7 @@ export function BudgetEditor({
         />
       ) : null}
 
-      <BudgetSummaryPanel
-        budgetId={budget.id}
-        currency={budget.currency}
-        densityMode={effectiveDensityMode}
-        isExcelMode={isExcelMode}
-        summaryCollapsed={summaryCollapsed}
-        generalExpensesRate={state.generalExpensesRate}
-        utilityRate={state.utilityRate}
-        igvRate={state.igvRate}
-        totals={summary.totals}
-        qualitySummary={qualitySummary}
-        onToggleCollapsed={toggleSummaryCollapsed}
-      />
-
-      {apuSheetSession ? (
+      {apuSheetSession && !isExcelApuDocked ? (
         <ApuSheetController
           key={apuSheetSession.item.id}
           initialItem={apuSheetSession.item}
@@ -2396,6 +2422,29 @@ export function BudgetEditor({
           canUsePartidaGenerator={canUsePartidaGenerator}
           canUseCollaboration={canUseCollaboration}
         />
+      ) : null}
+
+      {isExcelApuDocked && dockedApuItem ? (
+        <div
+          data-testid="budget-apu-dock"
+          data-selected-item-id={dockedApuItem.id}
+          className="min-w-0 xl:col-start-2 xl:row-start-1"
+        >
+          <ApuEditorSheet
+            item={ensureBudgetItemApu(dockedApuItem)}
+            open
+            onClose={() => setApuSheetSession(null)}
+            onUpdate={handleApuItemUpdate}
+            catalogPartidas={partidasCatalog}
+            resourcesCatalog={resourcesCatalog}
+            densityMode={effectiveDensityMode}
+            budgetId={budget.id}
+            canUseKhipu={canUseKhipu}
+            canUsePartidaGenerator={canUsePartidaGenerator}
+            canUseCollaboration={canUseCollaboration}
+            presentation="docked"
+          />
+        </div>
       ) : null}
 
       {aiPanel ? (
@@ -2933,7 +2982,7 @@ export function BudgetEditor({
           }}
         />
       ) : null}
-    </div>
+      </div>
     </KhipuActionRegistryProvider>
   );
 }
@@ -4352,6 +4401,7 @@ type BudgetItemTableRowProps = {
   onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
+  apuSelectedItemId?: string | null;
   canUseKhipu: boolean;
   onToggleItemActionMenu: (rowId: string, trigger: HTMLElement) => void;
   qualityState?: BudgetItemQualityState;
@@ -4511,6 +4561,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onApplyCatalogPartida,
   onOpenApuSheet,
   onRunAiItemAction,
+  apuSelectedItemId,
   canUseKhipu,
   onToggleItemActionMenu,
   qualityState,
@@ -4525,6 +4576,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   const hasNoUsefulUnitPrice = row.item.unitPrice <= 0;
   const hasNoApu = !row.item.apu;
   const requiresCatalogReview = qualityState?.requiresCatalogReview ?? !row.item.apu;
+  const isApuSelected = isExcelMode && apuSelectedItemId === row.item.id;
   const itemWarningTone = hasNoUsefulUnitPrice
     ? "theme-status-error-row"
     : requiresCatalogReview
@@ -4534,6 +4586,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   return (
     <TR
       data-budget-row-id={row.item.id}
+      data-apu-selected={isApuSelected ? "true" : "false"}
       draggable={!isEditingField}
       onDragStart={(event) => {
         if (shouldCancelRowDragStart(event, isEditingField)) return;
@@ -4551,6 +4604,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         isDragging ? "scale-[0.995] opacity-60 ring-2 ring-sky-300" : "",
         itemWarningTone,
         activeRowId === row.item.id ? (isExcelMode ? "bg-sky-50/80 ring-1 ring-sky-200" : "bg-sky-50/60 ring-2 ring-sky-200") : "",
+        isApuSelected && "bg-sky-50/90 ring-1 ring-sky-300",
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
@@ -4749,18 +4803,21 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
             <BotMessageSquare className="h-3.5 w-3.5" />
             {canUseKhipu ? "IA" : "Pro"}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onOpenApuSheet(row.item)}
-            data-demo-tour-target="open-apu"
-            className="h-7 gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-[var(--app-text-muted)] shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface)]"
-            title="Abrir editor APU de esta partida"
-            aria-label="Abrir editor APU de esta partida"
-          >
-            <ExternalLink className="h-4 w-4" />
-            APU
-          </Button>
+          {!isExcelMode ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onOpenApuSheet(row.item)}
+              data-testid={`budget-apu-button-${row.item.id}`}
+              data-apu-selected={isApuSelected ? "true" : "false"}
+              data-demo-tour-target="open-apu"
+              className="h-7 gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/85 px-2.5 text-[10px] font-medium tracking-[0.08em] text-[var(--app-text-muted)] shadow-[0_10px_18px_-18px_rgba(15,23,42,0.25)] hover:border-[var(--app-border-strong)] hover:bg-[var(--app-surface)]"
+              title="Abrir editor APU de esta partida"
+              aria-label="Abrir editor APU de esta partida"
+            >
+              APU
+            </Button>
+          ) : null}
           {isExcelMode && onDuplicateItem && onRemoveItem ? (
             <CompactRowActions
               actions={[
@@ -4810,6 +4867,7 @@ function areBudgetItemRowPropsEqual(
     previous.onDuplicateItem === current.onDuplicateItem &&
     previous.onRemoveItem === current.onRemoveItem &&
     previous.onActivateSpreadsheetCell === current.onActivateSpreadsheetCell &&
+    previous.apuSelectedItemId === current.apuSelectedItemId &&
     previous.isMetradoAdvanced === current.isMetradoAdvanced &&
     previous.onRequestManualMetrado === current.onRequestManualMetrado
   );
@@ -4882,6 +4940,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onApplyCatalogPartida,
   onOpenApuSheet,
   onRunAiItemAction,
+  apuSelectedItemId,
   canUseKhipu,
   itemQualityStateById,
   spreadsheetActiveCell,
@@ -4935,6 +4994,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onApplyCatalogPartida: (itemId: string, partida: CatalogPartidaRecord) => void;
   onOpenApuSheet: (item: BudgetItemRecord) => void;
   onRunAiItemAction: (kind: "chat" | "autocomplete", itemId: string) => void;
+  apuSelectedItemId?: string | null;
   canUseKhipu: boolean;
   itemQualityStateById: Record<string, BudgetItemQualityState | undefined>;
   spreadsheetActiveCell?: SpreadsheetCellAddress | null;
@@ -5055,7 +5115,8 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onCloseCatalogSelector={onCloseCatalogSelector}
                   onScheduleCatalogClose={onScheduleCatalogClose}                   onApplyCatalogPartida={onApplyCatalogPartida}
                    onOpenApuSheet={onOpenApuSheet}
-                   onRunAiItemAction={onRunAiItemAction}
+                  apuSelectedItemId={apuSelectedItemId}
+                  onRunAiItemAction={onRunAiItemAction}
                    canUseKhipu={canUseKhipu}
                    onToggleItemActionMenu={onToggleItemActionMenu}
                   qualityState={itemQualityStateById[row.item.id]}
@@ -5096,102 +5157,119 @@ const BudgetTableSection = memo(function BudgetTableSection({
   );
 });
 
-const BudgetSummaryPanel = memo(function BudgetSummaryPanel({
+const BudgetSummaryDrawer = memo(function BudgetSummaryDrawer({
   budgetId,
   currency,
   densityMode,
   isExcelMode,
-  summaryCollapsed,
   generalExpensesRate,
   utilityRate,
   igvRate,
   totals,
   qualitySummary,
-  onToggleCollapsed,
 }: {
   budgetId: string;
   currency: BudgetRecord["currency"];
   densityMode: DensityMode;
   isExcelMode: boolean;
-  summaryCollapsed: boolean;
   generalExpensesRate: number;
   utilityRate: number;
   igvRate: number;
   totals: BudgetTotals;
   qualitySummary: BudgetQualitySummary;
-  onToggleCollapsed: () => void;
 }) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
   return (
-    <Card
-      data-testid="budget-summary-panel"
-      data-density-mode={densityMode}
-      className={cn(
-        "h-fit overflow-hidden border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_20px_42px_-34px_rgba(15,23,42,0.24)] xl:sticky xl:top-4",
-        isExcelMode && "rounded-md border-[var(--app-border-strong)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.18)]",
-      )}
-    >
-      <CardHeader
-        className={cn(
-          "flex flex-row items-center border-b border-[var(--app-border)] bg-[var(--app-surface-elevated)]",
-          summaryCollapsed ? "justify-center px-2 py-3" : "justify-between",
-          isExcelMode && !summaryCollapsed && "px-3 py-2",
-        )}
-      >
-        {!summaryCollapsed ? <CardTitle>Resumen</CardTitle> : null}
+    <Dialog.Root>
+      <Dialog.Trigger asChild>
         <Button
           type="button"
-          size="sm"
           variant="ghost"
-          aria-label={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
-          title={summaryCollapsed ? "Expandir resumen" : "Colapsar resumen"}
-          className="h-8 w-8 px-0"
-          onClick={onToggleCollapsed}
+          className={cn("h-8 gap-2 rounded-full px-3 text-[11px] font-semibold tracking-[0.08em] text-[var(--app-text-muted)] hover:bg-[var(--app-surface-hover-strong)] hover:text-[var(--app-text-strong)]", isExcelMode && "text-xs")}
+          aria-label="Abrir resumen del presupuesto"
+          title="Abrir resumen del presupuesto"
         >
-          {summaryCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <Rows3 className="h-4 w-4" />
+          Resumen
         </Button>
-      </CardHeader>
-      {!summaryCollapsed ? (
-        <CardContent className={cn(isExcelMode ? "space-y-3 px-3 py-3" : "space-y-4")}>
-          <div className={cn("grid gap-2", isExcelMode ? "grid-cols-1" : "grid-cols-2")}>
-            <QualityStatCard label="Partidas sin PU útil" value={qualitySummary.itemsWithoutUsefulUnitPrice} tone="danger" />
-            <QualityStatCard label="Partidas por revisar" value={qualitySummary.itemsRequiringCatalogReview} tone="warning" />
-            <QualityStatCard label="Sin APU" value={qualitySummary.itemsWithoutApu} tone="neutral" />
-            <QualityStatCard label="Resueltas por sugerencia" value={qualitySummary.itemsResolvedFromSuggestion} tone="info" />
-          </div>
-          <SummaryRow label="Costo directo" value={totals.totalDirectCost} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="GG" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
-          <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
-          <div className={cn("theme-budget-summary-total", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
-            <p className={cn("theme-budget-summary-total-label", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
-            <AnimatedCurrencyValue
-              value={totals.totalAmount}
-              currency={currency}
-              className={cn("theme-budget-summary-total-value mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
-            />
-          </div>
-          <div className="grid gap-2">
-            <ExportPanel
-              buttonLabel="Exportar presupuesto"
-              className={cn("w-full", isExcelMode && "h-8 text-xs")}
-              defaultPreset="presupuesto_detallado"
-              definition={getExportDefinition("budget")}
-              targetId={budgetId}
-            />
-            <ExportPanel
-              buttonLabel="Exportar APU"
-              className={cn("w-full", isExcelMode && "h-8 text-xs")}
-              defaultPreset="apu_consolidado"
-              definition={getExportDefinition("apu")}
-              targetId={budgetId}
-            />
-          </div>
-          <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface-muted)] text-xs text-[var(--app-text-muted)]", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
-            Atajos: <span className="font-medium text-[var(--app-text)]">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-[var(--app-text)]">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-[var(--app-text)]">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-[var(--app-text)]">Pegar</span> importa filas desde Excel.
-          </div>
-        </CardContent>
-      ) : null}
-    </Card>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          data-testid="budget-summary-overlay"
+          className={cn("fixed inset-0 z-50 bg-slate-950/30", isExcelMode ? "backdrop-blur-0" : "backdrop-blur-sm")}
+        />
+        <Dialog.Content
+          asChild
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            closeButtonRef.current?.focus();
+          }}
+        >
+          <aside
+            data-testid="budget-summary-panel"
+            data-density-mode={densityMode}
+            className={cn(
+              "theme-surface-card fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-md flex-col border-l outline-none",
+              isExcelMode ? "border-[var(--table-border-strong)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]" : "border-[var(--app-border)] shadow-2xl",
+            )}
+          >
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-5 py-4">
+              <div>
+                <p className={cn("theme-muted-text", isExcelMode ? "text-xs uppercase tracking-wide" : "text-sm")}>Control financiero</p>
+                <Dialog.Title className={cn("theme-strong-text font-semibold", isExcelMode ? "text-xl" : "text-2xl")}>Resumen</Dialog.Title>
+                <Dialog.Description className="theme-muted-text mt-1 text-sm">Indicadores, totales y exportaciones del presupuesto.</Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <Button ref={closeButtonRef} type="button" variant="outline" size="sm" className="h-8 gap-2 whitespace-nowrap">
+                  <X className="h-4 w-4" />
+                  Cerrar
+                </Button>
+              </Dialog.Close>
+            </header>
+            <div className={cn("min-h-0 flex-1 overflow-y-auto", isExcelMode ? "space-y-3 px-3 py-3" : "space-y-4 px-5 py-5")}>
+              <div className={cn("grid gap-2", isExcelMode ? "grid-cols-1" : "grid-cols-2")}>
+                <QualityStatCard label="Partidas sin PU útil" value={qualitySummary.itemsWithoutUsefulUnitPrice} tone="danger" />
+                <QualityStatCard label="Partidas por revisar" value={qualitySummary.itemsRequiringCatalogReview} tone="warning" />
+                <QualityStatCard label="Sin APU" value={qualitySummary.itemsWithoutApu} tone="neutral" />
+                <QualityStatCard label="Resueltas por sugerencia" value={qualitySummary.itemsResolvedFromSuggestion} tone="info" />
+              </div>
+              <SummaryRow label="Costo directo" value={totals.totalDirectCost} currency={currency} compact={isExcelMode} />
+              <SummaryRow label="GG" rate={generalExpensesRate} value={totals.totalGeneralExpenses} currency={currency} compact={isExcelMode} />
+              <SummaryRow label="Utilidad" rate={utilityRate} value={totals.totalUtility} currency={currency} compact={isExcelMode} />
+              <SummaryRow label="IGV" rate={igvRate} value={totals.totalTax} currency={currency} compact={isExcelMode} />
+              <div className={cn("theme-budget-summary-total", isExcelMode ? "rounded-md px-3 py-3" : "rounded-2xl px-4 py-4")}>
+                <p className={cn("theme-budget-summary-total-label", isExcelMode ? "text-xs" : "text-sm")}>Total presupuesto</p>
+                <AnimatedCurrencyValue
+                  value={totals.totalAmount}
+                  currency={currency}
+                  className={cn("theme-budget-summary-total-value mt-1 px-0 py-0 font-semibold", isExcelMode ? "text-2xl" : "text-3xl")}
+                />
+              </div>
+              <div className="grid gap-2">
+                <ExportPanel
+                  buttonLabel="Exportar presupuesto"
+                  className={cn("w-full", isExcelMode && "h-8 text-xs")}
+                  defaultPreset="presupuesto_detallado"
+                  definition={getExportDefinition("budget")}
+                  targetId={budgetId}
+                />
+                <ExportPanel
+                  buttonLabel="Exportar APU"
+                  className={cn("w-full", isExcelMode && "h-8 text-xs")}
+                  defaultPreset="apu_consolidado"
+                  definition={getExportDefinition("apu")}
+                  targetId={budgetId}
+                />
+              </div>
+              <div className={cn("border border-[var(--app-border)] bg-[var(--app-surface-muted)] text-xs text-[var(--app-text-muted)]", isExcelMode ? "rounded-md px-3 py-2" : "rounded-2xl px-4 py-3")}>
+                Atajos: <span className="font-medium text-[var(--app-text)]">Ctrl/Cmd + S</span> guardar, <span className="font-medium text-[var(--app-text)]">Alt + ↑/↓</span> mover fila activa, <span className="font-medium text-[var(--app-text)]">↑ ↓ Enter Tab</span> navegar celdas, <span className="font-medium text-[var(--app-text)]">Pegar</span> importa filas desde Excel.
+              </div>
+            </div>
+          </aside>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 });
 
