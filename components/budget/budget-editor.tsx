@@ -494,7 +494,10 @@ export function BudgetEditor({
     return map;
   }, [rows]);
   const spreadsheetSelection = useSpreadsheetSelection({ rows: spreadsheetRows });
-  const { activateCell: activateSpreadsheetCell } = spreadsheetSelection;
+  const {
+    activateCell: activateSpreadsheetCell,
+    clearSelection: clearSpreadsheetSelection,
+  } = spreadsheetSelection;
   const spreadsheetSelectionKey = useMemo(() => {
     const keys = spreadsheetSelection.selectedCellKeys;
     return keys && keys.size > 0 ? Array.from(keys).sort().join("|") : "";
@@ -1936,6 +1939,13 @@ export function BudgetEditor({
   }, []);
 
   const handleRowFocus = useCallback((rowId: string) => {
+    const activeInput = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
+    const activeInputRowId = activeInput?.closest<HTMLElement>("[data-budget-row-id]")?.dataset.budgetRowId;
+
+    if (activeInput && activeInputRowId && activeInputRowId !== rowId) {
+      activeInput.blur();
+    }
+
     activeRowIdRef.current = rowId;
     setActiveRowId(rowId);
 
@@ -1950,6 +1960,39 @@ export function BudgetEditor({
       setExcelSelectedItemId(focusedRow.item.id);
     }
   }, [excelEditingRowId, isExcelMode, rows]);
+
+  const handleRowPointerDownCapture = useCallback((rowId: string) => {
+    if (activeRowId === rowId) return;
+
+    const activeInput = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
+    const activeInputRowId = activeInput?.closest<HTMLElement>("[data-budget-row-id]")?.dataset.budgetRowId;
+
+    if (activeInput && activeInputRowId && activeInputRowId !== rowId) {
+      activeInput.blur();
+    }
+
+    clearSpreadsheetSelection();
+
+    if (isExcelMode) {
+      setExcelEditingRowId(null);
+    }
+  }, [activeRowId, clearSpreadsheetSelection, isExcelMode]);
+
+  useEffect(() => {
+    if (!isExcelMode || !excelEditingRowId) return;
+
+    const closeEditingOnOutsidePointerDown = (event: PointerEvent) => {
+      const activeInput = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
+      if (activeInput && event.target === activeInput) return;
+
+      activeInput?.blur();
+      clearSpreadsheetSelection();
+      setExcelEditingRowId(null);
+    };
+
+    document.addEventListener("pointerdown", closeEditingOnOutsidePointerDown, true);
+    return () => document.removeEventListener("pointerdown", closeEditingOnOutsidePointerDown, true);
+  }, [clearSpreadsheetSelection, excelEditingRowId, isExcelMode]);
 
   const handleCellFocus = useCallback(
     (rowId: string, column: ActiveColumn) => {
@@ -2358,6 +2401,7 @@ export function BudgetEditor({
           onDragEnd={clearDragState}
           onDropRow={handleDropRow}
           onRowFocus={handleRowFocus}
+          onRowPointerDownCapture={handleRowPointerDownCapture}
           onCellFocus={handleCellFocus}
           onUpdateLevel={updateLevel}
           onUpdateItem={updateItem}
@@ -4247,6 +4291,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onDragEnd,
   onDropRow,
   onRowFocus,
+  onRowPointerDownCapture,
   onCellFocus,
   onUpdateLevel,
   onSetCellRef,
@@ -4271,6 +4316,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
   onDragEnd: () => void;
   onDropRow: (row: BudgetDisplayRow) => void;
   onRowFocus: (rowId: string) => void;
+  onRowPointerDownCapture: (rowId: string) => void;
   onCellFocus: (rowId: string, column: ActiveColumn) => void;
   onUpdateLevel: (levelId: string, patch: Partial<BudgetLevelRecord>) => void;
   onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
@@ -4320,6 +4366,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
       }}
       onDrop={() => onDropRow(row)}
       onDragEnd={onDragEnd}
+      onPointerDownCapture={() => onRowPointerDownCapture(row.level.id)}
       onClick={(event) => {
         if (event.target instanceof HTMLInputElement) {
           onRowFocus(row.level.id);
@@ -4444,6 +4491,7 @@ type BudgetItemTableRowProps = {
   onDragEnd: () => void;
   onDropRow: (row: BudgetDisplayRow) => void;
   onRowFocus: (rowId: string) => void;
+  onRowPointerDownCapture: (rowId: string) => void;
   onCellFocus: (rowId: string, column: ActiveColumn) => void;
   onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
   onSetCellRef: (rowId: string, column: EditableColumn, element: HTMLInputElement | null) => void;
@@ -4605,6 +4653,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
   onDragEnd,
   onDropRow,
   onRowFocus,
+  onRowPointerDownCapture,
   onCellFocus,
   onUpdateItem,
   isMetradoAdvanced = false,
@@ -4678,6 +4727,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
       }}
       onDrop={() => onDropRow(row)}
       onDragEnd={onDragEnd}
+      onPointerDownCapture={() => onRowPointerDownCapture(row.item.id)}
       onClick={(event) => {
         if (event.target instanceof HTMLInputElement) {
           onRowFocus(row.item.id);
@@ -4975,6 +5025,7 @@ function areBudgetItemRowPropsEqual(
     previous.onRemoveItem === current.onRemoveItem &&
     previous.onActivateSpreadsheetCell === current.onActivateSpreadsheetCell &&
     previous.apuSelectedItemId === current.apuSelectedItemId &&
+    previous.excelEditingRowId === current.excelEditingRowId &&
     previous.isMetradoAdvanced === current.isMetradoAdvanced &&
     previous.onRequestManualMetrado === current.onRequestManualMetrado
   );
@@ -5032,6 +5083,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onDragEnd,
   onDropRow,
   onRowFocus,
+  onRowPointerDownCapture,
   onCellFocus,
   onUpdateLevel,
   onUpdateItem,
@@ -5089,6 +5141,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
   onDragEnd: () => void;
   onDropRow: (row: BudgetDisplayRow) => void;
   onRowFocus: (rowId: string) => void;
+  onRowPointerDownCapture: (rowId: string) => void;
   onCellFocus: (rowId: string, column: ActiveColumn) => void;
   onUpdateLevel: (levelId: string, patch: Partial<BudgetLevelRecord>) => void;
   onUpdateItem: (itemId: string, patch: Partial<BudgetItemRecord>) => void;
@@ -5205,6 +5258,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onDragEnd={onDragEnd}
                   onDropRow={onDropRow}
                   onRowFocus={onRowFocus}
+                  onRowPointerDownCapture={onRowPointerDownCapture}
                   onCellFocus={onCellFocus}
                   onUpdateLevel={onUpdateLevel}
                   onSetCellRef={onSetCellRef}
@@ -5238,6 +5292,7 @@ const BudgetTableSection = memo(function BudgetTableSection({
                   onDragEnd={onDragEnd}
                   onDropRow={onDropRow}
                   onRowFocus={onRowFocus}
+                  onRowPointerDownCapture={onRowPointerDownCapture}
                   onCellFocus={onCellFocus}
                   onUpdateItem={onUpdateItem}
                   onSetCellRef={onSetCellRef}

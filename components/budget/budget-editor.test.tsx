@@ -67,6 +67,8 @@ describe("BudgetEditor Khipu floating panel blur guard", () => {
     });
 
     expect(descriptionInput.readOnly).toBe(false);
+    expect(descriptionInput.dataset.spreadsheetActive).toBe("true");
+    expect(descriptionInput.dataset.spreadsheetSelected).toBe("true");
     expect(document.activeElement).toBe(descriptionInput);
     expect(descriptionInput.selectionStart).toBe(0);
     expect(descriptionInput.selectionEnd).toBe(descriptionInput.value.length);
@@ -106,6 +108,64 @@ describe("BudgetEditor Khipu floating panel blur guard", () => {
     expect(secondPointerDown.defaultPrevented).toBe(false);
     expect(descriptionInput.readOnly).toBe(false);
     expect(document.activeElement).toBe(descriptionInput);
+  });
+
+  it("blurs the edited input when selecting another row", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getInputByValue } = await renderEditor({ budget: createBudgetWithTwoItems() });
+    const previousInput = getInputByValue("Partida demo");
+    const nextInput = getInputByValue("Partida secundaria");
+    const nextRow = nextInput.closest("tr");
+    if (!(nextRow instanceof HTMLTableRowElement)) throw new Error("Missing next budget row");
+
+    await act(async () => {
+      previousInput.focus();
+      previousInput.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+
+    expect(document.activeElement).toBe(previousInput);
+    expect(previousInput.readOnly).toBe(false);
+
+    await act(async () => {
+      nextRow.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    });
+
+    expect(document.activeElement).not.toBe(previousInput);
+    expect(previousInput.dataset.spreadsheetActive).toBeUndefined();
+    expect(previousInput.dataset.spreadsheetSelected).toBeUndefined();
+
+    await act(async () => {
+      nextInput.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(previousInput.readOnly).toBe(true);
+  });
+
+  it("closes input editing when clicking outside the active input", async () => {
+    window.localStorage.setItem("app_view_mode", "excel");
+
+    const { getInputByValue } = await renderEditor({ budget: createBudgetWithItem() });
+    const descriptionInput = getInputByValue("Partida demo");
+    const row = descriptionInput.closest("tr");
+    const outsideCell = row?.querySelector("td:last-child");
+    if (!(outsideCell instanceof HTMLTableCellElement)) throw new Error("Missing outside cell");
+
+    await act(async () => {
+      descriptionInput.focus();
+      descriptionInput.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+
+    expect(descriptionInput.readOnly).toBe(false);
+
+    await act(async () => {
+      outsideCell.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    });
+
+    expect(descriptionInput.readOnly).toBe(true);
+    expect(document.activeElement).not.toBe(descriptionInput);
+    expect(descriptionInput.dataset.spreadsheetActive).toBeUndefined();
+    expect(descriptionInput.dataset.spreadsheetSelected).toBeUndefined();
   });
 
   it("does not clear activeRowId when focus moves to the Khipu floating panel", async () => {
