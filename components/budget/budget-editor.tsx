@@ -3518,7 +3518,7 @@ function PastePreviewSheet({
                     <TD className="py-2 text-sm text-slate-600">{row.code ?? "-"}</TD>
                     <TD className="py-2">
                       <div className="space-y-1">
-                        <div className="truncate text-sm text-slate-800" style={{ paddingLeft: `${row.depth * 18}px` }}>
+                        <div className="truncate text-sm text-slate-800" style={{ paddingLeft: `${row.depth * 12}px` }}>
                           {row.description}
                         </div>
                         {row.kind === "item" && row.itemMatch ? (
@@ -4293,7 +4293,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-                        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
+                        <div className={cn("flex min-w-0 items-center gap-2", isExcelMode ? "w-full" : "w-fit")}>
                           <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
                           <BufferedInput
                             {...buildSpreadsheetCellDataAttrs(row.level.id, "code", spreadsheetActiveCell, spreadsheetSelectedKeys)}
@@ -4310,7 +4310,7 @@ const BudgetLevelTableRow = memo(function BudgetLevelTableRow({
         </div>
       </TD>
       <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-                        <div className="flex items-center gap-3" style={{ paddingLeft: `${row.depth * 18}px` }}>
+                        <div className="flex items-center gap-2" style={{ paddingLeft: `${row.depth * 12}px` }}>
                           <BufferedInput
                             {...buildSpreadsheetCellDataAttrs(row.level.id, "description", spreadsheetActiveCell, spreadsheetSelectedKeys)}
                             value={row.level.name}
@@ -4608,13 +4608,13 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
       )}
     >
       <TD className={getBodyCellClass("code", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-                        <div className="flex items-center gap-2" style={{ width: "fit-content" }}>
+                        <div className={cn("flex min-w-0 items-center gap-2", isExcelMode ? "w-full" : "w-fit")}>
                           <GripVertical className="h-4 w-4 cursor-grab text-[var(--app-text-subtle)]" />
                           <BufferedInput
                             {...buildSpreadsheetCellDataAttrs(row.item.id, "code", spreadsheetActiveCell, spreadsheetSelectedKeys)}
                             value={row.item.code}
             onCommit={(value) => onUpdateItem(row.item.id, { code: value })}
-            className={cn(getInputDensityClass(densityMode, isExcelMode), "w-auto max-w-full px-2")}
+            className={cn(getInputDensityClass(densityMode, isExcelMode), isExcelMode ? "w-full max-w-full px-1" : "w-auto max-w-full px-2")}
             style={getCodeInputStyle(row.item.code)}
             ref={(element) => onSetCellRef(row.item.id, "code", element)}
             onKeyDown={(event) => onNavigate(event, row.item.id, "code")}
@@ -4625,7 +4625,7 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         </div>
       </TD>
       <TD className={getBodyCellClass("description", activeColumn, "align-[initial]", densityMode, isExcelMode)}>
-                        <div style={{ paddingLeft: `${row.depth * 18}px` }}>
+                        <div style={{ paddingLeft: `${row.depth * 12}px` }}>
                           <div className="relative flex min-w-0 flex-wrap items-center gap-2 space-y-1">
                             <div className="min-w-0 flex-1">
                               <BufferedInput
@@ -4785,24 +4785,26 @@ const BudgetItemTableRow = memo(function BudgetItemTableRow({
         )}
       >
         <div className="ml-auto flex justify-end gap-1 px-1 py-0.5 opacity-80 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!canUseKhipu}
-            onClick={() => {
-              if (canUseKhipu) onRunAiItemAction("chat", row.item.id);
-            }}
-            className={cn(
-              "h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]",
-              canUseKhipu ? "theme-budget-ai-pill" : "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90",
-            )}
-            title={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
-            aria-label={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
-            aria-disabled={!canUseKhipu ? "true" : undefined}
-          >
-            <BotMessageSquare className="h-3.5 w-3.5" />
-            {canUseKhipu ? "IA" : "Pro"}
-          </Button>
+          {!isExcelMode ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!canUseKhipu}
+              onClick={() => {
+                if (canUseKhipu) onRunAiItemAction("chat", row.item.id);
+              }}
+              className={cn(
+                "h-7 gap-1 rounded-full border px-2 text-[10px] font-medium tracking-[0.08em]",
+                canUseKhipu ? "theme-budget-ai-pill" : "theme-status-warning theme-status-warning-strong cursor-not-allowed opacity-90",
+              )}
+              title={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
+              aria-label={canUseKhipu ? "Explicar esta partida con IA" : "Explicar esta partida con IA — Disponible en Pro"}
+              aria-disabled={!canUseKhipu ? "true" : undefined}
+            >
+              <BotMessageSquare className="h-3.5 w-3.5" />
+              {canUseKhipu ? "IA" : "Pro"}
+            </Button>
+          ) : null}
           {!isExcelMode ? (
             <Button
               size="sm"
@@ -5017,25 +5019,44 @@ const BudgetTableSection = memo(function BudgetTableSection({
         data-density-mode={densityMode}
         className={getTableFrameClassName(
           isExcelMode,
-          cn("max-h-[72vh] overflow-auto", !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]" : undefined),
+          cn(
+            "max-h-[72vh] overflow-y-auto",
+            isExcelMode ? "overflow-x-hidden" : "overflow-x-auto",
+            !isExcelMode ? "shadow-[0_18px_36px_-30px_rgba(15,23,42,0.22)]" : undefined,
+          ),
         )}
         {...tableScrollProps}
       >
         <Table
           className={cn(
             "table-fixed w-full",
-            isExcelMode && "[&_td]:px-2 [&_th]:px-2 [&_tr]:border-b [&_tr]:border-[var(--app-border)]",
+            isExcelMode &&
+              "min-w-0 [&_td]:min-w-0 [&_td]:px-1 [&_th]:min-w-0 [&_th]:px-1 [&_tr]:border-b [&_tr]:border-[var(--app-border)] [&_input]:min-w-0 [&_input]:!px-1",
           )}
-          style={{ minWidth: Math.max(1100, codeColumnWidth + 1030) }}
+          style={isExcelMode ? undefined : { minWidth: Math.max(1100, codeColumnWidth + 1030) }}
         >
           <colgroup>
-            <col style={{ width: codeColumnWidth }} />
-            <col className="w-[420px]" />
-            <col className="w-[90px]" />
-            <col className="w-[92px]" />
-            <col className="w-[96px]" />
-            <col className="w-[96px]" />
-            <col className="w-[170px]" />
+            {isExcelMode ? (
+              <>
+                <col className="w-[11%]" />
+                <col className="w-[34%]" />
+                <col className="w-[8%]" />
+                <col className="w-[16%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
+              </>
+            ) : (
+              <>
+                <col style={{ width: codeColumnWidth }} />
+                <col className="w-[420px]" />
+                <col className="w-[90px]" />
+                <col className="w-[92px]" />
+                <col className="w-[96px]" />
+                <col className="w-[96px]" />
+                <col className="w-[170px]" />
+              </>
+            )}
           </colgroup>
           <THead className={cn(isExcelMode && "[&_th]:bg-[var(--app-surface-strong)] [&_th]:text-[11px] [&_th]:font-semibold")}>
             <TR className={cn("hover:bg-[var(--app-surface-muted)]", isExcelMode ? "bg-[var(--app-surface-strong)]/90" : "bg-[var(--app-surface-muted)]")}>

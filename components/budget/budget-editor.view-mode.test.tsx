@@ -212,7 +212,7 @@ describe("BudgetEditor view mode integration", () => {
   });
 
   it("opens the Excel APU dock automatically, hides row APU actions, switches between partidas, and closes back to the single pane", async () => {
-    const { getByTestId, getButtonByText, getInputByValue, queryByTestId, queryByText } = await renderEditor({
+    const { getByTestId, getButtonByText, getInputByValue, getTableSurface, queryByTestId, queryByText } = await renderEditor({
       budget: createBudgetWithTwoItems(),
     });
 
@@ -228,6 +228,19 @@ describe("BudgetEditor view mode integration", () => {
     expect(document.querySelector("[data-radix-dialog-overlay]")).toBeNull();
     expect(document.querySelector("[data-testid='budget-apu-button-item-1']")).toBeNull();
     expect(document.querySelector("[data-testid='budget-apu-button-item-3']")).toBeNull();
+    expect(getTableSurface().className).toContain("overflow-x-hidden");
+    const excelBudgetTable = getTableSurface().querySelector("table");
+    expect(excelBudgetTable?.className).toContain("min-w-0");
+    expect([...((excelBudgetTable?.querySelectorAll("col") ?? []) as NodeListOf<HTMLElement>)].map((column) => column.className)).toEqual([
+      "w-[11%]",
+      "w-[34%]",
+      "w-[8%]",
+      "w-[16%]",
+      "w-[12%]",
+      "w-[12%]",
+      "w-[7%]",
+    ]);
+    expect(document.querySelector("[aria-label='Explicar esta partida con IA']")).toBeNull();
 
     await act(async () => {
       getInputByValue("Partida secundaria").focus();
@@ -263,7 +276,9 @@ describe("BudgetEditor view mode integration", () => {
     expect(getByTestId("budget-apu-button-item-1")).toBeTruthy();
     expect(getByTestId("budget-apu-button-item-1").getAttribute("aria-label")).toBe("Abrir editor APU de esta partida");
     expect(document.querySelector("[data-testid='budget-apu-dock']")).toBeNull();
-  });  it("preserves a docked APU edit when switching to another partida and back", async () => {
+  });
+
+  it("preserves a docked APU edit when switching to another partida and back", async () => {
     const { getButtonByText, getInputByValue, getApuPerformanceInput, getByTestId } = await renderEditor({
       budget: createBudgetWithTwoItems(),
     });
@@ -893,7 +908,7 @@ describe("BudgetEditor view mode integration", () => {
     const input = getInputByValue("Nueva partida");
     const paddingWrapper = input.closest("div[style]");
 
-    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 36px");
+    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 24px");
   });
 
   it("anchors a header subtitle under the nearest title context", async () => {
@@ -912,7 +927,7 @@ describe("BudgetEditor view mode integration", () => {
     const input = getInputByValue("Nuevo subtítulo");
     const paddingWrapper = input.parentElement;
 
-    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 18px");
+    expect(paddingWrapper?.getAttribute("style")).toContain("padding-left: 12px");
   });
 
   it("inserts a header item immediately after the active item in the same section", async () => {
