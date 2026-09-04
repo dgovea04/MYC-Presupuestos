@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Decimal from "decimal.js";
 import { useMemo, useState } from "react";
 
 const ExportPanel = dynamic(() => import("@/components/exports/export-panel").then((mod) => mod.ExportPanel));
@@ -18,6 +19,13 @@ import { getExportDefinition } from "@/lib/exports/definitions";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type { GeneralBudgetResourceSummaryResult } from "@/types/budget-sections";
+
+const RESOURCE_CATEGORY_CARDS = [
+  { category: "LABOR", label: "Mano de obra" },
+  { category: "MATERIAL", label: "Materiales" },
+  { category: "EQUIPMENT", label: "Equipos" },
+  { category: "SUBCONTRACT", label: "Subcontratos" },
+] as const;
 
 export function GeneralBudgetResourcesTable({
   budgetId,
@@ -53,14 +61,22 @@ export function GeneralBudgetResourcesTable({
 
   const totals = useMemo(
     () =>
-      filteredResources.reduce(
+      summary.resources.reduce(
         (accumulator, resource) => ({
-          totalQuantity: accumulator.totalQuantity + resource.totalQuantity,
           totalCost: accumulator.totalCost + resource.totalCost,
         }),
-        { totalQuantity: 0, totalCost: 0 },
+        { totalCost: 0 },
       ),
-    [filteredResources],
+    [summary.resources],
+  );
+
+  const categoryTotals = useMemo(
+    () =>
+      summary.resources.reduce<Record<string, number>>((accumulator, resource) => {
+        accumulator[resource.category] = (accumulator[resource.category] ?? 0) + resource.totalCost;
+        return accumulator;
+      }, {}),
+    [summary.resources],
   );
 
   return (
@@ -82,7 +98,6 @@ export function GeneralBudgetResourcesTable({
                 <option value="MATERIAL">Materiales</option>
                 <option value="LABOR">Mano de obra</option>
                 <option value="EQUIPMENT">Equipos</option>
-                <option value="TOOLS">Herramientas</option>
                 <option value="SUBCONTRACT">Sub contratos</option>
               </Select>
               <Select value={budgetName} onChange={(event) => setBudgetName(event.target.value)}>
@@ -103,11 +118,41 @@ export function GeneralBudgetResourcesTable({
           }
         />
 
-        <div className={isExcelMode ? "grid gap-2 md:grid-cols-2 xl:grid-cols-4" : "grid gap-3 md:grid-cols-2 xl:grid-cols-4"}>
-          <InfoCard label="Insumos" value={String(filteredResources.length)} tone="slate" />
-          <InfoCard label="Sub Presupuestos" value={String(summary.budgetCount)} tone="sky" />
-          <InfoCard label="Cantidad total" value={formatNumber(totals.totalQuantity, 4)} tone="amber" />
-          <InfoCard label="Costo total" value={formatCurrency(totals.totalCost, currency, currencyDecimals)} tone="sky" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className={cn("theme-surface-card flex min-h-0 flex-col space-y-3 border border-[var(--app-border-soft)] p-3", isExcelMode ? "rounded-md" : "rounded-2xl")} aria-label="Información general">
+            <h3 className="theme-muted-text px-1 text-xs font-semibold uppercase tracking-[0.16em]">Información general</h3>
+            <div className={isExcelMode ? "grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-2" : "grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3"}>
+              <div className="min-h-0 [&>div]:h-full">
+                <InfoCard label="Insumos" value={String(summary.resources.length)} tone="slate" />
+              </div>
+              <div className="min-h-0 [&>div]:h-full">
+                <InfoCard label="Sub Presupuestos" value={String(summary.budgetCount)} tone="sky" />
+              </div>
+              <div className="col-start-2 row-span-2 row-start-1 min-h-0 [&>div]:h-full">
+                <InfoCard label="Costo total" value={formatCurrency(totals.totalCost, currency, currencyDecimals)} tone="sky" />
+              </div>
+            </div>
+          </section>
+
+          <section className={cn("theme-surface-card flex min-h-0 flex-col space-y-3 border border-[var(--app-border-soft)] p-3", isExcelMode ? "rounded-md" : "rounded-2xl")} aria-label="Costos por categoría">
+            <h3 className="theme-muted-text px-1 text-xs font-semibold uppercase tracking-[0.16em]">Costos por categoría</h3>
+            <div className={isExcelMode ? "grid min-h-0 flex-1 gap-2 md:grid-cols-2" : "grid min-h-0 flex-1 gap-3 md:grid-cols-2"}>
+              {RESOURCE_CATEGORY_CARDS.map(({ category: resourceCategory, label }) => (
+                <div
+                  key={resourceCategory}
+                  className="min-h-0 rounded-2xl [&>div]:h-full"
+                >
+                  <InfoCard
+                    label={`Costo ${label.toLowerCase()}`}
+                    value={formatCurrency(categoryTotals[resourceCategory] ?? 0, currency, currencyDecimals)}
+                    tone="amber"
+                    className={category === resourceCategory ? "theme-info-card-amber-selected" : undefined}
+                    secondaryValue={formatCostShare(categoryTotals[resourceCategory] ?? 0, totals.totalCost)}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         {summary.unresolvedCount > 0 ? (
@@ -124,8 +169,8 @@ export function GeneralBudgetResourcesTable({
                 <TH>Descripcion</TH>
                 <TH>Categoria</TH>
                 <TH className="text-center">Unidad</TH>
+                <TH className="text-right">Cantidad</TH>
                 <TH className="text-right">P. unitario</TH>
-                <TH className="text-right">Cantidad total</TH>
                 <TH className="text-right">Costo total</TH>
                 <TH className="text-right">Usos</TH>
                 <TH>Sub Presupuestos</TH>
@@ -138,8 +183,8 @@ export function GeneralBudgetResourcesTable({
                   <TD>{resource.description}</TD>
                   <TD>{getCategoryLabel(resource.category)}</TD>
                   <TD className="text-center">{resource.unit}</TD>
-                  <TD className="text-right tabular-nums">{formatCurrency(resource.unitPrice, currency, currencyDecimals)}</TD>
                   <TD className="text-right tabular-nums">{formatNumber(resource.totalQuantity, 4)}</TD>
+                  <TD className="text-right tabular-nums">{formatCurrency(resource.unitPrice, currency, currencyDecimals)}</TD>
                   <TD className="text-right tabular-nums">{formatCurrency(resource.totalCost, currency, currencyDecimals)}</TD>
                   <TD className="text-right tabular-nums">{resource.usageCount}</TD>
                   <TD className="text-sm text-slate-600">{resource.budgetNames.join(", ")}</TD>
@@ -158,6 +203,12 @@ export function GeneralBudgetResourcesTable({
       </CardContent>
     </Card>
   );
+}
+
+function formatCostShare(categoryCost: number, directCost: number) {
+  if (directCost <= 0) return "0.00%";
+
+  return `${new Decimal(categoryCost).dividedBy(directCost).times(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)}%`;
 }
 
 function getCategoryLabel(category: string) {

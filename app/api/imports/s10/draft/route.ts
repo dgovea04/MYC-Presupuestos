@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       budgetCode: input.budgetCode,
       companyId: input.companyId,
       projectId: input.projectId,
+      sourceSystem: input.sourceSystem,
     });
 
     return NextResponse.json(preview);
@@ -65,6 +66,7 @@ async function readDraftRequestInput(request: Request) {
       budgetCode: readOptionalFormString(formData, "budgetCode"),
       companyId: readOptionalFormString(formData, "companyId"),
       projectId: readOptionalFormString(formData, "projectId"),
+      sourceSystem: readSourceSystem(formData.get("sourceSystem")),
     };
   }
 
@@ -78,6 +80,7 @@ async function readDraftRequestInput(request: Request) {
     budgetCode: readOptionalRecordString(body, "budgetCode"),
     companyId: readOptionalRecordString(body, "companyId"),
     projectId: readOptionalRecordString(body, "projectId"),
+    sourceSystem: readSourceSystem(body.sourceSystem),
   };
 }
 
@@ -89,6 +92,14 @@ function readOptionalFormString(formData: FormData, key: string) {
 function readOptionalRecordString(record: Record<string, unknown>, key: string) {
   const value = record[key];
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readSourceSystem(value: unknown): "S10" | "RW7" | "DELPHIN" | "DB" {
+  if (value === "DB" || value === "RW7" || value === "DELPHIN" || value === "S10") {
+    return value;
+  }
+
+  return "S10";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

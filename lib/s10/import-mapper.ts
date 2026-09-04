@@ -115,7 +115,7 @@ export type S10ExportSnapshot = {
   resultadoPieSubpresupuestos?: S10ResultadoPieSubpresupuestoRow[];
 };
 
-export type ImportSourceSystem = "S10" | "RW7" | "DELPHIN";
+export type ImportSourceSystem = "S10" | "RW7" | "DELPHIN" | "DB";
 
 export type S10ImportMapperOptions = {
   budgetCode?: string;

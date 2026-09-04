@@ -34,7 +34,7 @@ El snapshot S10 es el puente entre SQL Server local, la futura aplicación deskt
 - `contractVersion`: versión semver del contrato. La versión `1.x` es compatible dentro de su major; cambios incompatibles requieren `2.0.0`.
 - `exportedAt`: fecha ISO-8601 de generación.
 - `source.system`: siempre `S10`.
-- `source.adapter`: `sqlserver`, `desktop` o `legacy`.
+- `source.adapter`: `sqlserver`, `desktop`, `legacy` o `db`.
 - `source.databaseName` y `source.budgetCode`: metadatos opcionales de trazabilidad; no son necesarios para importar.
 - `payload`: el modelo de filas S10 que consume el mapper de MC.
 

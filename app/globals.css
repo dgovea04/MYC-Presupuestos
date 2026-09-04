@@ -376,6 +376,11 @@ body,
   background: #fffbeb;
 }
 
+.theme-info-card-amber-selected {
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
 .theme-info-card-emerald {
   border-color: #a7f3d0;
   background: #ecfdf5;
@@ -642,6 +647,11 @@ body,
 [data-theme="dark"] .theme-info-card-amber {
   border-color: rgba(245, 158, 11, 0.24);
   background: rgba(245, 158, 11, 0.10);
+}
+
+[data-theme="dark"] .theme-info-card-amber-selected {
+  border-color: rgba(245, 158, 11, 0.62);
+  background: rgba(245, 158, 11, 0.24);
 }
 
 [data-theme="dark"] .theme-info-card-emerald {

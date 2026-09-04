@@ -1,9 +1,19 @@
+import Decimal from "decimal.js";
 import type { ResourceCategory } from "@/types/resource";
 import type { GeneralBudgetResourceSummaryResult } from "@/types/budget-sections";
+
+const RESOURCE_CATEGORY_ORDER: ResourceCategory[] = [
+  "LABOR",
+  "MATERIAL",
+  "EQUIPMENT",
+  "TOOLS",
+  "SUBCONTRACT",
+];
 
 type AggregationBudget = {
   name: string;
   items: Array<{
+    quantity: number;
     apu?: {
       resources: Array<{
         resourceId?: string | null;
@@ -61,8 +71,10 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
           budgetNames: new Set<string>(),
         };
 
-        existing.totalQuantity = round(existing.totalQuantity + resource.quantity);
-        existing.totalCost = round(existing.totalCost + resource.subtotal);
+        const quantityForItem = new Decimal(item.quantity);
+        const resourceSubtotal = getResourceSubtotal(resource.quantity, resource.unitPrice, resource.resource.unit, resource.subtotal);
+        existing.totalQuantity = round(new Decimal(existing.totalQuantity).plus(new Decimal(resource.quantity).times(quantityForItem)));
+        existing.totalCost = round(new Decimal(existing.totalCost).plus(resourceSubtotal.times(quantityForItem)));
         existing.usageCount += 1;
         existing.unitPrice = resource.unitPrice;
         existing.budgetNames.add(budget.name);
@@ -85,7 +97,7 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
       budgetNames: [...resource.budgetNames].sort(),
     }))
     .sort((left, right) => {
-      const categoryCompare = left.category.localeCompare(right.category);
+      const categoryCompare = RESOURCE_CATEGORY_ORDER.indexOf(left.category) - RESOURCE_CATEGORY_ORDER.indexOf(right.category);
       if (categoryCompare !== 0) return categoryCompare;
       return left.description.localeCompare(right.description);
     });
@@ -97,6 +109,14 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
   };
 }
 
-function round(value: number) {
-  return Math.round((value + Number.EPSILON) * 10000) / 10000;
+function getResourceSubtotal(quantity: number, unitPrice: number, unit: string, persistedSubtotal: number) {
+  if (unit.trim().startsWith("%")) {
+    return new Decimal(persistedSubtotal);
+  }
+
+  return new Decimal(quantity).times(unitPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
+function round(value: Decimal.Value) {
+  return Number(new Decimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toString());
 }

@@ -4,7 +4,7 @@ export const S10_SNAPSHOT_SCHEMA = "mc.s10.snapshot" as const;
 export const S10_SNAPSHOT_CONTRACT_VERSION = "1.0.0" as const;
 const supportedContractMajor = 1;
 
-export type S10SnapshotAdapter = "sqlserver" | "desktop" | "legacy";
+export type S10SnapshotAdapter = "sqlserver" | "desktop" | "legacy" | "db";
 
 export type S10SnapshotContract = {
   schema: typeof S10_SNAPSHOT_SCHEMA;
@@ -192,7 +192,7 @@ function isNullableText(value: unknown) {
 }
 
 function isSnapshotAdapter(value: unknown): value is S10SnapshotAdapter {
-  return value === "sqlserver" || value === "desktop" || value === "legacy";
+  return value === "sqlserver" || value === "desktop" || value === "legacy" || value === "db";
 }
 
 function isIsoDate(value: string) {

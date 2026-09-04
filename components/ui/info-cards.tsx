@@ -10,6 +10,8 @@ export function InfoCard({
   layout = "stacked",
   previewLabel,
   previewValue,
+  secondaryValue,
+  className,
 }: {
   label: string;
   value: string;
@@ -17,6 +19,8 @@ export function InfoCard({
   layout?: "stacked" | "inline";
   previewLabel?: string;
   previewValue?: string;
+  secondaryValue?: string;
+  className?: string;
 }) {
   const { isExcelMode } = useAppViewMode();
   const toneClass =
@@ -34,11 +38,19 @@ export function InfoCard({
         "theme-info-card px-4 py-3 transition-colors",
         isExcelMode ? "rounded-md shadow-none" : "rounded-2xl shadow-[0_10px_24px_-22px_rgba(15,23,42,0.38)]",
         toneClass,
+        className,
         layout === "inline" ? "flex items-center justify-between gap-3" : "space-y-1",
       )}
     >
       <p className="theme-info-card-label text-sm">{label}</p>
-      <p className={cn("theme-info-card-value font-semibold tracking-tight", layout === "inline" ? "text-sm" : "text-lg")}>{value}</p>
+      {secondaryValue ? (
+        <div className="flex items-baseline justify-between gap-3">
+          <p className={cn("theme-info-card-value font-semibold tracking-tight", layout === "inline" ? "text-sm" : "text-lg")}>{value}</p>
+          <p className="theme-info-card-label text-sm font-semibold tabular-nums">{secondaryValue}</p>
+        </div>
+      ) : (
+        <p className={cn("theme-info-card-value font-semibold tracking-tight", layout === "inline" ? "text-sm" : "text-lg")}>{value}</p>
+      )}
       {layout === "stacked" && previewLabel && previewValue ? (
         <>
           <p className="theme-info-card-preview-label mt-3 text-xs uppercase tracking-[0.16em]">{previewLabel}</p>

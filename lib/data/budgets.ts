@@ -345,6 +345,7 @@ export async function getGeneralBudgetResourceSummary(budgetId: string, userId: 
       items: {
         orderBy: { sortOrder: "asc" },
         select: {
+          quantity: true,
           apu: {
             select: {
               resources: {
@@ -376,6 +377,7 @@ export async function getGeneralBudgetResourceSummary(budgetId: string, userId: 
     subBudgets.map((subBudget) => ({
       name: subBudget.name,
       items: subBudget.items.map((item) => ({
+        quantity: decimalToNumber(item.quantity),
         apu: item.apu
           ? {
               resources: item.apu.resources.flatMap((resource) =>
