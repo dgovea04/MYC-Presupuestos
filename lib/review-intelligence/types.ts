@@ -87,6 +87,7 @@ export interface ReviewConfiguration {
   maxXlsxSheets: number;
   tolerancePercent: string;
   findingTypes: ReviewFindingType[];
+  xlsxSheetNames?: string[];
 }
 
 export interface ComparisonJson {

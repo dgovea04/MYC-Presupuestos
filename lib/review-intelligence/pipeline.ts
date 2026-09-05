@@ -16,7 +16,7 @@ type TransactionOptions = { isolationLevel?: "Serializable" };
 
 export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string; baseSnapshotId?: string; }
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
-export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; extractionCoverage?: Array<{ coverage?: string }>; }
+export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; extractionCoverage?: Array<{ coverage?: string; page?: number; worksheet?: string }>; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }
 export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }

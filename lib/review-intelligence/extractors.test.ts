@@ -20,6 +20,28 @@ async function createWorkbookFile(): Promise<File> {
 }
 
 describe("review document extractors", () => {
+  it("extracts only selected XLSX sheets while retaining their real sheet and range provenance", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const selected = workbook.addWorksheet("Metrados");
+    selected.addRow(["Código", "Descripción", "Cantidad"]);
+    selected.addRow(["01.01", "Concreto", 12]);
+    const excluded = workbook.addWorksheet("Resumen");
+    excluded.addRow(["Código", "Descripción", "Cantidad"]);
+    excluded.addRow(["99.99", "No procesar", 99]);
+    const bytes = await workbook.xlsx.writeBuffer();
+
+    const result = await extractDocument({
+      file: new File([bytes], "metrados.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      xlsxSheetNames: ["Metrados"],
+    });
+
+    expect(result.sheetCount).toBe(2);
+    expect(result.items).toEqual([expect.objectContaining({
+      content: expect.stringContaining("Concreto"),
+      location: { sheet: "Metrados", range: "A2:C2" },
+    })]);
+  });
+
   it("normalizes XLSX content with real sheet/range evidence and does not evaluate formulas or links", async () => {
     const result = await extractDocument({ file: await createWorkbookFile() });
     expect(result.kind).toBe("XLSX");

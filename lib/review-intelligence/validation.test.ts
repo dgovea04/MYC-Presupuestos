@@ -69,6 +69,18 @@ describe("parseReviewConfiguration", () => {
     });
   });
 
+  it("accepts an optional, bounded XLSX worksheet selection", () => {
+    expect(parseReviewConfiguration({
+      maxFiles: 1,
+      maxPdfPages: 1,
+      maxFileSizeMb: 1,
+      maxXlsxSheets: 2,
+      tolerancePercent: "0",
+      findingTypes: ["QUANTITY_MISMATCH"],
+      xlsxSheetNames: ["Metrados", "Resumen"],
+    }).xlsxSheetNames).toEqual(["Metrados", "Resumen"]);
+  });
+
   it("rechaza límites inferiores, campos faltantes y decimales inválidos", () => {
     const validConfiguration = {
       maxFiles: 1,
