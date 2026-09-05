@@ -21,4 +21,12 @@ describe("review evidence view API", () => {
     await expect(response.json()).resolves.toEqual(expect.objectContaining({ evidenceId: "evidence-1", expiresAt: expect.any(String) }));
     expect(mocks.viewReviewEvidence).toHaveBeenCalledWith(expect.objectContaining({ evidenceId: "evidence-1", companyId: "company-1", userId: "user-1", token: "temp", correlationId: "corr-view", role: "VIEWER" }));
   });
+
+  it("rejects cross-tenant provenance before a source URL can be returned", async () => {
+    mocks.viewReviewEvidence.mockRejectedValue(new Error("Evidence not found."));
+    const response = await GET(new Request("http://localhost/api/review-evidence/evidence-1/view?token=temp"), { params: Promise.resolve({ id: "evidence-1" }) });
+
+    expect(response.status).toBe(404);
+    expect(mocks.viewReviewEvidence).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", evidenceId: "evidence-1" }));
+  });
 });

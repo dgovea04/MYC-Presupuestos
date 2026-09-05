@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-import { createDocumentVersion, createProjectDocument, createProjectDocumentAndVersion } from "./documents";
+import { createDocumentVersion, createProjectDocument, createProjectDocumentAndVersion, persistReviewDocumentUpload } from "./documents";
 
 const validPdf = (suffix: string): Uint8Array => new TextEncoder().encode(`%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (${suffix})>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF`);
 
@@ -21,7 +21,46 @@ function createClient() {
   };
 }
 
+function createStorage() {
+  return { put: vi.fn(), delete: vi.fn(), createTemporaryReadUrl: vi.fn() };
+}
+
 describe("review document persistence", () => {
+  it("rolls back a newly persisted binary when version persistence fails", async () => {
+    const client = createClient();
+    const transaction = createClient();
+    transaction.projectDocument.findFirst.mockResolvedValue(null);
+    transaction.projectDocument.create.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "valid.pdf" });
+    transaction.documentVersion.findFirst.mockResolvedValue(null);
+    transaction.documentVersion.aggregate.mockResolvedValue({ _max: { versionNumber: null } });
+    transaction.documentVersion.create.mockRejectedValue(new Error("database failure"));
+    client.$transaction.mockImplementation(async (callback) => callback(transaction));
+    const storage = createStorage();
+    storage.put.mockResolvedValue({ storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf", absolutePath: "C:\\private\\original.pdf", sha256: createHash("sha256").update(validPdf("rollback")).digest("hex"), fileSizeBytes: validPdf("rollback").byteLength });
+
+    await expect(persistReviewDocumentUpload({ companyId: "company-1", projectId: "project-1", createdById: "user-1", name: "Valid", originalFileName: "valid.pdf", file: new File([validPdf("rollback")], "valid.pdf", { type: "application/pdf" }), bytes: validPdf("rollback"), sha256: createHash("sha256").update(validPdf("rollback")).digest("hex"), mimeType: "application/pdf", fileSizeBytes: validPdf("rollback").byteLength, idempotencyKey: "key-rollback" }, client, storage)).rejects.toThrow("database failure");
+
+    expect(storage.put).toHaveBeenCalledOnce();
+    expect(storage.delete).toHaveBeenCalledWith({ companyId: "company-1", projectId: "project-1", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" });
+  });
+
+  it("replays an identical upload without storing bytes or creating another version", async () => {
+    const client = createClient();
+    const transaction = createClient();
+    const file = new File([validPdf("replay-storage")], "valid.pdf", { type: "application/pdf" });
+    const sha256 = createHash("sha256").update(validPdf("replay-storage")).digest("hex");
+    const version = { id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256 };
+    transaction.projectDocument.findFirst.mockResolvedValue({ id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "valid.pdf" });
+    transaction.documentVersion.findFirst.mockResolvedValueOnce({ ...version, storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" });
+    client.$transaction.mockImplementation(async (callback) => callback(transaction));
+    const storage = createStorage();
+
+    const result = await persistReviewDocumentUpload({ companyId: "company-1", projectId: "project-1", createdById: "user-1", name: "Valid", originalFileName: "valid.pdf", file, bytes: validPdf("replay-storage"), sha256, mimeType: "application/pdf", fileSizeBytes: file.size, idempotencyKey: "key-replay" }, client, storage);
+
+    expect(result.version).toEqual(expect.objectContaining(version));
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(transaction.documentVersion.create).not.toHaveBeenCalled();
+  });
   it("rejects an extension whose real MIME is not a supported document", async () => {
     const client = createClient();
     const file = new File(["plain text"], "budget.pdf", { type: "application/pdf" });

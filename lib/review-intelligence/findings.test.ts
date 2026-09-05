@@ -93,8 +93,9 @@ describe("review findings service", () => {
     expect(linkTx.reviewAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ correlationId: "corr-link", payloadJson: expect.objectContaining({ role: "EDITOR" }) }) }));
     const expiresAt = Date.now() + 60_000;
     const token = `${expiresAt}.${createHmac("sha256", "test-review-secret").update(`evidence-1.${expiresAt}`).digest("base64url")}`;
-    const evidenceClient = { reviewEvidence: { findFirst: vi.fn().mockResolvedValue({ id: "evidence-1", projectId: "project-1", documentVersionId: "version-1", evidenceType: "QUANTITY", originalText: "1", normalizedText: null, locationJson: {}, unit: "m2", extractionMethod: "xlsx", confidence: "HIGH", sourceHash: "hash" }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-view" }) } } as never;
-    await viewReviewEvidence({ evidenceId: "evidence-1", companyId: "company-1", userId: "user-1", role: "VIEWER", correlationId: "corr-view", token }, evidenceClient);
+    const evidenceClient = { reviewEvidence: { findFirst: vi.fn().mockResolvedValue({ id: "evidence-1", companyId: "company-1", projectId: "project-1", documentVersionId: "version-1", evidenceType: "QUANTITY", originalText: "1", normalizedText: null, locationJson: {}, unit: "m2", extractionMethod: "xlsx", confidence: "HIGH", sourceHash: "hash", documentVersion: { id: "version-1", companyId: "company-1", projectId: "project-1", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" } }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-view" }) } } as never;
+    const storage = { createTemporaryReadUrl: vi.fn().mockResolvedValue("/api/review-documents/read?token=temporary"), put: vi.fn(), delete: vi.fn() };
+    await viewReviewEvidence({ evidenceId: "evidence-1", companyId: "company-1", userId: "user-1", role: "VIEWER", correlationId: "corr-view", token }, evidenceClient, storage);
     expect(evidenceClient.reviewAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ correlationId: "corr-view", payloadJson: expect.objectContaining({ role: "VIEWER" }) }) }));
   });
 

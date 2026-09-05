@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createDocumentVersion: vi.fn(),
   createProjectDocumentAndVersion: vi.fn(),
   validateDocumentFile: vi.fn(),
+  persistReviewDocumentUpload: vi.fn(),
   projectDocumentUpdate: vi.fn(),
   documentVersionFindFirst: vi.fn(),
   assertWorkspaceMembership: vi.fn(),
@@ -22,9 +23,12 @@ const mocks = vi.hoisted(() => ({
   reviewFindingDeleteMany: vi.fn(),
   findingDecisionDeleteMany: vi.fn(),
   reviewAuditEventDeleteMany: vi.fn(),
+  reviewAuditEventCreate: vi.fn(),
+  reviewAuditEventUpdateMany: vi.fn(),
   reviewRunDocumentVersionDeleteMany: vi.fn(),
   reviewRunDeleteMany: vi.fn(),
   transaction: vi.fn(),
+  getReviewDocumentStorage: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
@@ -40,10 +44,9 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {
   $transaction: mocks.transaction,
 } }));
 vi.mock("@/lib/review-intelligence/documents", () => ({
-  createProjectDocument: mocks.createProjectDocument,
-  createDocumentVersion: mocks.createDocumentVersion,
-  createProjectDocumentAndVersion: mocks.createProjectDocumentAndVersion,
   validateDocumentFile: mocks.validateDocumentFile,
+  persistReviewDocumentUpload: mocks.persistReviewDocumentUpload,
+  getReviewDocumentStorage: mocks.getReviewDocumentStorage,
 }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: mocks.assertWorkspaceMembership }));
 vi.mock("@/lib/review-intelligence/extraction-persistence", () => ({ extractAndPersistDocumentVersion: mocks.extractAndPersistDocumentVersion }));
@@ -60,13 +63,15 @@ describe("review documents API", () => {
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
     mocks.validateDocumentFile.mockResolvedValue({ sha256: "hash", mimeType: "application/pdf", extension: ".pdf", fileSizeBytes: 8, bytes: new Uint8Array() });
     mocks.documentVersionFindMany.mockResolvedValue([]);
+    mocks.getReviewDocumentStorage.mockReturnValue({ delete: vi.fn(), put: vi.fn(), createTemporaryReadUrl: vi.fn() });
+    mocks.persistReviewDocumentUpload.mockResolvedValue({ document: { id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "spec.pdf" }, version: { id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "hash" } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
       projectDocument: { updateMany: mocks.projectDocumentUpdateMany, deleteMany: mocks.projectDocumentDeleteMany },
       documentVersion: { deleteMany: mocks.documentVersionDeleteMany },
       reviewRun: { findMany: mocks.reviewRunFindMany, deleteMany: mocks.reviewRunDeleteMany },
       reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
       findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
-      reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+      reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany, create: mocks.reviewAuditEventCreate, updateMany: mocks.reviewAuditEventUpdateMany },
       reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
     }));
   });
@@ -102,7 +107,7 @@ describe("review documents API", () => {
     const version = { id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "hash" };
     mocks.createProjectDocument.mockResolvedValue(document);
     mocks.createDocumentVersion.mockResolvedValue(version);
-    mocks.createProjectDocumentAndVersion.mockResolvedValue({ document, version });
+    mocks.persistReviewDocumentUpload.mockResolvedValue({ document, version });
     const form = new FormData();
     form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
     form.set("category", "TECHNICAL_SPECIFICATION");
@@ -111,7 +116,21 @@ describe("review documents API", () => {
     const payload = await response.json() as Record<string, unknown>;
     expect(payload).toEqual(expect.objectContaining({ document, version }));
     expect(payload).not.toHaveProperty("url");
-    expect(mocks.createProjectDocumentAndVersion).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", projectId: "project-1", createdById: "user-1" }), expect.anything());
+    expect(mocks.persistReviewDocumentUpload).toHaveBeenCalledWith(expect.objectContaining({ companyId: "company-1", projectId: "project-1", createdById: "user-1", bytes: expect.any(Uint8Array) }), expect.anything(), expect.anything());
+  });
+
+  it("sends the validated upload bytes to tenant-scoped storage before extraction", async () => {
+    const form = new FormData();
+    form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-storage" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
+
+    expect(response.status).toBe(201);
+    expect(mocks.persistReviewDocumentUpload).toHaveBeenCalledWith(expect.objectContaining({
+      bytes: new Uint8Array(),
+      sha256: "hash",
+      idempotencyKey: "key-storage",
+    }), expect.anything(), expect.anything());
+    expect(mocks.extractAndPersistDocumentVersion).toHaveBeenCalledOnce();
   });
 
   it("reports no next page when the final page has exactly pageSize rows", async () => {
@@ -131,7 +150,7 @@ describe("review documents API", () => {
   });
 
   it("returns 409 when the persisted upload key replays a different payload", async () => {
-    mocks.createProjectDocumentAndVersion.mockRejectedValue(new Error("Idempotency key conflict: payload hash differs."));
+    mocks.persistReviewDocumentUpload.mockRejectedValue(new Error("Idempotency key conflict: payload hash differs."));
     const form = new FormData();
     form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" }));
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-conflict" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
@@ -148,7 +167,7 @@ describe("review documents API", () => {
 
   it("deletes all source documents and dependent review history only with explicit confirmation", async () => {
     mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", currentVersionId: "version-1" }]);
-    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1" }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" }]);
     mocks.reviewRunFindMany.mockResolvedValue([{ id: "run-1" }]);
     const response = await DELETE(new Request("http://localhost/api/projects/project-1/review-documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "ELIMINAR DOCUMENTOS FUENTE" }) }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(200);
@@ -156,5 +175,9 @@ describe("review documents API", () => {
     expect(mocks.projectDocumentUpdateMany).toHaveBeenCalledWith({ where: { id: { in: ["document-1"] }, companyId: "company-1", projectId: "project-1" }, data: { currentVersionId: null } });
     expect(mocks.documentVersionDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["version-1"] }, companyId: "company-1", projectId: "project-1" } });
     expect(mocks.projectDocumentDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["document-1"] }, companyId: "company-1", projectId: "project-1" } });
+    expect(mocks.getReviewDocumentStorage()).toEqual(expect.objectContaining({ delete: expect.any(Function) }));
+    expect(mocks.reviewAuditEventDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.reviewAuditEventUpdateMany).toHaveBeenCalledWith({ where: { reviewRunId: { in: ["run-1"] }, companyId: "company-1", projectId: "project-1" }, data: { reviewRunId: null } });
+    expect(mocks.reviewAuditEventCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: 1, versionCount: 1 } }) }));
   });
 });

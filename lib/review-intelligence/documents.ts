@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 
 import { ExtractionStatus, Prisma, ReviewDocumentCategory, type ReviewDocumentCategory as ReviewDocumentCategoryType } from "@prisma/client";
+import { LocalReviewDocumentStorage, type ReviewDocumentStorage, type StoredReviewDocument } from "./storage";
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".pdf", ".xlsx"]);
@@ -48,6 +50,64 @@ export type DocumentClient = {
 };
 
 export type ProjectDocumentAndVersionInput = ProjectDocumentInput & Pick<DocumentVersionInput, "storageKey" | "file">;
+
+export type PersistReviewDocumentUploadInput = ProjectDocumentInput & {
+  projectDocumentId?: string;
+  idempotencyKey: string;
+  file: ReviewDocumentFile;
+  bytes: Uint8Array;
+  sha256: string;
+  mimeType: ValidatedDocument["mimeType"];
+  fileSizeBytes: number;
+};
+
+export function getReviewDocumentStorage(): ReviewDocumentStorage {
+  const signingSecret = process.env.REVIEW_DOCUMENT_STORAGE_SIGNING_SECRET ?? process.env.REVIEW_EVIDENCE_SIGNING_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  if (!signingSecret) throw new Error("Review document storage is unavailable until a signing secret is configured.");
+  return new LocalReviewDocumentStorage({
+    rootDirectory: process.env.REVIEW_DOCUMENT_STORAGE_DIR ?? path.resolve(process.cwd(), "..", "review-document-storage"),
+    signingSecret,
+    temporaryUrlTtlSeconds: 5 * 60,
+  });
+}
+
+export async function persistReviewDocumentUpload(
+  input: PersistReviewDocumentUploadInput,
+  client: DocumentClient,
+  storage: ReviewDocumentStorage,
+): Promise<{ document: ProjectDocumentRecord; version: DocumentVersionRecord }> {
+  let stored: StoredReviewDocument | null = null;
+  let storedKey: string | undefined;
+  try {
+    return await client.$transaction(async (transaction) => {
+      const document = input.projectDocumentId
+        ? await transaction.projectDocument.findFirst({ where: { id: input.projectDocumentId, companyId: input.companyId, projectId: input.projectId } })
+        : await transaction.projectDocument.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, originalFileName: input.originalFileName } })
+          ?? await transaction.projectDocument.create({ data: { companyId: input.companyId, projectId: input.projectId, createdById: input.createdById, name: input.name, originalFileName: input.originalFileName, category: input.category ?? ReviewDocumentCategory.OTHER } });
+      if (!document) throw new Error("El documento no pertenece a la empresa y proyecto indicados.");
+
+      const replay = await transaction.documentVersion.findFirst({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, sha256: input.sha256 } });
+      if (replay) return { document, version: replay };
+
+      const aggregate = await transaction.documentVersion.aggregate({ where: { companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id }, _max: { versionNumber: true } });
+      const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
+      stored = await storage.put({ companyId: input.companyId, projectId: input.projectId, documentId: document.id, versionNumber, originalFileName: input.file.name, bytes: input.bytes });
+      storedKey = stored.storageKey;
+      if (stored.sha256 !== input.sha256 || stored.fileSizeBytes !== input.fileSizeBytes) throw new Error("Stored document integrity check failed.");
+      const version = await transaction.documentVersion.create({ data: {
+        companyId: input.companyId, projectId: input.projectId, projectDocumentId: document.id, versionNumber,
+        storageKey: stored.storageKey, storageProvider: "LOCAL",
+        storageMetadata: { provider: "LOCAL", sha256: stored.sha256, fileSizeBytes: stored.fileSizeBytes, idempotencyKey: input.idempotencyKey },
+        originalFileName: input.file.name, mimeType: input.mimeType, fileSizeBytes: input.fileSizeBytes, sha256: input.sha256, extractionStatus: ExtractionStatus.PENDING,
+      } });
+      await transaction.projectDocument.update({ where: { id: document.id, companyId: input.companyId, projectId: input.projectId }, data: { currentVersionId: version.id } });
+      return { document, version };
+    });
+  } catch (error) {
+    if (storedKey) await storage.delete({ companyId: input.companyId, projectId: input.projectId, storageKey: storedKey });
+    throw error;
+  }
+}
 
 export async function createProjectDocumentAndVersion(
   input: ProjectDocumentAndVersionInput,

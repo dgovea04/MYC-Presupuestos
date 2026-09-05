@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { FindingResolution, FindingStatus } from "./types";
+import { getReviewDocumentStorage } from "./documents";
+import type { ReviewDocumentStorage } from "./storage";
 
 type Client = Pick<PrismaClient, "reviewRun" | "reviewFinding" | "findingDecision" | "reviewAuditEvent" | "entityLink" | "reviewEvidence" | "budget" | "budgetVersionSnapshot"> & {
   $transaction<T>(callback: (transaction: Client) => Promise<T>): Promise<T>;
@@ -215,10 +217,13 @@ export async function validateReviewLink(input: { linkId: string; companyId: str
   });
 }
 
-export async function viewReviewEvidence(input: { evidenceId: string; companyId: string; userId: string; role: string; correlationId: string; token?: string }, client: Client = prisma) {
+export async function viewReviewEvidence(input: { evidenceId: string; companyId: string; userId: string; role: string; correlationId: string; token?: string }, client: Client = prisma, storage: ReviewDocumentStorage = getReviewDocumentStorage()) {
   if (!input.token || !verifyTemporaryEvidenceToken(input.evidenceId, input.token)) throw new Error("Temporary evidence URL is invalid or expired.");
-  const evidence = await client.reviewEvidence.findFirst({ where: { id: input.evidenceId, companyId: input.companyId, project: { companyId: input.companyId } }, select: { id: true, projectId: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true } });
+  if (!new Set(["VIEWER", "EDITOR", "OWNER"]).has(input.role)) throw new Error("Evidence access role is invalid.");
+  const evidence = await client.reviewEvidence.findFirst({ where: { id: input.evidenceId, companyId: input.companyId, project: { companyId: input.companyId } }, select: { id: true, companyId: true, projectId: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, documentVersion: { select: { id: true, companyId: true, projectId: true, storageKey: true } } } });
   if (!evidence) throw new Error("Evidence not found.");
+  if (!evidence.documentVersion || evidence.documentVersion.id !== evidence.documentVersionId || evidence.documentVersion.companyId !== input.companyId || evidence.documentVersion.projectId !== evidence.projectId || evidence.companyId !== input.companyId) throw new Error("Evidence provenance is invalid.");
+  const sourceUrl = await storage.createTemporaryReadUrl({ companyId: input.companyId, projectId: evidence.projectId, storageKey: evidence.documentVersion.storageKey });
   await client.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: evidence.projectId, actorUserId: input.userId, correlationId: input.correlationId, eventType: "REVIEW_EVIDENCE_VIEWED", payloadJson: { evidenceId: evidence.id, documentVersionId: evidence.documentVersionId, role: input.role, expiresAt: new Date(Number(input.token.split(".")[0])).toISOString() } } });
-  return { evidenceId: evidence.id, projectId: evidence.projectId, documentVersionId: evidence.documentVersionId, evidenceType: evidence.evidenceType, originalText: evidence.originalText, normalizedText: evidence.normalizedText, location: jsonObject(evidence.locationJson), unit: evidence.unit, extractionMethod: evidence.extractionMethod, confidence: evidence.confidence, sourceHash: evidence.sourceHash, expiresAt: new Date(Number(input.token.split(".")[0])).toISOString() };
+  return { evidenceId: evidence.id, projectId: evidence.projectId, documentVersionId: evidence.documentVersionId, evidenceType: evidence.evidenceType, originalText: evidence.originalText, normalizedText: evidence.normalizedText, location: jsonObject(evidence.locationJson), unit: evidence.unit, extractionMethod: evidence.extractionMethod, confidence: evidence.confidence, sourceHash: evidence.sourceHash, sourceUrl, expiresAt: new Date(Number(input.token.split(".")[0])).toISOString() };
 }
