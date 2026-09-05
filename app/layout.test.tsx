@@ -19,6 +19,10 @@ vi.mock("next/font/google", () => ({
   Plus_Jakarta_Sans: () => ({ variable: "font-plus-jakarta-sans" }),
 }));
 
+vi.mock("next/script", () => ({
+  default: ({ children, id }: { children: ReactNode; id?: string }) => <script id={id}>{children}</script>,
+}));
+
 vi.mock("@/components/ai/global-ai-assistant-provider", () => ({
   GlobalAiAssistantProvider: ({ children }: { children: ReactNode; canUseKhipu?: boolean }) => {
     globalAiAssistantProviderSpy(children);

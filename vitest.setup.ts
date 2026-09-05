@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { vi } from "vitest";
 
 // Phase 1 Excel-mode note:
@@ -12,6 +13,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
   unstable_cache: vi.fn(),
+  unstable_noStore: vi.fn(),
 }));
 
 class MockResizeObserver implements ResizeObserver {

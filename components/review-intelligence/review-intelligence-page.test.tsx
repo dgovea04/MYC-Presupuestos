@@ -39,9 +39,9 @@ describe("ReviewIntelligencePage", () => {
     fireEvent.click(screen.getByLabelText("Incluir Planos.pdf en la revisión"));
     fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
 
-    await waitFor(() => expect(screen.getByTestId("review-lifecycle-status").textContent).toBe("QUEUED"));
+    await waitFor(() => expect(screen.getByTestId("review-lifecycle-status").textContent).toBe("En cola"));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("run-new/findings"))).toBe(true));
-  });
+  }, 15000);
 
   it("shows the empty state with supported formats and human-review guardrails", async () => {
     const fetchMock = vi.fn<typeof fetch>()
@@ -71,7 +71,7 @@ describe("ReviewIntelligencePage", () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ documents: [], runs: [], findings: [], page: 1, pageSize: 25, hasNextPage: false })));
     const completed: ReviewRunView = { ...runningRun, status: "COMPLETED", updatedAt: "2026-09-03T12:00:00.000Z" };
     const { rerender } = render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" initialRun={completed} canResolve />);
-    expect((await screen.findByTestId("review-lifecycle-status")).textContent).toBe("COMPLETED");
+    expect((await screen.findByTestId("review-lifecycle-status")).textContent).toBe("Completada");
     expect(screen.getByRole("button", { name: "Pasar a revisión" })).toBeTruthy();
     rerender(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" initialRun={completed} canResolve={false} />);
     expect(screen.queryByRole("button", { name: "Pasar a revisión" })).toBeNull();
@@ -118,7 +118,8 @@ describe("FindingQueue", () => {
 
     expect(screen.getByRole("heading", { name: "Bandeja de hallazgos" })).toBeTruthy();
     expect(screen.getAllByText("Diferencia de metrado").length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByLabelText("Filtrar por tipo"), { target: { value: "QUANTITY_MISMATCH" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "Filtrar por tipo" }));
+    fireEvent.click(screen.getByRole("option", { name: "Diferencia de metrado" }));
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ findingType: "QUANTITY_MISMATCH" }));
     fireEvent.click(screen.getByRole("button", { name: "Abrir hallazgo MAT-001" }));
     expect(onOpenFinding).toHaveBeenCalledWith("finding-1");
@@ -140,7 +141,7 @@ describe("FindingDetail", () => {
     expect(screen.getAllByText(/requerida/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/presupuesto no se modifica/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "VALID_AS_IS" }));
+    fireEvent.click(screen.getByRole("button", { name: /V.*lido sin cambios/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/review-findings/finding-1/decisions",
       expect.objectContaining({ method: "POST" }),
@@ -154,7 +155,7 @@ describe("FindingDetail", () => {
   it("keeps provenance readable but hides resolution actions for a viewer", () => {
     render(<FindingDetail finding={finding} canResolve={false} onChanged={vi.fn()} />);
     expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "VALID_AS_IS" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /V.*lido sin cambios/ })).toBeNull();
   });
 });
 

@@ -412,10 +412,10 @@ describe("PartidasTable", () => {
       trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
 
     await act(async () => {
-      const items = container.querySelectorAll('[role="menuitem"]');
+      const items = document.body.querySelectorAll('[role="menuitem"]');
       const deleteItem = Array.from(items).find((item) => item.textContent?.includes("Eliminar"));
       deleteItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

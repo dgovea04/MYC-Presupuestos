@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getWorkspaceUsage } from "@/lib/workspace/usage";
 
 function makePlan(overrides: Record<string, unknown> = {}) {
@@ -33,6 +33,15 @@ function createClient() {
 }
 
 describe("getWorkspaceUsage", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-21T10:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("resolves plan and subscription from the company subscription", async () => {
     const client = createClient();
     client.companySubscription.findUnique.mockResolvedValue({

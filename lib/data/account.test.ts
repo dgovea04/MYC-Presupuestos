@@ -226,6 +226,7 @@ describe("account data", () => {
         },
         billingSubscriptions: [],
         aiUsagePeriods: [],
+        aiTokenLedger: [],
       });
       getEffectiveWorkspaceLicenseMock.mockResolvedValue({
         planSlug: "pro",
