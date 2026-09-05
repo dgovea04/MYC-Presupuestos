@@ -2,14 +2,19 @@ import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import PDFDocument from "pdfkit";
 import { extractDocument } from "./extractors";
-import { runReviewJob, type ReviewPipelineClient, type RunReviewJobInput } from "./pipeline";
+import { retryReviewRun, runReviewJob, type ReviewPipelineClient, type RunReviewJobInput } from "./pipeline";
 
 function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>; evidence: Array<Record<string, unknown>>; links: Array<Record<string, unknown>>; findings: Array<Record<string, unknown>>; events: Array<Record<string, unknown>>; beforeTransaction?: (count: number) => void } {
   const store = { runs: [], evidence: [], links: [], findings: [], events: [] } as ReturnType<typeof client>;
   store.reviewRun = {
     findFirst: async ({ where }) => store.runs.find((run) => run.id === where.id || (run.budgetId === where.budgetId && run.companyId === where.companyId && run.projectId === where.projectId)) ?? null,
     findUnique: async ({ where }) => store.runs.find((run) => run.id === where.id || (run.id === (where.id_companyId_projectId as { id?: string } | undefined)?.id && run.companyId === (where.id_companyId_projectId as { companyId?: string } | undefined)?.companyId && run.projectId === (where.id_companyId_projectId as { projectId?: string } | undefined)?.projectId)) ?? null,
-    findMany: async ({ where }) => store.runs.filter((run) => run.budgetId === where.budgetId && run.companyId === where.companyId && run.projectId === where.projectId),
+    findMany: async ({ where }) => store.runs.filter((run) =>
+      (where.budgetId === undefined || run.budgetId === where.budgetId)
+      && (where.companyId === undefined || run.companyId === where.companyId)
+      && (where.projectId === undefined || run.projectId === where.projectId)
+      && (where.status === undefined || typeof where.status === "string" && run.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(run.status)),
+    ),
     create: async ({ data }) => { if (store.runs.some((run) => run.id === data.id)) throw new Error("P2002"); const run = { id: data.id ?? `run-${store.runs.length + 1}`, ...data }; store.runs.push(run); return run; },
     update: async ({ where, data }) => { const run = store.runs.find((entry) => entry.id === where.id && (!where.status || entry.status === where.status))!; Object.assign(run, data); return run; },
     updateMany: async ({ where, data }) => { const compound = where.id_companyId_projectId as { id?: string; companyId?: string; projectId?: string } | undefined; const run = store.runs.find((entry) => (entry.id === where.id || entry.id === compound?.id) && (!where.status || typeof where.status === "string" && entry.status === where.status || typeof where.status === "object" && (where.status as { in?: unknown[] }).in?.includes(entry.status)) && (!where.progressJson || JSON.stringify(entry.progressJson) === JSON.stringify((where.progressJson as { equals?: unknown }).equals))); if (!run) return { count: 0 }; Object.assign(run, data); return { count: 1 }; },
@@ -39,6 +44,69 @@ const input = (): RunReviewJobInput => ({
 });
 
 describe("runReviewJob", () => {
+  it("retries a retryable stage failure with persisted attempts and deterministic backoff", async () => {
+    const database = client();
+    const scheduledDelays: number[] = [];
+    let failOnce = true;
+    const result = await runReviewJob({
+      ...input(),
+      jobPolicy: { maxAttempts: 2, backoffMs: 25 },
+      jobRuntime: { schedule: async (delayMs) => { scheduledDelays.push(delayMs); } },
+      shouldCancel: () => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error("temporary upstream failure");
+        }
+        return false;
+      },
+    }, database);
+
+    expect(result.status).toBe("COMPLETED");
+    expect(scheduledDelays).toEqual([25]);
+    expect(database.runs[0]).toMatchObject({ attemptCount: 9, nextRetryAt: null, failureCode: null });
+  });
+
+  it("fails a stage that exceeds its persisted deadline without sleeping", async () => {
+    const database = client();
+    let timestamp = 1_000;
+    await expect(runReviewJob({
+      ...input(),
+      jobPolicy: { maxAttempts: 1, stageTimeoutMs: 10 },
+      jobRuntime: { now: () => new Date(timestamp) },
+      shouldCancel: () => {
+        timestamp = 1_011;
+        return false;
+      },
+    }, database)).rejects.toThrow("timed out");
+
+    expect(database.runs[0]).toMatchObject({ status: "FAILED", failureCode: "STAGE_TIMEOUT", stageDeadlineAt: null });
+  });
+
+  it("rejects a new run when the company active-run limit is already reached", async () => {
+    const database = client();
+    database.runs.push({ id: "company-active", companyId: "company-1", projectId: "project-other", budgetId: "budget-other", status: "QUEUED", progressJson: { checkpoints: [] }, warningsJson: [] });
+
+    await expect(runReviewJob({ ...input(), jobPolicy: { maxConcurrentPerCompany: 1 } }, database)).rejects.toThrow("company already has");
+  });
+
+  it("retries a failed run from its checkpoint without duplicating evidence or findings", async () => {
+    const database = client();
+    let fail = true;
+    const request = { ...input(), shouldCancel: () => {
+      if (fail) {
+        fail = false;
+        throw new Error("temporary failure");
+      }
+      return false;
+    } };
+    await expect(runReviewJob(request, database)).rejects.toThrow("temporary failure");
+
+    const resumed = await retryReviewRun(database.runs[0].id as string, "company-1", request, database);
+    expect(resumed.status).toBe("COMPLETED_WITH_WARNINGS");
+    expect(database.evidence).toHaveLength(1);
+    expect(database.findings).toHaveLength(1);
+  });
+
   it("rejects a review when the selected documents have no extracted evidence", async () => {
     const database = client();
     await expect(runReviewJob({ ...input(), evidence: [] }, database)).rejects.toThrow("No extracted evidence is available");
