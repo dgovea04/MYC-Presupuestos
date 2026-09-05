@@ -13,6 +13,25 @@ function jobClient(): ReviewJobClient & { runs: Array<Record<string, unknown>> }
 }
 
 describe("review jobs", () => {
+  it("returns persisted retry and deadline metadata for the tenant-owned run", async () => {
+    const database = jobClient();
+    database.runs[0] = {
+      ...database.runs[0],
+      attemptCount: 2,
+      nextRetryAt: new Date("2026-09-05T17:00:00.000Z"),
+      stageDeadlineAt: new Date("2026-09-05T17:01:00.000Z"),
+      failureCode: "STAGE_RETRYABLE_FAILURE",
+    };
+
+    const progress = await getReviewProgress("run-1", "company-1", database);
+    expect(progress.job).toEqual({
+      attemptCount: 2,
+      nextRetryAt: "2026-09-05T17:00:00.000Z",
+      stageDeadlineAt: "2026-09-05T17:01:00.000Z",
+      failureCode: "STAGE_RETRYABLE_FAILURE",
+    });
+  });
+
   it("returns tenant-scoped progress and marks stale executions", async () => {
     const database = jobClient();
     const progress = await getReviewProgress("run-1", "company-1", database, { staleAfterMs: 1 });

@@ -3,7 +3,8 @@ import { calculateReviewRunMetrics, type ReviewRunMetrics } from "./metrics";
 
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
-export interface ReviewProgress { reviewRunId: string; status: ReviewRunStatus; progress: ProgressJson & { metrics?: ReviewRunMetrics }; warnings: WarningJson[]; }
+export interface ReviewJobMetadata { attemptCount: number; nextRetryAt: string | null; stageDeadlineAt: string | null; failureCode: string | null; }
+export interface ReviewProgress { reviewRunId: string; status: ReviewRunStatus; progress: ProgressJson & { metrics?: ReviewRunMetrics }; warnings: WarningJson[]; job: ReviewJobMetadata; }
 export interface ReviewJobClient { reviewRun: { findUnique(args: { where: Where }): Promise<Row | null>; updateMany(args: { where: Where; data: Row }): Promise<{ count: number }>; findMany(args: { where: Where }): Promise<Row[]>; }; reviewRunDocumentVersion?: { findMany(args: { where: Where }): Promise<Row[]> }; budget?: { findMany(args: { where: Where }): Promise<Row[]> }; budgetItem?: { findMany(args: { where: Where }): Promise<Row[]> }; reviewEvidence?: { findMany(args: { where: Where }): Promise<Row[]> }; entityLink?: { findMany(args: { where: Where }): Promise<Row[]> }; reviewFinding?: { findMany(args: { where: Where }): Promise<Row[]> }; }
 
 export async function getReviewProgress(reviewRunId: string, companyId: string, client: ReviewJobClient, options: { staleAfterMs?: number } = {}): Promise<ReviewProgress> {
@@ -15,8 +16,10 @@ export async function getReviewProgress(reviewRunId: string, companyId: string, 
   if (["DRAFT", "QUEUED", "RUNNING"].includes(status) && Date.now() - updatedAt > staleAfterMs) { status = "STALE"; await client.reviewRun.updateMany({ where: { id: reviewRunId, companyId, status: { in: ["DRAFT", "QUEUED", "RUNNING"] } }, data: { status } }); }
   const value = (run.progressJson ?? {}) as Partial<ProgressJson>;
   const metrics = await persistedMetrics(run, companyId, client) ?? (value as Partial<ProgressJson> & { metrics?: ReviewRunMetrics }).metrics;
-  return { reviewRunId, status, progress: { stage: String(value.stage ?? "validating"), completed: Number(value.completed ?? 0), total: Number(value.total ?? 8), percent: Number(value.percent ?? 0), metrics }, warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [] };
+  return { reviewRunId, status, progress: { stage: String(value.stage ?? "validating"), completed: Number(value.completed ?? 0), total: Number(value.total ?? 8), percent: Number(value.percent ?? 0), metrics }, warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [], job: { attemptCount: Number(run.attemptCount ?? 0), nextRetryAt: toIsoString(run.nextRetryAt), stageDeadlineAt: toIsoString(run.stageDeadlineAt), failureCode: typeof run.failureCode === "string" ? run.failureCode : null } };
 }
+
+function toIsoString(value: unknown): string | null { return value instanceof Date ? value.toISOString() : typeof value === "string" ? value : null; }
 
 async function persistedMetrics(run: Row, companyId: string, client: ReviewJobClient): Promise<ReviewRunMetrics | undefined> {
   if (!client.reviewRunDocumentVersion?.findMany || !client.budget?.findMany || !client.budgetItem?.findMany || !client.reviewEvidence?.findMany || !client.entityLink?.findMany || !client.reviewFinding?.findMany) return undefined;

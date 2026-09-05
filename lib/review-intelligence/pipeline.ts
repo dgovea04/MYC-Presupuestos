@@ -18,7 +18,9 @@ export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem {
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
 export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; extractionCoverage?: Array<{ coverage?: string; page?: number; worksheet?: string }>; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }
-export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
+export interface ReviewJobPolicy { maxAttempts: number; stageTimeoutMs: number; backoffMs: number; maxConcurrentPerCompany: number; }
+export interface ReviewJobRuntime { now?: () => Date; schedule?: (delayMs: number) => Promise<void>; }
+export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; isRetryableFailure?: (error: unknown) => boolean; jobPolicy?: Partial<ReviewJobPolicy>; jobRuntime?: ReviewJobRuntime; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }
 export interface ReviewPipelineClient {
   budget: { findFirst(args: QueryArgs): Promise<Row | null>; findMany(args: QueryArgs): Promise<Row[]> };
@@ -42,9 +44,23 @@ const idempotencyKeyFor = (input: RunReviewJobInput): string => input.idempotenc
 const runIdFor = (input: RunReviewJobInput, key: string): string => `review-${createHash("sha256").update(`${input.companyId}:${input.projectId}:${input.budgetId}:${key}`).digest("hex")}`;
 const json = (value: unknown): unknown => value;
 const isRetryableUniqueOrSerializationConflict = (error: unknown): boolean => { if (typeof error === "object" && error !== null && "code" in error) return error.code === "P2002" || error.code === "P2034"; return error instanceof Error && (/P2002|P2034|serialization/i).test(error.message); };
+const defaultReviewJobPolicy: ReviewJobPolicy = { maxAttempts: 1, stageTimeoutMs: 5 * 60 * 1000, backoffMs: 1_000, maxConcurrentPerCompany: 3 };
+const jobPolicyFor = (input: RunReviewJobInput): ReviewJobPolicy => {
+  const policy = { ...defaultReviewJobPolicy, ...input.jobPolicy };
+  if (!Number.isInteger(policy.maxAttempts) || policy.maxAttempts < 1 || !Number.isFinite(policy.stageTimeoutMs) || policy.stageTimeoutMs < 1 || !Number.isFinite(policy.backoffMs) || policy.backoffMs < 0 || !Number.isInteger(policy.maxConcurrentPerCompany) || policy.maxConcurrentPerCompany < 1) throw new Error("Review job policy is invalid.");
+  return policy;
+};
+const nowFor = (input: RunReviewJobInput): Date => input.jobRuntime?.now?.() ?? new Date();
+const scheduleFor = async (input: RunReviewJobInput, delayMs: number): Promise<void> => {
+  if (input.jobRuntime?.schedule) return input.jobRuntime.schedule(delayMs);
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+};
+const backoffFor = (policy: ReviewJobPolicy, attempt: number): number => policy.backoffMs * 2 ** (attempt - 1);
+class ReviewStageTimeoutError extends Error { constructor() { super("Review stage timed out."); } }
 
 export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<RunReviewJobResult> {
   const configuration = parseReviewConfiguration(input.configuration);
+  const policy = jobPolicyFor(input);
   await validateInput(input, client);
   if (input.humanReviewRequired === false || input.automaticBudgetMutation === true) throw new Error("Review guardrails cannot be disabled.");
   const key = idempotencyKeyFor(input);
@@ -61,7 +77,10 @@ export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipel
     }
     const active = await transaction.reviewRun.findMany({ where: { companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, status: { in: activeStatuses } } });
     if (active.length > 0) throw new Error("An active review run already exists for this budget.");
-    return transaction.reviewRun.create({ data: { id, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, createdById: input.createdById, configurationJson: { ...configuration, idempotencyKey: key, requestFingerprint: requestFingerprintFor(input) }, rulesVersion: input.rulesVersion, status: input.defer ? "QUEUED" : "RUNNING", startedAt: input.defer ? null : new Date(), progressJson: { stage: "validating", completed: 0, total: 8, percent: 0, checkpoints: [], lease: { token: claimToken, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() } }, warningsJson: input.extractionWarnings ?? [] } });
+    const companyActive = await transaction.reviewRun.findMany({ where: { companyId: input.companyId, status: { in: activeStatuses } } });
+    if (companyActive.length >= policy.maxConcurrentPerCompany) throw new Error("The company already has the maximum number of active review runs.");
+    const startedAt = input.defer ? null : nowFor(input);
+    return transaction.reviewRun.create({ data: { id, companyId: input.companyId, projectId: input.projectId, budgetId: input.budgetId, createdById: input.createdById, configurationJson: { ...configuration, reviewJobPolicy: policy, idempotencyKey: key, requestFingerprint: requestFingerprintFor(input) }, rulesVersion: input.rulesVersion, status: input.defer ? "QUEUED" : "RUNNING", startedAt, attemptCount: 0, nextRetryAt: null, stageDeadlineAt: null, failureCode: null, progressJson: { stage: "validating", completed: 0, total: 8, percent: 0, checkpoints: [], lease: { token: claimToken, expiresAt: new Date(nowFor(input).getTime() + 5 * 60 * 1000).toISOString() } }, warningsJson: input.extractionWarnings ?? [] } });
     }, { isolationLevel: "Serializable" });
   } catch (error) {
     const concurrent = await client.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } });
@@ -72,7 +91,18 @@ export async function runReviewJob(input: RunReviewJobInput, client: ReviewPipel
   if (["COMPLETED", "COMPLETED_WITH_WARNINGS", "CANCELLED"].includes(String(run.status))) return result(run, key);
   const ownsRun = await claimRun(client, input, run, claimToken);
   if (!ownsRun) return result((await ownedRun(client, input, id)) ?? run, key);
-  return executeFromCheckpoint(input, client, run, configuration, key, claimToken);
+  return executeFromCheckpoint(input, client, run, configuration, key, claimToken, policy);
+}
+
+export async function retryReviewRun(reviewRunId: string, companyId: string, input: RunReviewJobInput, client: ReviewPipelineClient): Promise<RunReviewJobResult> {
+  const run = await client.reviewRun.findFirst({ where: { id: reviewRunId, companyId } });
+  if (!run || run.companyId !== companyId) throw new Error("Review run not found.");
+  if (!['FAILED', 'STALE'].includes(String(run.status))) throw new Error("Review run is not retryable.");
+  const configuration = run.configurationJson as { idempotencyKey?: string } | undefined;
+  if (!configuration?.idempotencyKey) throw new Error("Review run does not have an idempotency key.");
+  const result = await runReviewJob({ ...input, companyId, idempotencyKey: configuration.idempotencyKey }, client);
+  if (result.reviewRunId !== reviewRunId) throw new Error("Retry request does not match the persisted review run.");
+  return result;
 }
 
 async function claimRun(client: ReviewPipelineClient, input: RunReviewJobInput, run: Row, token: string): Promise<boolean> {
@@ -83,7 +113,7 @@ async function claimRun(client: ReviewPipelineClient, input: RunReviewJobInput, 
   return changed.count > 0;
 }
 
-async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPipelineClient, run: Row, configuration: ReviewConfiguration, key: string, claimToken: string): Promise<RunReviewJobResult> {
+async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPipelineClient, run: Row, configuration: ReviewConfiguration, key: string, claimToken: string, policy: ReviewJobPolicy): Promise<RunReviewJobResult> {
   const id = String(run.id);
   const stored = (run.progressJson ?? {}) as { checkpoints?: Array<{ stage?: string; status?: string }> };
   const failedIndex = stored.checkpoints?.findIndex((entry) => entry.status === "FAILED") ?? -1;
@@ -93,18 +123,32 @@ async function executeFromCheckpoint(input: RunReviewJobInput, client: ReviewPip
   for (let index = first; index < REVIEW_STAGES.length; index += 1) {
     const stage = REVIEW_STAGES[index];
     const correlationId = `${id}:${stage}:${Date.now()}`;
-    try {
-      await checkpoint(client, input, id, stage, index, "RUNNING", 0, warnings, correlationId, claimToken);
-      if (await isCancellationRequested(input, client, id)) return cancelResult(client, input, id, stage, warnings, key, correlationId, claimToken);
-      const count = await processStage(stage, input, client, id, configuration, claimToken);
-      await checkpoint(client, input, id, stage, index, "COMPLETED", count, warnings, correlationId, claimToken);
-      await createAudit(client, input, id, claimToken, { stage, status: "COMPLETED", count, warnings }, correlationId, "REVIEW_STAGE_COMPLETED");
-    } catch (error) {
-      const warning: WarningJson = { code: "STAGE_FAILED", message: error instanceof Error ? error.message : "Review stage failed.", source: stage };
-      warnings.push(warning);
-      await checkpoint(client, input, id, stage, index, "FAILED", 0, warnings, correlationId, claimToken).catch(() => undefined);
-      await failRun(client, input, id, claimToken, stage, warning, warnings, correlationId).catch(() => undefined);
-      throw error;
+    for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
+      const deadline = new Date(nowFor(input).getTime() + policy.stageTimeoutMs);
+      try {
+        await beginStageAttempt(client, input, id, claimToken, deadline);
+        await checkpoint(client, input, id, stage, index, "RUNNING", 0, warnings, correlationId, claimToken);
+        if (await isCancellationRequested(input, client, id)) return cancelResult(client, input, id, stage, warnings, key, correlationId, claimToken);
+        assertStageDeadline(input, deadline);
+        const count = await processStage(stage, input, client, id, configuration, claimToken);
+        assertStageDeadline(input, deadline);
+        await checkpoint(client, input, id, stage, index, "COMPLETED", count, warnings, correlationId, claimToken);
+        await createAudit(client, input, id, claimToken, { stage, status: "COMPLETED", count, warnings }, correlationId, "REVIEW_STAGE_COMPLETED");
+        break;
+      } catch (error) {
+        const retryable = !(error instanceof ReviewStageTimeoutError) && error instanceof Error && error.message !== "Review lease is no longer active." && (input.isRetryableFailure?.(error) ?? true);
+        if (retryable && attempt < policy.maxAttempts) {
+          const delayMs = backoffFor(policy, attempt);
+          await recordRetry(client, input, id, claimToken, delayMs);
+          await scheduleFor(input, delayMs);
+          continue;
+        }
+        const warning: WarningJson = { code: error instanceof ReviewStageTimeoutError ? "STAGE_TIMEOUT" : "STAGE_FAILED", message: error instanceof Error ? error.message : "Review stage failed.", source: stage };
+        warnings.push(warning);
+        await checkpoint(client, input, id, stage, index, "FAILED", 0, warnings, correlationId, claimToken).catch(() => undefined);
+        await failRun(client, input, id, claimToken, stage, warning, warnings, correlationId, error instanceof ReviewStageTimeoutError ? "STAGE_TIMEOUT" : "STAGE_FAILED").catch(() => undefined);
+        throw error;
+      }
     }
   }
   const status: ReviewRunStatus = warnings.length > 0 ? "COMPLETED_WITH_WARNINGS" : "COMPLETED";
@@ -249,14 +293,17 @@ async function validateInput(input: RunReviewJobInput, client: ReviewPipelineCli
 }
 async function getPersistedEvidence(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<ReviewEvidence[]> { const persisted: ReviewEvidence[] = []; for (const evidence of input.evidence) { const stored = await client.reviewEvidence.findFirst({ where: { documentVersionId: evidence.documentVersionId, sourceHash: evidence.sourceHash, companyId: input.companyId, projectId: input.projectId } }); if (!stored) throw new Error("Evidence was not persisted for the requested document version."); persisted.push({ ...evidence, id: String(stored.id) }); } return persisted; }
 async function ownedRun(client: ReviewPipelineClient, input: RunReviewJobInput, id: string): Promise<Row | null> { return client.reviewRun.findUnique({ where: { id_companyId_projectId: { id, companyId: input.companyId, projectId: input.projectId } } }); }
+async function beginStageAttempt(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, deadline: Date): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { attemptCount: Number(current?.attemptCount ?? 0) + 1, nextRetryAt: null, stageDeadlineAt: deadline, failureCode: null } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
+async function recordRetry(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, delayMs: number): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { nextRetryAt: new Date(nowFor(input).getTime() + delayMs), failureCode: "STAGE_RETRYABLE_FAILURE" } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
+function assertStageDeadline(input: RunReviewJobInput, deadline: Date): void { if (nowFor(input).getTime() > deadline.getTime()) throw new ReviewStageTimeoutError(); }
 function leaseFor(token: string): { token: string; expiresAt: string } { return { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() }; }
 function leaseValid(run: Row | null, token: string): boolean { const lease = ((run?.progressJson ?? {}) as { lease?: { token?: string; expiresAt?: string } }).lease; return run?.status === "RUNNING" && lease?.token === token && !!lease.expiresAt && Date.parse(lease.expiresAt) > Date.now(); }
-async function checkpoint(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, index: number, status: string, count: number, warnings: WarningJson[], correlationId: string, token: string): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const existing = (current?.progressJson as { checkpoints?: Array<Record<string, unknown>> } | undefined)?.checkpoints ?? []; const checkpoints = [...existing]; const entry = { stage, status, count, total: 8, warnings, correlationId }; const at = checkpoints.findIndex((value) => value.stage === stage); if (at >= 0) checkpoints[at] = entry; else checkpoints.push(entry); const metrics = { coveragePercent: input.budgetItems.length === 0 ? 0 : Math.min(100, Math.round((count / input.budgetItems.length) * 100)), analyzedItems: count, failures: status === "FAILED" ? 1 : 0, incompleteness: warnings.filter((warning) => /incomplete|partial|missing/i.test(warning.message)).length, deltaVsPrevious: null }; const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { progressJson: { stage, completed: index, total: 8, percent: stage === "completed" ? 100 : Math.round((index / 8) * 100), checkpoints, metrics, lease: leaseFor(token) }, warningsJson: warnings } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
+async function checkpoint(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, index: number, status: string, count: number, warnings: WarningJson[], correlationId: string, token: string): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const existing = (current?.progressJson as { checkpoints?: Array<Record<string, unknown>> } | undefined)?.checkpoints ?? []; const checkpoints = [...existing]; const entry = { stage, status, count, total: 8, warnings, correlationId }; const at = checkpoints.findIndex((value) => value.stage === stage); if (at >= 0) checkpoints[at] = entry; else checkpoints.push(entry); const metrics = { coveragePercent: input.budgetItems.length === 0 ? 0 : Math.min(100, Math.round((count / input.budgetItems.length) * 100)), analyzedItems: count, failures: status === "FAILED" ? 1 : 0, incompleteness: warnings.filter((warning) => /incomplete|partial|missing/i.test(warning.message)).length, deltaVsPrevious: null }; const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { progressJson: { stage, completed: index, total: 8, percent: stage === "completed" ? 100 : Math.round((index / 8) * 100), checkpoints, metrics, lease: leaseFor(token) }, warningsJson: warnings, ...(status === "COMPLETED" ? { nextRetryAt: null, stageDeadlineAt: null, failureCode: null } : {}) } }); if (changed.count === 0) throw new Error("Review run is no longer active."); }
 async function isCancellationRequested(input: RunReviewJobInput, client: ReviewPipelineClient, id: string): Promise<boolean> { return ["CANCEL_REQUESTED", "CANCELLED"].includes(String((await ownedRun(client, input, id))?.status)) || Boolean(await input.shouldCancel?.()); }
 async function assertLease(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string): Promise<void> { const current = await ownedRun(client, input, id); if (!leaseValid(current, token)) throw new Error("Review lease is no longer active."); const changed = await client.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { progressJson: { ...(current?.progressJson as Record<string, unknown>), lease: leaseFor(token) } } }); if (changed.count === 0) throw new Error("Review lease is no longer active."); }
 async function createAudit(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, payload: Row, correlationId: string, eventType: string): Promise<void> { await client.$transaction(async (transaction) => { await assertLease(transaction, input, id, token); await transaction.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType, correlationId, payloadJson: { ...payload, leaseToken: token } } }); }); }
 async function cancelResult(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, stage: ReviewStage, warnings: WarningJson[], key: string, correlationId: string, token: string): Promise<RunReviewJobResult> { await client.$transaction(async (transaction) => { const current = await ownedRun(transaction, input, id); if (current?.status === "CANCELLED") return; const changed = await transaction.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: { in: ["RUNNING", "CANCEL_REQUESTED"] }, progressJson: { equals: current?.progressJson } }, data: { status: "CANCELLED", finishedAt: new Date(), warningsJson: warnings } }); if (changed.count === 0) throw new Error("Review run is no longer active."); await transaction.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_CANCELLED", correlationId, payloadJson: { stage, warnings, leaseToken: token } } }); }); return result((await ownedRun(client, input, id)) ?? { id, status: "CANCELLED", progressJson: {}, warningsJson: warnings }, key); }
-async function failRun(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, stage: ReviewStage, warning: WarningJson, warnings: WarningJson[], correlationId: string): Promise<void> { await client.$transaction(async (transaction) => { await assertLease(transaction, input, id, token); const current = await ownedRun(transaction, input, id); const changed = await transaction.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { status: "FAILED", warningsJson: warnings, finishedAt: new Date() } }); if (changed.count === 0) throw new Error("Review run is no longer active."); await transaction.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_STAGE_FAILED", correlationId, payloadJson: { stage, status: "FAILED", count: 0, warnings: [warning], leaseToken: token } } }); }); }
+async function failRun(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, stage: ReviewStage, warning: WarningJson, warnings: WarningJson[], correlationId: string, failureCode: string): Promise<void> { await client.$transaction(async (transaction) => { await assertLease(transaction, input, id, token); const current = await ownedRun(transaction, input, id); const changed = await transaction.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { status: "FAILED", warningsJson: warnings, finishedAt: nowFor(input), nextRetryAt: null, stageDeadlineAt: null, failureCode } }); if (changed.count === 0) throw new Error("Review run is no longer active."); await transaction.reviewAuditEvent.create({ data: { companyId: input.companyId, projectId: input.projectId, reviewRunId: id, actorUserId: input.createdById, eventType: "REVIEW_STAGE_FAILED", correlationId, payloadJson: { stage, status: "FAILED", failureCode, count: 0, warnings: [warning], leaseToken: token } } }); }); }
 async function closeRun(client: ReviewPipelineClient, input: RunReviewJobInput, id: string, token: string, status: ReviewRunStatus, warnings: WarningJson[], metrics?: unknown): Promise<{ count: number }> { return client.$transaction(async (transaction) => { await assertLease(transaction, input, id, token); const current = await ownedRun(transaction, input, id); const progressJson = (current?.progressJson as Record<string, unknown> | null | undefined) ?? {}; return transaction.reviewRun.updateMany({ where: { id, companyId: input.companyId, projectId: input.projectId, status: "RUNNING", progressJson: { equals: current?.progressJson } }, data: { status, warningsJson: warnings, finishedAt: new Date(), progressJson: metrics ? { ...progressJson, metrics } : progressJson } }); }); }
 function result(run: Row, key: string): RunReviewJobResult { const checkpoints = (run.progressJson as { checkpoints?: Array<{ stage?: string }> } | undefined)?.checkpoints ?? []; const stages = checkpoints.map((entry) => entry.stage).filter((stage): stage is ReviewStage => typeof stage === "string" && (REVIEW_STAGES as readonly string[]).includes(stage)); return { reviewRunId: String(run.id), status: String(run.status) as ReviewRunStatus, stages: [...new Set(stages)], warnings: Array.isArray(run.warningsJson) ? run.warningsJson as WarningJson[] : [], idempotencyKey: key }; }
 function stableId(prefix: string, ...parts: string[]): string { return `${prefix}-${createHash("sha256").update(parts.join("\u001f")).digest("hex")}`; }

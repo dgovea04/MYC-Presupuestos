@@ -3166,6 +3166,10 @@ model ReviewRun {
   configurationJson        Json
   rulesVersion             String
   status                   ReviewRunStatus   @default(DRAFT)
+  attemptCount             Int               @default(0)
+  nextRetryAt              DateTime?
+  stageDeadlineAt          DateTime?
+  failureCode              String?
   progressJson             Json?
   warningsJson             Json?
   startedAt                DateTime?
@@ -3181,6 +3185,7 @@ model ReviewRun {
   auditEvents              ReviewAuditEvent[]
 
   @@index([companyId, projectId, status])
+  @@index([companyId, status, nextRetryAt])
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([createdById])
   @@unique([id, companyId, projectId])
