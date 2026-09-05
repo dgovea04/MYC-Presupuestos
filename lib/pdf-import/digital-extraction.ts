@@ -105,5 +105,12 @@ function extractLiteralStrings(source: string): string[] {
     .map((match) => unescapePdfString(match[1] ?? ""))
     .filter((value) => value.length <= 1000 && /[A-Za-zÁÉÍÓÚáéíóúÑñ]{3}/.test(value) && [...value].filter((char) => char >= " " && char <= "~" || /[ÁÉÍÓÚáéíóúÑñ]/.test(char)).length / value.length > 0.9);
 }
-function unescapePdfString(value: string): string { return value.replace(/\\([\\()])/g, "$1").replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t"); }
+function unescapePdfString(value: string): string {
+  return value
+    .replace(/\\([0-7]{1,3})/g, (_, octal: string) => String.fromCharCode(Number.parseInt(octal, 8)))
+    .replace(/\\([\\()])/g, "$1")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t");
+}
 function normalize(value: string): string { return value.replace(/\s+/g, " ").trim(); }

@@ -108,6 +108,28 @@ describe("review document extractors", () => {
     expect(result.items[0]?.metadata).toMatchObject({ code: "2.11", description: "MATERIAL DE PRESTAMO PARA RELLENOS", unit: "m3", quantity: "208259.9", evidenceType: "QUANTITY" });
   });
 
+  it("maps Item to code and Partida to description in quantity takeoff sheets", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Metrados");
+    sheet.addRow(["Item", "Partida", "Unidad", "Metrado"]);
+    sheet.addRow(["2.7", "EXCAVACION", "m3", 18]);
+    const bytes = await workbook.xlsx.writeBuffer();
+    const result = await extractDocument({ file: new File([bytes], "metrados.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) });
+
+    expect(result.items[0]?.metadata).toMatchObject({ code: "2.7", description: "EXCAVACION", quantity: "18", unit: "m3" });
+  });
+
+  it("supports alternative code and description headers without treating Partida as a code", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Metrados");
+    sheet.addRow(["Código de partida", "Nombre", "Unidad", "Cantidad"]);
+    sheet.addRow(["A-02.22.2", "Relleno compactado", "m3", 12.25]);
+    const bytes = await workbook.xlsx.writeBuffer();
+    const result = await extractDocument({ file: new File([bytes], "metrado-alternativo.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) });
+
+    expect(result.items[0]?.metadata).toMatchObject({ code: "A-02.22.2", description: "Relleno compactado", quantity: "12.25", unit: "m3" });
+  });
+
   it("uses the compatible PDF importer and states that page count may be estimated and exact location is unavailable", async () => {
     const file = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (01.01 Trazo y replanteo m2 10 2.50 25.00)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "spec.pdf", { type: "application/pdf" });
     const result = await extractDocument({ file });

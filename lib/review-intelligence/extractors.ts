@@ -136,10 +136,22 @@ function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minC
   const find = (patterns: RegExp[]): string | undefined => { const index = headers.findIndex((header) => patterns.some((pattern) => pattern.test(header))); const value = index >= 0 ? values[index] : undefined; return value?.trim() || undefined; };
   const spec = find([/spec/i, /tecn/i]);
   const apuComponents = find([/apu/i, /componente/i])?.split(/[;,|]/).map((value) => value.trim()).filter(Boolean);
-  const metadata = { code: find([/c.{0,2}dig/i, /^id$/i]), description: find([/desc/i, /partida/i]), quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec, technicalSpec: spec, discipline: find([/disc/i, /especial/i]), attributes: {}, apuComponents };
+  const explicitCode = find([/c.{0,2}dig/i, /^id$/i, /^item$/i, /^cod$/i, /^code$/i, /codigo.*partida/i, /item.*partida/i]);
+  const code = explicitCode ?? values.find(isCodeLike);
+  const description = find([/^desc/i, /^descripcion/i, /^descripci/i, /^partida$/i, /^nombre/i, /^concepto/i, /^actividad/i])
+    ?? values.find((value) => value !== code && isDescriptionLike(value));
+  const metadata = { code, description, quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec, technicalSpec: spec, discipline: find([/disc/i, /especial/i]), attributes: {}, apuComponents };
   const evidenceType = metadata.quantity ? "QUANTITY" : metadata.unit ? "UNIT" : metadata.spec ? "TECHNICAL_SPECIFICATION" : "OTHER";
   return Object.values(metadata).some((value) => typeof value === "string" && value.length > 0 || Array.isArray(value) && value.length > 0) ? { ...metadata, evidenceType } : undefined;
 }
+
+function isCodeLike(value: string): boolean { return /^[A-Za-z]?\d+(?:[.\-][A-Za-z0-9]+)+$/.test(value.trim()); }
+
+function isDescriptionLike(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length >= 3 && /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(normalized) && !/^\[FORMULA:/i.test(normalized);
+}
+
 
 function extractPdfEvidence(text: string, page = 1): ExtractionItem[] {
   return text.split("\f").flatMap((pageText, pageIndex) => {

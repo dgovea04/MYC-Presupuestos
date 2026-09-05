@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { matchBudgetItemToEvidence, type BudgetItemMatchInput, type EvidenceMatchInput } from "./matching";
 import { evaluateFindingRules, type ReviewRuleEvidence, type ReviewRuleItem } from "./rules";
+import { normalizeUnit } from "./units";
 import { parseReviewConfiguration } from "./validation";
 import { getReviewProgress, type ReviewJobClient } from "./jobs";
 import type { ReviewConfiguration, ReviewRunStatus, WarningJson } from "./types";
@@ -128,8 +129,8 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
       const primaryEvidence = persistedEvidence.filter((entry) => entry.primary);
       for (const item of input.budgetItems) {
         const candidates = matchBudgetItemToEvidence(item, persistedEvidence);
-        const linkedPrimary = candidates.find((entry) => entry.eligibleForFindings && primaryEvidence.some((evidence) => evidence.id === entry.evidenceId));
-        if (!linkedPrimary && primaryEvidence[0] && configuration.findingTypes.includes("MISSING_DOCUMENTATION")) {
+        const linkedPrimaryCandidates = candidates.filter((entry) => entry.eligibleForFindings && primaryEvidence.some((evidence) => evidence.id === entry.evidenceId));
+        if (linkedPrimaryCandidates.length === 0 && primaryEvidence[0] && configuration.findingTypes.includes("MISSING_DOCUMENTATION")) {
           const evidence = primaryEvidence[0];
           const findings = evaluateFindingRules({ item, evidence, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: ["MISSING_DOCUMENTATION"] });
           for (const finding of findings) {
@@ -138,13 +139,46 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
             count += 1;
           }
         }
-        if (linkedPrimary) {
-          const evidence = primaryEvidence.find((entry) => entry.id === linkedPrimary.evidenceId);
-          if (!evidence) continue;
-          const persistedLink = await transaction.entityLink.findFirst({ where: { budgetItemId: linkedPrimary.budgetItemId, evidenceId: linkedPrimary.evidenceId, companyId: input.companyId, projectId: input.projectId } });
+        const linkedEvidence = linkedPrimaryCandidates.flatMap((candidate) => {
+          const evidence = primaryEvidence.find((entry) => entry.id === candidate.evidenceId);
+          return evidence ? [{ candidate, evidence }] : [];
+        });
+        const quantityGroups = new Map<string, { quantity: Decimal; representative: (typeof linkedEvidence)[number] }>();
+        const seenQuantityRows = new Set<string>();
+        for (const entry of linkedEvidence) {
+          if (entry.evidence.evidenceType !== "QUANTITY" || entry.evidence.quantity === undefined || entry.evidence.unit === undefined) continue;
+          const rowKey = [entry.evidence.code ?? "", entry.evidence.description ?? "", entry.evidence.quantity.toString(), normalizeUnit(entry.evidence.unit).canonical].join("\u001f");
+          if (seenQuantityRows.has(rowKey)) continue;
+          seenQuantityRows.add(rowKey);
+          const groupKey = normalizeUnit(entry.evidence.unit).canonical;
+          const current = quantityGroups.get(groupKey);
+          if (!current) quantityGroups.set(groupKey, { quantity: entry.evidence.quantity, representative: entry });
+          else {
+            current.quantity = current.quantity.plus(entry.evidence.quantity);
+            if (entry.candidate.score.greaterThan(current.representative.candidate.score)) current.representative = entry;
+          }
+        }
+        if (configuration.findingTypes.includes("QUANTITY_MISMATCH")) {
+          for (const group of quantityGroups.values()) {
+            const evidence = { ...group.representative.evidence, quantity: group.quantity };
+            await publishFindings(transaction, input, runId, item, evidence, group.representative.candidate, ["QUANTITY_MISMATCH"], new Decimal(configuration.tolerancePercent), countRef(() => count += 1));
+          }
+        }
+        const ruleEvidence = new Map<string, (typeof linkedEvidence)[number]>();
+        for (const entry of linkedEvidence) {
+          const evidence = entry.evidence;
+          const hasApplicableRule = evidence.evidenceType !== "QUANTITY" || evidence.technicalSpecification !== undefined || evidence.unit !== undefined;
+          if (!hasApplicableRule) continue;
+          const key = `${evidence.documentVersionId}:${evidence.evidenceType}`;
+          const current = ruleEvidence.get(key);
+          if (!current || entry.candidate.score.greaterThan(current.candidate.score)) ruleEvidence.set(key, entry);
+        }
+        for (const { candidate, evidence } of ruleEvidence.values()) {
+          const persistedLink = await transaction.entityLink.findFirst({ where: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, companyId: input.companyId, projectId: input.projectId } });
           const persistedLinkId = typeof persistedLink?.id === "string" ? persistedLink.id : undefined;
           if (!persistedLinkId) throw new Error("Matched entity link was not persisted for the requested tenant/project.");
-          const findings = evaluateFindingRules({ item, evidence, link: { evidenceId: linkedPrimary.evidenceId, confidence: linkedPrimary.confidence, score: linkedPrimary.score }, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: configuration.findingTypes.filter((type) => type !== "MISSING_DOCUMENTATION") });
+          const ruleTypes = configuration.findingTypes.filter((type) => !["MISSING_DOCUMENTATION", "QUANTITY_MISMATCH"].includes(type) && !(type === "TECHNICAL_SPEC_MISMATCH" && evidence.evidenceType === "QUANTITY" && evidence.technicalSpecification === undefined));
+          const findings = evaluateFindingRules({ item, evidence, link: { evidenceId: candidate.evidenceId, confidence: candidate.confidence, score: candidate.score }, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes });
           for (const finding of findings) {
             await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, persistedLinkId), update: {} });
             count += 1;
@@ -155,6 +189,29 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
     return count;
   }
   return input.budgetItems.length + input.evidence.length;
+}
+
+function countRef(onIncrement: () => void): { increment: () => void } { return { increment: onIncrement }; }
+
+async function publishFindings(
+  transaction: ReviewPipelineClient,
+  input: RunReviewJobInput,
+  runId: string,
+  item: ReviewBudgetItem,
+  evidence: ReviewEvidence,
+  candidate: ReturnType<typeof matchBudgetItemToEvidence>[number],
+  ruleTypes: ReviewConfiguration["findingTypes"],
+  tolerance: Decimal,
+  count: { increment: () => void },
+): Promise<void> {
+  const persistedLink = await transaction.entityLink.findFirst({ where: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, companyId: input.companyId, projectId: input.projectId } });
+  const persistedLinkId = typeof persistedLink?.id === "string" ? persistedLink.id : undefined;
+  if (!persistedLinkId) throw new Error("Matched entity link was not persisted for the requested tenant/project.");
+  const findings = evaluateFindingRules({ item, evidence, link: { evidenceId: candidate.evidenceId, confidence: candidate.confidence, score: candidate.score }, tolerance, ruleTypes });
+  for (const finding of findings) {
+    await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, persistedLinkId), update: {} });
+    count.increment();
+  }
 }
 
 async function validateInput(input: RunReviewJobInput, client: ReviewPipelineClient): Promise<void> {

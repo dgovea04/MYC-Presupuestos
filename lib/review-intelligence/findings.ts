@@ -12,7 +12,7 @@ type FindingRow = Prisma.ReviewFindingGetPayload<{
     findingType: true; status: true; severity: true; priority: true; confidence: true; score: true; potentialImpact: true; ruleKey: true; discipline: true; baseSnapshotId: true;
     comparisonJson: true; humanReviewRequired: true; automaticBudgetMutation: true; createdAt: true; updatedAt: true;
     budgetItem: { select: { id: true; code: true; description: true; unit: true; quantity: true; unitPrice: true; discipline: true; levelId: true } };
-    evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; value: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true; documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } };
+    evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; value: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true; metadataJson: true; documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } };
     entityLink: { select: { id: true; score: true; confidence: true; validationStatus: true; signalsJson: true } };
     decisions: { select: { id: true; userId: true; resolution: true; note: true; expectedUpdatedAt: true; previousStatus: true; newStatus: true; correctionVersionId: true; createdAt: true }; orderBy: { createdAt: "desc" } };
   }
@@ -30,6 +30,18 @@ export type FindingDecisionRecord = { id: string; findingId: string; resolution:
 
 const decimal = (value: unknown): string | null => value === null || value === undefined ? null : String(value);
 const jsonObject = (value: unknown): Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const evidenceValue = (value: unknown, metadataJson: unknown): string | null => {
+  const persisted = decimal(value);
+  if (persisted !== null) return persisted;
+  const metadata = jsonObject(metadataJson);
+  const quantity = metadata.quantity;
+  return typeof quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(quantity) ? quantity : null;
+};
+const evidenceUnit = (unit: string | null, metadataJson: unknown): string | null => unit ?? (() => {
+  const metadata = jsonObject(metadataJson);
+  return typeof metadata.unit === "string" && metadata.unit.trim() !== "" ? metadata.unit : null;
+})();
+const normalizePdfEscapes = (value: string | null): string | null => value?.replace(/\\([0-7]{1,3})/g, (_, octal: string) => String.fromCharCode(Number.parseInt(octal, 8))) ?? null;
 const secret = () => process.env.REVIEW_EVIDENCE_SIGNING_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? null;
 
 function temporaryToken(evidenceId: string, expiresAt: number): string {
@@ -52,9 +64,9 @@ export function verifyTemporaryEvidenceToken(evidenceId: string, token: string):
 function serializeFinding(row: FindingRow): Record<string, unknown> {
   const evidence = row.evidence ? {
     id: row.evidence.id, documentVersionId: row.evidence.documentVersionId, evidenceType: row.evidence.evidenceType,
-    originalText: row.evidence.originalText, normalizedText: row.evidence.normalizedText, value: decimal(row.evidence.value), location: row.evidence.locationJson,
+    originalText: row.evidence.originalText, normalizedText: normalizePdfEscapes(row.evidence.normalizedText), value: evidenceValue(row.evidence.value, row.evidence.metadataJson), location: row.evidence.locationJson,
     sourceName: row.evidence.documentVersion?.projectDocument?.name || row.evidence.documentVersion?.projectDocument?.originalFileName, sourceVersion: row.evidence.documentVersion?.versionNumber,
-    unit: row.evidence.unit, extractionMethod: row.evidence.extractionMethod, confidence: row.evidence.confidence, sourceHash: row.evidence.sourceHash,
+    unit: evidenceUnit(row.evidence.unit, row.evidence.metadataJson), extractionMethod: row.evidence.extractionMethod, confidence: row.evidence.confidence, sourceHash: row.evidence.sourceHash,
     viewUrl: `/api/review-evidence/${encodeURIComponent(row.evidence.id)}/view?token=${encodeURIComponent(temporaryToken(row.evidence.id, Date.now() + 5 * 60 * 1000))}`,
   } : null;
   return {
@@ -75,7 +87,7 @@ const findingSelect = {
   findingType: true, status: true, severity: true, priority: true, confidence: true, score: true, potentialImpact: true, ruleKey: true, discipline: true, baseSnapshotId: true,
   comparisonJson: true, humanReviewRequired: true, automaticBudgetMutation: true, createdAt: true, updatedAt: true,
   budgetItem: { select: { id: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, levelId: true } },
-  evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } },
+  evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, metadataJson: true, documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } },
   entityLink: { select: { id: true, score: true, confidence: true, validationStatus: true, signalsJson: true } },
   decisions: { select: { id: true, userId: true, resolution: true, note: true, expectedUpdatedAt: true, previousStatus: true, newStatus: true, correctionVersionId: true, createdAt: true }, orderBy: { createdAt: "desc" } },
 } satisfies Prisma.ReviewFindingSelect;

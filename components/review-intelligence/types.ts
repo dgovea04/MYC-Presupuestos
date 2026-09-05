@@ -75,6 +75,7 @@ export interface FindingEvidenceView {
   originalText: string;
   normalizedText?: string | null;
   value?: string | null;
+  unit?: string | null;
   sourceName?: string;
   sourceVersion?: number;
   warnings?: string[];

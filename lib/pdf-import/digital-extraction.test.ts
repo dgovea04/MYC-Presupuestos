@@ -70,6 +70,13 @@ describe("digital PDF extraction", () => {
     expect(result.pages[0]?.text).toContain("2.7 CONFORMACION DE TERRAPLENES M2");
   });
 
+  it("decodes octal escapes used for accented characters in PDF literal strings", async () => {
+    const body = "%PDF-1.4\n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<< /Length 90 >>\nstream\nBT /F1 12 Tf (Excavaci\\363n y perforaci\\363n de roca) Tj ET\nendstream\nendobj\ntrailer\n<<>>\n%%EOF";
+    const result = await extractDigitalPdf(new TextEncoder().encode(body));
+
+    expect(result.pages[0]?.text).toContain("Excavación y perforación de roca");
+  });
+
   it("extracts text and provenance from a PDFKit-generated digital PDF", async () => {
     const document = new PDFDocument({ autoFirstPage: true });
     const chunks: Buffer[] = [];

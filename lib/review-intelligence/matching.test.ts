@@ -41,6 +41,22 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.signals.unit).toBe(0);
   });
 
+  it("does not match an evidence row with a different code even when the description is similar", () => {
+    const [candidate] = matchBudgetItemToEvidence(item, [evidence({ code: "01.01.004", description: item.description, quantity: new Decimal("999") })]);
+
+    expect(candidate.confidence).toBe("LOW");
+    expect(candidate.eligibleForFindings).toBe(false);
+    expect(candidate.explanation).toContain("codeConflict=1.000");
+  });
+
+  it("treats 2.1 and 2.10 as different textual codes", () => {
+    const [candidate] = matchBudgetItemToEvidence({ ...item, code: "2.1" }, [evidence({ code: "2.10", description: "MEJORAMIENTO DE SUBRASANTE" })]);
+
+    expect(candidate.signals.code).toBe(0);
+    expect(candidate.eligibleForFindings).toBe(false);
+    expect(candidate.explanation).toContain("codeConflict=1.000");
+  });
+
   it("returns low-confidence candidates without making them eligible for inconsistency findings", () => {
     const [candidate] = matchBudgetItemToEvidence(item, [evidence({ code: "99", description: "Puerta de madera", unit: "und", discipline: "arquitectura", attributes: {}, location: { row: 300, column: 1 } })], { highThreshold: 0.9, mediumThreshold: 0.8 });
 

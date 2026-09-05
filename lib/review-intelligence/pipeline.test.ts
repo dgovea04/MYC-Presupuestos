@@ -22,8 +22,8 @@ function client(): ReviewPipelineClient & { runs: Array<Record<string, unknown>>
   store.budget = { findFirst: async ({ where }) => where.id === "budget-1" && (where.project as { companyId?: string } | undefined)?.companyId === "company-1" && where.projectId === "project-1" ? { id: "budget-1" } : null, findMany: async () => [{ id: "budget-1", parentBudgetId: null }] };
   store.budgetVersionSnapshot = { findFirst: async ({ where }) => where.budgetId === "budget-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "base-version-1", versionNumber: 1, snapshot: { items: [{ id: "item-1", budgetId: "budget-1" }] } } : null };
   store.project = { findFirst: async ({ where }) => where.id === "project-1" && where.companyId === "company-1" ? { id: "project-1" } : null };
-  store.documentVersion = { findFirst: async ({ where }) => where.id === "version-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "version-1", projectDocumentId: "document-1" } : null };
-  store.projectDocument = { findFirst: async ({ where }) => where.id === "document-1" && where.companyId === "company-1" && where.projectId === "project-1" ? { id: "document-1" } : null };
+  store.documentVersion = { findFirst: async ({ where }) => ["version-1", "version-2"].includes(String(where.id)) && where.companyId === "company-1" && where.projectId === "project-1" ? { id: String(where.id), projectDocumentId: `document-${String(where.id).slice(-1)}` } : null };
+  store.projectDocument = { findFirst: async ({ where }) => ["document-1", "document-2"].includes(String(where.id)) && where.companyId === "company-1" && where.projectId === "project-1" ? { id: String(where.id) } : null };
   store.budgetItem = { findFirst: async ({ where }) => where.id === "item-1" && where.budgetId === "budget-1" ? { id: "item-1" } : null };
   let transactionCount = 0;
   store.$transaction = async (callback) => { transactionCount += 1; store.beforeTransaction?.(transactionCount); return callback(store); };
@@ -268,19 +268,40 @@ describe("runReviewJob", () => {
     expect(database.findings.every((finding) => finding.evidenceId === database.evidence[0]?.id)).toBe(true);
   });
 
-  it("evaluates quantity only against the best primary match for each item", async () => {
+  it("evaluates rules against every eligible primary document for each item", async () => {
     const database = client();
     const result = await runReviewJob({
       ...input(),
       evidence: [
         { ...input().evidence[0], code: "A-1", description: "Concreto", quantity: new Decimal("12") },
-        { ...input().evidence[0], id: "evidence-secondary", sourceHash: "source-secondary", code: undefined, description: "Concreto", quantity: new Decimal("15") },
+        { ...input().evidence[0], id: "evidence-xlsx", sourceHash: "source-xlsx", documentVersionId: "version-2", code: undefined, description: "Concreto", quantity: new Decimal("15"), locationJson: { sheet: "Metrados", range: "A2:G2" } },
+      ],
+      documentVersionIds: ["version-1", "version-2"],
+      documentVersions: [
+        { id: "version-1", companyId: "company-1", projectId: "project-1" },
+        { id: "version-2", companyId: "company-1", projectId: "project-1" },
       ],
     }, database);
 
     expect(result.status).toBe("COMPLETED");
     expect(database.findings).toHaveLength(1);
-    expect(database.findings[0]?.comparisonJson).toMatchObject({ documentValue: "12" });
+    expect(database.findings[0]?.comparisonJson).toMatchObject({ documentValue: "27" });
+  });
+
+  it("consolidates repeated quantity rows instead of comparing each row with the budget total", async () => {
+    const database = client();
+    const result = await runReviewJob({
+      ...input(),
+      evidence: [
+        { ...input().evidence[0], sourceHash: "source-a", quantity: new Decimal("4"), locationJson: { sheet: "Metrados", range: "A2:G2" } },
+        { ...input().evidence[0], id: "evidence-b", sourceHash: "source-b", quantity: new Decimal("6.5"), locationJson: { sheet: "Metrados", range: "A3:G3" } },
+        { ...input().evidence[0], id: "evidence-duplicate", sourceHash: "source-duplicate", quantity: new Decimal("6.5"), locationJson: { sheet: "Metrados", range: "A4:G4" } },
+      ],
+    }, database);
+
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings).toHaveLength(1);
+    expect(database.findings[0]?.comparisonJson).toMatchObject({ documentValue: "10.5" });
   });
 
   it("publishes UNIT_INCONSISTENCY from PDFKit evidence through matching", async () => {

@@ -54,6 +54,10 @@ function normalizedText(value: string | undefined): string {
   return (value ?? "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function normalizedCode(value: string | undefined): string {
+  return (value ?? "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").trim();
+}
+
 function tokens(value: string | undefined): Set<string> {
   return new Set(normalizedText(value).split(/\s+/).filter(Boolean));
 }
@@ -116,7 +120,7 @@ export function matchBudgetItemToEvidence(
   validateThresholds(thresholds);
   return evidence.map((entry) => {
     const signals: SignalsJson = {
-      code: item.code !== undefined && entry.code !== undefined && normalizedText(item.code) === normalizedText(entry.code) ? 1 : 0,
+      code: item.code !== undefined && entry.code !== undefined && normalizedCode(item.code) === normalizedCode(entry.code) ? 1 : 0,
       description: descriptionSignal(item.description, entry.description),
       unit: item.unit && entry.unit ? (normalizeUnit(item.unit).canonical === normalizeUnit(entry.unit).canonical ? 1 : 0) : 0,
       discipline: item.discipline && entry.discipline && normalizedText(item.discipline) === normalizedText(entry.discipline) ? 1 : 0,
@@ -146,8 +150,11 @@ export function matchBudgetItemToEvidence(
       .plus(new Decimal(signals.crossReference).times(weights.crossReference))
       .plus(new Decimal(signals.confirmedMatch).times(weights.confirmedMatch));
     const score = activeWeight.isZero() ? new Decimal(0) : weightedScore.dividedBy(activeWeight);
-    const confidence = confidenceFor(score.toNumber(), thresholds);
+    const codeConflict = item.code !== undefined && entry.code !== undefined && normalizedCode(item.code) !== normalizedCode(entry.code);
+    const effectiveScore = codeConflict ? new Decimal(0) : score;
+    const confidence = confidenceFor(effectiveScore.toNumber(), thresholds);
     const explanation = Object.entries(signals).filter(([, value]) => value > 0).map(([signal, value]) => `${signal}=${value.toFixed(3)}`);
-    return { budgetItemId: item.id, evidenceId: entry.id, score, confidence, eligibleForFindings: confidence !== "LOW", signals, explanation };
+    if (codeConflict) explanation.push("codeConflict=1.000");
+    return { budgetItemId: item.id, evidenceId: entry.id, score: effectiveScore, confidence, eligibleForFindings: !codeConflict && confidence !== "LOW", signals, explanation };
   }).sort((left, right) => right.score.comparedTo(left.score));
 }
