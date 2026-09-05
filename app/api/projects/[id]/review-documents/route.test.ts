@@ -29,6 +29,9 @@ const mocks = vi.hoisted(() => ({
   reviewRunDeleteMany: vi.fn(),
   transaction: vi.fn(),
   getReviewDocumentStorage: vi.fn(),
+  storageRead: vi.fn(),
+  storageDelete: vi.fn(),
+  storagePut: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
@@ -63,7 +66,9 @@ describe("review documents API", () => {
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
     mocks.validateDocumentFile.mockResolvedValue({ sha256: "hash", mimeType: "application/pdf", extension: ".pdf", fileSizeBytes: 8, bytes: new Uint8Array() });
     mocks.documentVersionFindMany.mockResolvedValue([]);
-    mocks.getReviewDocumentStorage.mockReturnValue({ delete: vi.fn(), put: vi.fn(), createTemporaryReadUrl: vi.fn() });
+    mocks.reviewRunFindMany.mockResolvedValue([]);
+    mocks.storageRead.mockResolvedValue(new Uint8Array([1]));
+    mocks.getReviewDocumentStorage.mockReturnValue({ read: mocks.storageRead, delete: mocks.storageDelete, put: mocks.storagePut, createTemporaryReadUrl: vi.fn() });
     mocks.persistReviewDocumentUpload.mockResolvedValue({ document: { id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "spec.pdf" }, version: { id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "hash" } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
       projectDocument: { updateMany: mocks.projectDocumentUpdateMany, deleteMany: mocks.projectDocumentDeleteMany },
@@ -158,7 +163,7 @@ describe("review documents API", () => {
   });
 
   it("returns 409 when an idempotency key is reused for another target", async () => {
-    mocks.documentVersionFindMany.mockResolvedValue([{ storageKey: "review-documents/company-1/project-1/key-target/other-document/hash", sha256: "hash", projectDocumentId: "other-document" }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ storageKey: "review-documents/company-1/project-1/key-target/other-document/hash", sha256: "hash", projectDocumentId: "other-document", projectDocument: { originalFileName: "spec.pdf", name: "spec.pdf" } }]);
     const form = new FormData(); form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" })); form.set("documentId", "document-1");
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-target" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(409);
@@ -179,5 +184,36 @@ describe("review documents API", () => {
     expect(mocks.reviewAuditEventDeleteMany).not.toHaveBeenCalled();
     expect(mocks.reviewAuditEventUpdateMany).toHaveBeenCalledWith({ where: { reviewRunId: { in: ["run-1"] }, companyId: "company-1", projectId: "project-1" }, data: { reviewRunId: null } });
     expect(mocks.reviewAuditEventCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: 1, versionCount: 1 } }) }));
+  });
+
+  it("rejects a new-document idempotency replay whose file identity changes", async () => {
+    mocks.documentVersionFindMany.mockResolvedValue([{ sha256: "hash", projectDocumentId: "document-old", projectDocument: { originalFileName: "other.pdf", name: "Other source" } }]);
+    const form = new FormData(); form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" })); form.set("name", "Specification");
+    const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-new-document" }, body: form }), { params: Promise.resolve({ id: "project-1" }) });
+
+    expect(response.status).toBe(409);
+    expect(mocks.persistReviewDocumentUpload).not.toHaveBeenCalled();
+  });
+
+  it("removes every historical binary even when a document has no current version pointer", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", currentVersionId: null }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", projectDocumentId: "document-1", versionNumber: 1, originalFileName: "old.pdf", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" }, { id: "version-2", projectDocumentId: "document-1", versionNumber: 2, originalFileName: "new.pdf", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/2/original.pdf" }]);
+    const response = await DELETE(new Request("http://localhost/api/projects/project-1/review-documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "ELIMINAR DOCUMENTOS FUENTE" }) }), { params: Promise.resolve({ id: "project-1" }) });
+
+    expect(response.status).toBe(200);
+    expect(mocks.storageDelete).toHaveBeenCalledTimes(2);
+    expect(mocks.documentVersionDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["version-1", "version-2"] }, companyId: "company-1", projectId: "project-1" } });
+  });
+
+  it("restores removed binaries when the database deletion transaction fails", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", currentVersionId: "version-1" }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", projectDocumentId: "document-1", versionNumber: 1, originalFileName: "spec.pdf", storageKey: "companies/company-1/projects/project-1/documents/document-1/versions/1/original.pdf" }]);
+    mocks.transaction.mockRejectedValueOnce(new Error("database failure"));
+    const response = await DELETE(new Request("http://localhost/api/projects/project-1/review-documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "ELIMINAR DOCUMENTOS FUENTE" }) }), { params: Promise.resolve({ id: "project-1" }) });
+
+    expect(response.status).toBe(400);
+    expect(mocks.storageRead).toHaveBeenCalledOnce();
+    expect(mocks.storageDelete).toHaveBeenCalledOnce();
+    expect(mocks.storagePut).toHaveBeenCalledWith(expect.objectContaining({ documentId: "document-1", versionNumber: 1, originalFileName: "spec.pdf", bytes: new Uint8Array([1]) }));
   });
 });

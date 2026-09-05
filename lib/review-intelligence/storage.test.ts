@@ -51,6 +51,18 @@ describe("local review document storage", () => {
     expect(existsSync(stored.absolutePath)).toBe(true);
   });
 
+  it("provisions a missing private storage root without allowing public roots", async () => {
+    const parentDirectory = await mkdtemp(path.join(tmpdir(), "mc-review-storage-parent-"));
+    temporaryDirectories.push(parentDirectory);
+    const rootDirectory = path.join(parentDirectory, "new-private-root");
+
+    const storage = new LocalReviewDocumentStorage({ rootDirectory, signingSecret: "test-only-signing-secret", temporaryUrlTtlSeconds: 60 });
+    const stored = await storage.put({ companyId: "company-1", projectId: "project-1", documentId: "document-1", versionNumber: 1, originalFileName: "budget.pdf", bytes: new Uint8Array([1]) });
+
+    expect(existsSync(rootDirectory)).toBe(true);
+    expect(existsSync(stored.absolutePath)).toBe(true);
+  });
+
   it("issues a signed short-lived read token only for the matching tenant and project", async () => {
     const { storage } = await createStorage();
     const stored = await storage.put({ companyId: "company-1", projectId: "project-1", documentId: "document-1", versionNumber: 1, originalFileName: "planos.pdf", bytes: new Uint8Array([1, 2, 3]) });
