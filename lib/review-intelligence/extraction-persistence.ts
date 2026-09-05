@@ -20,7 +20,11 @@ export async function extractAndPersistDocumentVersion(input: { file: ReviewDocu
         update: {},
       });
     }
-    await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: extracted.warnings.length > 0 ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: extracted.warnings, pageCount: extracted.pageCount, sheetCount: extracted.sheetCount } });
+    const extractionMethod = extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE";
+    const extractionCoverage = extracted.kind === "PDF"
+      ? Array.from({ length: extracted.pageCount ?? 0 }, (_, index) => ({ page: index + 1, coverage: "PROCESSED" }))
+      : Array.from(new Set(extracted.items.map((item) => item.location?.sheet).filter((sheet): sheet is string => Boolean(sheet)))).map((worksheet) => ({ worksheet, coverage: "PROCESSED" }));
+    await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: extracted.warnings.length > 0 ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: extracted.warnings, pageCount: extracted.pageCount, sheetCount: extracted.sheetCount, extractionMethod, extractionConfidence: "MEDIUM", extractionCoverage } });
     return extracted;
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo extraer el documento.";

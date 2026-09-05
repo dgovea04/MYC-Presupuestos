@@ -256,6 +256,23 @@ enum ExtractionStatus {
   FAILED
 }
 
+enum ReviewDocumentStorageProvider {
+  LOCAL
+}
+
+enum ExtractionCoverage {
+  PROCESSED
+  OCR_REQUIRED
+  FAILED
+}
+
+enum ExtractionMethod {
+  PDF_TEXT
+  XLSX_CELL_RANGE
+  OCR_PROVIDER
+  OCR_UNAVAILABLE
+}
+
 enum EntityLinkValidationStatus {
   PENDING
   CONFIRMED
@@ -3051,6 +3068,8 @@ model DocumentVersion {
   projectDocumentId  String
   versionNumber      Int
   storageKey         String
+  storageProvider    ReviewDocumentStorageProvider @default(LOCAL)
+  storageMetadata    Json?
   originalFileName   String
   mimeType           String
   fileSizeBytes      Int
@@ -3058,6 +3077,9 @@ model DocumentVersion {
   pageCount          Int?
   sheetCount         Int?
   extractionStatus   ExtractionStatus @default(PENDING)
+  extractionMethod   ExtractionMethod?
+  extractionConfidence ConfidenceLevel?
+  extractionCoverage Json?
   extractionWarnings Json?
   createdAt          DateTime         @default(now())
   projectDocument    ProjectDocument  @relation("DocumentVersions", fields: [projectDocumentId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { reviewFindingTypes, type ReviewConfiguration } from "./types";
+import { extractionCoverages, reviewFindingTypes, type ReviewConfiguration } from "./types";
 
 const decimalStringSchema = z.string().regex(/^\d+(?:\.\d{1,6})?$/, "Expected a decimal string");
 const signedDecimalStringSchema = z.string().regex(/^-?\d+(?:\.\d{1,6})?$/, "Expected a decimal string");
@@ -28,6 +28,22 @@ export const warningsJsonSchema = z.array(z.object({
   code: z.string().min(1), message: z.string().min(1), source: z.string().min(1).optional(),
 }).strict());
 
+export const extractionCoverageEntrySchema = z.object({
+  coverage: z.enum(extractionCoverages),
+  page: z.number().int().positive().optional(),
+  worksheet: z.string().min(1).optional(),
+  warnings: z.array(z.string().min(1)).optional(),
+}).strict().refine((entry) => entry.page !== undefined || entry.worksheet !== undefined, "Coverage requires a page or worksheet.");
+
+export const extractionCoverageJsonSchema = z.array(extractionCoverageEntrySchema);
+
+export const reviewDocumentStorageMetadataSchema = z.object({
+  provider: z.literal("LOCAL"),
+  storageKey: z.string().min(1),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  fileSizeBytes: z.number().int().nonnegative(),
+}).strict();
+
 export const reviewFindingFlagsSchema = z.object({
   humanReviewRequired: z.boolean().default(true), automaticBudgetMutation: z.literal(false).default(false),
 }).strict();
@@ -43,6 +59,8 @@ export type SignalsJsonInput = z.infer<typeof signalsJsonSchema>;
 export type LocationJsonInput = z.infer<typeof locationJsonSchema>;
 export type ProgressJsonInput = z.infer<typeof progressJsonSchema>;
 export type WarningsJsonInput = z.infer<typeof warningsJsonSchema>;
+export type ExtractionCoverageJsonInput = z.infer<typeof extractionCoverageJsonSchema>;
+export type ReviewDocumentStorageMetadataInput = z.infer<typeof reviewDocumentStorageMetadataSchema>;
 
 export interface TenantProjectOwnershipInput { companyId: string; projectCompanyId: string; }
 
