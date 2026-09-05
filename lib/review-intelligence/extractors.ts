@@ -43,6 +43,7 @@ export type ExtractionOutput = {
   coverage?: PdfPageCoverage[];
   extractionMethod?: ExtractionMethod;
   extractionConfidence?: ConfidenceLevel;
+  classificationHeaders?: string[];
 };
 
 export async function extractDocument(input: ExtractionInput): Promise<ExtractionOutput> {
@@ -104,6 +105,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
   await workbook.xlsx.load(workbookInput);
   const warnings: string[] = await getZipIndicatorWarnings(validated.bytes);
   const items: ExtractionItem[] = [];
+  const classificationHeaders = new Set<string>();
 
   const selectedSheets = selectedSheetNames?.length ? new Set(selectedSheetNames) : undefined;
   workbook.eachSheet((worksheet) => {
@@ -141,6 +143,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
         .join("\n");
       const headerRow = findHeaderRow(rows, minRow, maxRow, minColumn, maxColumn);
       const headers = rows[headerRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
+      headers.filter((header) => header.length > 0).forEach((header) => classificationHeaders.add(header));
       const structured = headers.some((header) => /desc|partida|spec|tecn|disciplina|apu|componente/i.test(header)) && maxRow > headerRow;
       if (structured) {
         for (let rowNumber = headerRow + 1; rowNumber <= maxRow; rowNumber += 1) {
@@ -160,6 +163,7 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
     items,
     sheetCount: workbook.worksheets.length,
     warnings,
+    classificationHeaders: [...classificationHeaders],
   };
 }
 

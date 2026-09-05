@@ -7,6 +7,8 @@ import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { runReviewJob, type ReviewPipelineClient } from "@/lib/review-intelligence/pipeline";
 import { parseReviewConfiguration } from "@/lib/review-intelligence/validation";
 import { assertReviewRunLimits, ReviewRunLimitError } from "@/lib/review-intelligence/limits";
+import { getReviewDocumentStorage } from "@/lib/review-intelligence/documents";
+import { extractAndPersistDocumentVersion } from "@/lib/review-intelligence/extraction-persistence";
 
 const requestSchema = z.object({
   configuration: z.unknown(),
@@ -52,9 +54,10 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const body = requestSchema.parse(await request.json());
     const configuration = parseReviewConfiguration(body.configuration);
-    const versions = await prisma.documentVersion.findMany({ where: { id: { in: body.documentVersionIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, select: { id: true, companyId: true, projectId: true, projectDocumentId: true, fileSizeBytes: true, mimeType: true, pageCount: true, sheetCount: true, extractionCoverage: true } });
+    const versions = await prisma.documentVersion.findMany({ where: { id: { in: body.documentVersionIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, select: { id: true, companyId: true, projectId: true, projectDocumentId: true, fileSizeBytes: true, mimeType: true, pageCount: true, sheetCount: true, extractionCoverage: true, storageKey: true, originalFileName: true, sha256: true } });
     if (versions.length !== body.documentVersionIds.length) throw new Error("Alguna versión de documento no pertenece al proyecto solicitado.");
     assertReviewRunLimits(configuration, versions);
+    await reextractSelectedXlsxVersions(versions, configuration.xlsxSheetNames, scope.budget.project.companyId, scope.budget.projectId);
     const evidence = await prisma.reviewEvidence.findMany({ where: { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, documentVersionId: { in: body.documentVersionIds } }, select: { id: true, documentVersionId: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, evidenceType: true, metadataJson: true } });
     const budgets = await prisma.budget.findMany({ where: { project: { companyId: scope.budget.project.companyId }, projectId: scope.budget.projectId }, select: { id: true, parentBudgetId: true } });
     const budgetIds = new Set<string>([budgetId]);
@@ -66,8 +69,8 @@ export async function POST(request: Request, { params }: Context) {
     }
     const items = await prisma.budgetItem.findMany({ where: { budgetId: { in: [...budgetIds] } }, select: { id: true, budgetId: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, apu: { select: { name: true, resources: { select: { quantity: true, resource: { select: { code: true, description: true } }, catalogPartida: { select: { description: true } } } } } } } });
     const reviewItems = items.map((item) => ({ ...item, discipline: item.discipline ?? undefined, technicalSpecification: item.apu?.name ?? undefined, apuComponents: item.apu?.resources.map((resource) => resource.resource?.description ?? resource.resource?.code ?? resource.catalogPartida?.description).filter((value): value is string => typeof value === "string" && value.length > 0) }));
-    const selectedSheetNames = configuration.xlsxSheetNames;
-    const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions.map((version) => ({ ...version, extractionCoverage: normalizeExtractionCoverage(version.extractionCoverage) })), configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.filter((entry) => isSelectedWorksheetEvidence(entry.locationJson, selectedSheetNames)).map((entry) => { const metadata = typeof entry.metadataJson === "object" && entry.metadataJson !== null && !Array.isArray(entry.metadataJson) ? entry.metadataJson as Record<string, unknown> : {}; const metadataQuantity = typeof metadata.quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(metadata.quantity) ? new Decimal(metadata.quantity) : undefined; const components = Array.isArray(metadata.apuComponents) ? metadata.apuComponents.filter((value): value is string => typeof value === "string") : undefined; return { id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: typeof metadata.unit === "string" ? metadata.unit : entry.unit ?? undefined, quantity: metadataQuantity ?? entry.value ?? undefined, code: typeof metadata.code === "string" ? metadata.code : undefined, description: typeof metadata.description === "string" ? metadata.description : undefined, technicalSpecification: typeof metadata.technicalSpec === "string" ? metadata.technicalSpec : typeof metadata.spec === "string" ? metadata.spec : undefined, discipline: typeof metadata.discipline === "string" ? metadata.discipline : undefined, attributes: typeof metadata.attributes === "object" && metadata.attributes !== null ? metadata.attributes as Record<string, string> : undefined, apuComponents: components, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} }; }) };
+    const selectedSheetNamesByVersion = configuration.xlsxSheetNames;
+    const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions.map((version) => ({ ...version, extractionCoverage: normalizeExtractionCoverage(version.extractionCoverage) })), configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.filter((entry) => isSelectedWorksheetEvidence(entry.documentVersionId, entry.locationJson, selectedSheetNamesByVersion)).map((entry) => { const metadata = typeof entry.metadataJson === "object" && entry.metadataJson !== null && !Array.isArray(entry.metadataJson) ? entry.metadataJson as Record<string, unknown> : {}; const metadataQuantity = typeof metadata.quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(metadata.quantity) ? new Decimal(metadata.quantity) : undefined; const components = Array.isArray(metadata.apuComponents) ? metadata.apuComponents.filter((value): value is string => typeof value === "string") : undefined; return { id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: typeof metadata.unit === "string" ? metadata.unit : entry.unit ?? undefined, quantity: metadataQuantity ?? entry.value ?? undefined, code: typeof metadata.code === "string" ? metadata.code : undefined, description: typeof metadata.description === "string" ? metadata.description : undefined, technicalSpecification: typeof metadata.technicalSpec === "string" ? metadata.technicalSpec : typeof metadata.spec === "string" ? metadata.spec : undefined, discipline: typeof metadata.discipline === "string" ? metadata.discipline : undefined, attributes: typeof metadata.attributes === "object" && metadata.attributes !== null ? metadata.attributes as Record<string, string> : undefined, apuComponents: components, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} }; }) };
     const result = await runReviewJob(input, prisma as unknown as ReviewPipelineClient);
     after(async () => {
       await runReviewJob({ ...input, defer: false }, prisma as unknown as ReviewPipelineClient);
@@ -81,11 +84,32 @@ export async function POST(request: Request, { params }: Context) {
   }
 }
 
-function isSelectedWorksheetEvidence(location: unknown, selectedSheetNames: string[] | undefined): boolean {
+function isSelectedWorksheetEvidence(documentVersionId: string, location: unknown, selectedSheetNamesByVersion: Record<string, string[]> | undefined): boolean {
+  const selectedSheetNames = selectedSheetNamesByVersion?.[documentVersionId];
   if (!selectedSheetNames || selectedSheetNames.length === 0) return true;
   if (typeof location !== "object" || location === null || Array.isArray(location)) return true;
   const sheet = (location as Record<string, unknown>).sheet;
   return typeof sheet !== "string" || selectedSheetNames.includes(sheet);
+}
+
+async function reextractSelectedXlsxVersions(
+  versions: Array<{ id: string; companyId: string; projectId: string; projectDocumentId: string; mimeType?: string; storageKey?: string; originalFileName?: string; sha256: string }>,
+  selectedSheetNamesByVersion: Record<string, string[]> | undefined,
+  companyId: string,
+  projectId: string,
+): Promise<void> {
+  if (!selectedSheetNamesByVersion) return;
+  const candidates = versions.filter((version) => Boolean(selectedSheetNamesByVersion[version.id]) && Boolean(version.mimeType?.includes("spreadsheetml")) && Boolean(version.storageKey) && Boolean(version.originalFileName));
+  if (candidates.length === 0) return;
+  const storage = getReviewDocumentStorage();
+  for (const version of candidates) {
+    const selectedSheetNames = selectedSheetNamesByVersion[version.id];
+    if (!selectedSheetNames || !version.storageKey || !version.originalFileName || !version.mimeType) continue;
+    const bytes = await storage.read({ companyId, projectId, storageKey: version.storageKey });
+    const fileBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(fileBuffer).set(bytes);
+    await extractAndPersistDocumentVersion({ file: new File([fileBuffer], version.originalFileName, { type: version.mimeType }), version, companyId, projectId, xlsxSheetNames: selectedSheetNames }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
+  }
 }
 
 function normalizeExtractionCoverage(value: unknown): Array<{ coverage?: string; page?: number; worksheet?: string }> | undefined {

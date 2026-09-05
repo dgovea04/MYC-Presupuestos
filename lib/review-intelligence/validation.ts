@@ -52,7 +52,7 @@ export const reviewConfigurationSchema = z.object({
   maxFiles: z.number().int().min(1).max(10), maxPdfPages: z.number().int().min(1).max(300),
   maxFileSizeMb: z.number().positive().max(50), maxXlsxSheets: z.number().int().min(1).max(20),
   tolerancePercent: decimalStringSchema, findingTypes: z.array(z.enum(reviewFindingTypes)).min(1),
-  xlsxSheetNames: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+  xlsxSheetNames: z.record(z.string().min(1), z.array(z.string().trim().min(1).max(100)).max(20)).optional(),
 }).strict();
 
 export type ComparisonJsonInput = z.infer<typeof comparisonJsonSchema>;

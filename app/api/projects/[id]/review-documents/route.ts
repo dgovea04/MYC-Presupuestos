@@ -6,6 +6,7 @@ import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { getReviewDocumentStorage, persistReviewDocumentUpload, validateDocumentFile } from "@/lib/review-intelligence/documents";
 import { extractAndPersistDocumentVersion } from "@/lib/review-intelligence/extraction-persistence";
 import { markStaleForChange } from "@/lib/review-intelligence/stale";
+import { suggestDocumentClassification } from "@/lib/review-intelligence/classification";
 
 const categorySchema = z.enum(["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"]);
 const pageSchema = z.coerce.number().int().min(1).default(1);
@@ -38,9 +39,20 @@ export async function GET(request: Request, { params }: RouteContext) {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     skip: (page - 1) * pageSize,
     take: pageSize + 1,
-    select: { id: true, name: true, originalFileName: true, category: true, status: true, currentVersionId: true, createdAt: true, updatedAt: true, currentVersion: { select: { id: true, versionNumber: true, mimeType: true, fileSizeBytes: true, sha256: true, extractionStatus: true, extractionWarnings: true, pageCount: true, sheetCount: true, extractionCoverage: true } } },
+    select: { id: true, name: true, originalFileName: true, category: true, status: true, currentVersionId: true, createdAt: true, updatedAt: true, currentVersion: { select: { id: true, versionNumber: true, mimeType: true, fileSizeBytes: true, sha256: true, extractionStatus: true, extractionWarnings: true, pageCount: true, sheetCount: true, extractionCoverage: true, evidence: { select: { metadataJson: true } } } } },
   });
-  return NextResponse.json({ documents: documents.slice(0, pageSize), page, pageSize, hasNextPage: documents.length > pageSize });
+  return NextResponse.json({ documents: documents.slice(0, pageSize).map((document) => {
+    const evidence = document.currentVersion?.evidence ?? [];
+    const headers = [...new Set(evidence.flatMap((entry) => extractClassificationHeaders(entry.metadataJson)))];
+    const { evidence: _evidence, ...currentVersion } = document.currentVersion ?? {};
+    return { ...document, ...(Object.keys(currentVersion).length > 0 ? { currentVersion } : {}), ...(headers.length > 0 ? { classificationSuggestion: suggestDocumentClassification({ fileName: document.originalFileName, headers }) } : {}) };
+  }), page, pageSize, hasNextPage: documents.length > pageSize });
+}
+
+function extractClassificationHeaders(value: unknown): string[] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+  const headers = (value as Record<string, unknown>).classificationHeaders;
+  return Array.isArray(headers) ? headers.filter((header): header is string => typeof header === "string" && header.length > 0) : [];
 }
 
 export async function POST(request: Request, { params }: RouteContext) {

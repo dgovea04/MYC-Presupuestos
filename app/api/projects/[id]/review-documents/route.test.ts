@@ -102,6 +102,13 @@ describe("review documents API", () => {
     expect(mocks.projectDocumentFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { companyId: "company-1", projectId: "project-1" }, skip: 10, take: 11, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }));
   });
 
+  it("exposes an explainable classification suggestion using persisted XLSX header signals", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", originalFileName: "source.xlsx", category: "OTHER", currentVersion: { id: "version-1", evidence: [{ metadataJson: { classificationHeaders: ["Código", "Descripción", "Metrado"] } }] } }]);
+    const response = await GET(new Request("http://localhost/api/projects/project-1/review-documents"), { params: Promise.resolve({ id: "project-1" }) });
+    const payload = await response.json() as { documents: Array<{ classificationSuggestion?: { category: string; signals: string[] } }> };
+    expect(payload.documents[0]?.classificationSuggestion).toEqual(expect.objectContaining({ category: "QUANTITY_TAKEOFF", signals: expect.arrayContaining(["header:metrado"]) }));
+  });
+
   it("rejects an upload without a file", async () => {
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-empty" }, body: new FormData() }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(400);

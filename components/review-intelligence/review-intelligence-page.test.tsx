@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("ReviewIntelligencePage", () => {
-  it("sends selected XLSX sheet names in the review configuration", async () => {
+  it("sends selected XLSX sheet names scoped to each document version", async () => {
     const xlsxDocument: ReviewDocumentView = {
       ...documentView,
       id: "document-xlsx",
@@ -28,9 +28,10 @@ describe("ReviewIntelligencePage", () => {
       originalFileName: "Metrados.xlsx",
       currentVersion: { ...documentView.currentVersion!, id: "version-xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", sheetNames: ["Metrados", "Resumen"] },
     };
+    const secondXlsxDocument: ReviewDocumentView = { ...xlsxDocument, id: "document-xlsx-2", name: "Presupuesto.xlsx", currentVersion: { ...xlsxDocument.currentVersion!, id: "version-xlsx-2", sheetNames: ["Metrados", "Resumen"] } };
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url.includes("review-documents")) return jsonResponse({ documents: [xlsxDocument] });
+      if (url.includes("review-documents")) return jsonResponse({ documents: [xlsxDocument, secondXlsxDocument] });
       if (url.includes("review-runs?") && init?.method !== "POST") return jsonResponse({ runs: [] });
       if (init?.method === "POST") return jsonResponse({ reviewRunId: "run-xlsx" }, 201);
       return jsonResponse({ runs: [] });
@@ -41,12 +42,13 @@ describe("ReviewIntelligencePage", () => {
     await screen.findByText("Metrados.xlsx");
     fireEvent.click(screen.getByLabelText("Incluir Metrados.xlsx en la revisión"));
     fireEvent.click(screen.getByLabelText("Incluir hoja Metrados de Metrados.xlsx"));
+    fireEvent.click(screen.getByLabelText("Incluir Presupuesto.xlsx en la revisión"));
+    fireEvent.click(screen.getByLabelText("Incluir hoja Resumen de Presupuesto.xlsx"));
     fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
-
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => {
       if (init?.method !== "POST" || typeof init.body !== "string") return false;
-      const body = JSON.parse(init.body) as { configuration?: { xlsxSheetNames?: string[] } };
-      return body.configuration?.xlsxSheetNames?.join(",") === "Metrados";
+      const body = JSON.parse(init.body) as { configuration?: { xlsxSheetNames?: Record<string, string[]> } };
+      return body.configuration?.xlsxSheetNames?.["version-xlsx"]?.join(",") === "Metrados" && body.configuration.xlsxSheetNames["version-xlsx-2"]?.join(",") === "Resumen";
     })).toBe(true));
   });
 

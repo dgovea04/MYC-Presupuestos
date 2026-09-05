@@ -36,6 +36,7 @@ describe("review document extractors", () => {
     });
 
     expect(result.sheetCount).toBe(2);
+    expect(result.classificationHeaders).toEqual(["Código", "Descripción", "Cantidad"]);
     expect(result.items).toEqual([expect.objectContaining({
       content: expect.stringContaining("Concreto"),
       location: { sheet: "Metrados", range: "A2:C2" },

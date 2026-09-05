@@ -77,8 +77,8 @@ describe("parseReviewConfiguration", () => {
       maxXlsxSheets: 2,
       tolerancePercent: "0",
       findingTypes: ["QUANTITY_MISMATCH"],
-      xlsxSheetNames: ["Metrados", "Resumen"],
-    }).xlsxSheetNames).toEqual(["Metrados", "Resumen"]);
+      xlsxSheetNames: { "version-1": ["Metrados"], "version-2": ["Metrados"] },
+    }).xlsxSheetNames).toEqual({ "version-1": ["Metrados"], "version-2": ["Metrados"] });
   });
 
   it("rechaza límites inferiores, campos faltantes y decimales inválidos", () => {

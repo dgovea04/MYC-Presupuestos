@@ -10,17 +10,17 @@ type ExtractionClient = {
   documentVersion: { update(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<unknown> };
 };
 
-export async function extractAndPersistDocumentVersion(input: { file: ReviewDocumentFile; version: PersistedVersion; companyId: string; projectId: string; ocrAdapter?: OcrAdapter }, client: ExtractionClient): Promise<ExtractionOutput> {
+export async function extractAndPersistDocumentVersion(input: { file: ReviewDocumentFile; version: PersistedVersion; companyId: string; projectId: string; ocrAdapter?: OcrAdapter; xlsxSheetNames?: string[] }, client: ExtractionClient): Promise<ExtractionOutput> {
   try {
-    const extracted = await extractDocument({ file: input.file, ocr: { adapter: input.ocrAdapter, companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id } });
+    const extracted = await extractDocument({ file: input.file, ocr: { adapter: input.ocrAdapter, companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id }, xlsxSheetNames: input.xlsxSheetNames });
     for (const item of extracted.items) {
       const sourceHash = createHash("sha256").update(`${input.version.sha256}:${item.content}:${JSON.stringify(item.location ?? {})}`).digest("hex");
       const extractionMethod = item.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE");
       const confidence = item.confidence ?? "MEDIUM";
       await client.reviewEvidence.upsert({
         where: { documentVersionId_sourceHash: { documentVersionId: input.version.id, sourceHash } },
-        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: item.metadata?.evidenceType ?? "OTHER", originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence, sourceHash },
-        update: { normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence },
+        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: item.metadata?.evidenceType ?? "OTHER", originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), ...(extracted.classificationHeaders ? { classificationHeaders: extracted.classificationHeaders } : {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence, sourceHash },
+        update: { normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), ...(extracted.classificationHeaders ? { classificationHeaders: extracted.classificationHeaders } : {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence },
       });
     }
     const extractionMethod = extracted.extractionMethod ?? extracted.items.find((item) => item.extractionMethod)?.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE");

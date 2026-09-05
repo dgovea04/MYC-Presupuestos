@@ -105,15 +105,17 @@ describe("review runs API", () => {
     expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ documentVersions: [expect.objectContaining({ extractionCoverage: [{ page: 2, coverage: "OCR_REQUIRED" }] })] }), expect.anything());
   });
 
-  it("uses only explicitly selected XLSX worksheet evidence while retaining PDF evidence", async () => {
+  it("uses version-scoped XLSX worksheet selections while retaining PDF evidence", async () => {
     mocks.reviewEvidenceFindMany.mockResolvedValue([
       { id: "xlsx-selected", documentVersionId: "version-1", originalText: "Metrados", normalizedText: "Metrados", locationJson: { sheet: "Metrados", range: "A2:C2" }, value: null, unit: null, extractionMethod: "XLSX_CELL_RANGE", confidence: "MEDIUM", sourceHash: "selected", evidenceType: "QUANTITY", metadataJson: {} },
+      { id: "xlsx-duplicate-name-other-version", documentVersionId: "version-2", originalText: "Metrados", normalizedText: "Metrados", locationJson: { sheet: "Metrados", range: "A2:C2" }, value: null, unit: null, extractionMethod: "XLSX_CELL_RANGE", confidence: "MEDIUM", sourceHash: "other-version", evidenceType: "QUANTITY", metadataJson: {} },
       { id: "xlsx-excluded", documentVersionId: "version-1", originalText: "Resumen", normalizedText: "Resumen", locationJson: { sheet: "Resumen", range: "A2:C2" }, value: null, unit: null, extractionMethod: "XLSX_CELL_RANGE", confidence: "MEDIUM", sourceHash: "excluded", evidenceType: "QUANTITY", metadataJson: {} },
       { id: "pdf", documentVersionId: "version-1", originalText: "Plano", normalizedText: "Plano", locationJson: { page: 1 }, value: null, unit: null, extractionMethod: "PDF_TEXT", confidence: "MEDIUM", sourceHash: "pdf", evidenceType: "OTHER", metadataJson: {} },
     ]);
     mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean; idempotencyKey?: string }) => ({ reviewRunId: "review-sheets", status: input.defer ? "QUEUED" : "RUNNING", idempotencyKey: input.idempotencyKey ?? "key-sheets" }));
 
-    await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-sheets" }, body: JSON.stringify({ configuration: { ...configuration, xlsxSheetNames: ["Metrados"] }, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", projectDocumentId: "document-1" }, { id: "version-2", projectDocumentId: "document-2" }]);
+    await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-sheets" }, body: JSON.stringify({ configuration: { ...configuration, maxFiles: 2, xlsxSheetNames: { "version-1": ["Metrados"], "version-2": ["Resumen"] } }, documentVersionIds: ["version-1", "version-2"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
 
     expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ evidence: [expect.objectContaining({ id: "xlsx-selected" }), expect.objectContaining({ id: "pdf" })] }), expect.anything());
   });
