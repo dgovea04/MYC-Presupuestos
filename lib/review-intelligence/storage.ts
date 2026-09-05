@@ -1,11 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdirSync, realpathSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type ReviewDocumentStorage = {
   put(input: ReviewDocumentStoragePutInput): Promise<StoredReviewDocument>;
   createTemporaryReadUrl(input: TemporaryReadUrlInput): Promise<string>;
+  read(input: TemporaryReadUrlInput): Promise<Uint8Array>;
   delete(input: DeleteReviewDocumentInput): Promise<void>;
 };
 
@@ -33,7 +34,7 @@ export type TemporaryReadUrlInput = {
 
 export type DeleteReviewDocumentInput = TemporaryReadUrlInput;
 
-type TemporaryReadTokenPayload = {
+export type TemporaryReadTokenPayload = {
   companyId: string;
   projectId: string;
   storageKey: string;
@@ -82,6 +83,11 @@ export class LocalReviewDocumentStorage implements ReviewDocumentStorage {
     return `/api/review-documents/read?token=${encodeTemporaryReadToken(payload, this.signingSecret)}`;
   }
 
+  async read(input: TemporaryReadUrlInput): Promise<Uint8Array> {
+    assertStorageKeyScope(input);
+    return new Uint8Array(await readFile(resolveStoragePath(this.rootDirectory, input.storageKey)));
+  }
+
   async delete(input: DeleteReviewDocumentInput): Promise<void> {
     assertStorageKeyScope(input);
     await rm(resolveStoragePath(this.rootDirectory, input.storageKey), { force: true });
@@ -122,8 +128,14 @@ function safeEqual(left: string, right: string): boolean {
 }
 
 function assertPrivateStorageDirectory(rootDirectory: string): string {
-  const resolvedRoot = realpathSync(path.resolve(rootDirectory));
+  const configuredRoot = path.resolve(rootDirectory);
   const publicDirectory = realpathSync(path.resolve(process.cwd(), "public"));
+  const configuredRelativeToPublic = path.relative(publicDirectory, configuredRoot);
+  if (configuredRelativeToPublic === "" || (!configuredRelativeToPublic.startsWith(`..${path.sep}`) && configuredRelativeToPublic !== ".." && !path.isAbsolute(configuredRelativeToPublic))) {
+    throw new Error("Review document storage directory must be outside public.");
+  }
+  mkdirSync(configuredRoot, { recursive: true });
+  const resolvedRoot = realpathSync(configuredRoot);
   const relativeToPublic = path.relative(publicDirectory, resolvedRoot);
   if (relativeToPublic === "" || (!relativeToPublic.startsWith(`..${path.sep}`) && relativeToPublic !== ".." && !path.isAbsolute(relativeToPublic))) {
     throw new Error("Review document storage directory must be outside public.");

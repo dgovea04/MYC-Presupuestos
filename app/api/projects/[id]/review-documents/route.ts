@@ -58,12 +58,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     const category = categorySchema.parse(formData.get("category") ?? "OTHER");
     const validated = await validateDocumentFile(file);
     const targetDocumentId = String(formData.get("documentId") ?? "") || undefined;
+    const name = String(formData.get("name") ?? file.name);
     const previous = await prisma.documentVersion.findMany({
       where: { companyId: scope.project.companyId, projectId, storageMetadata: { path: ["idempotencyKey"], equals: idempotencyKey } },
-      select: { projectDocumentId: true, sha256: true },
+      select: { projectDocumentId: true, sha256: true, projectDocument: { select: { originalFileName: true, name: true } } },
     });
-    if (previous.some((version) => version.sha256 !== validated.sha256 || (targetDocumentId !== undefined && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
-    const result = await persistReviewDocumentUpload({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, projectDocumentId: targetDocumentId, idempotencyKey, file, ...validated }, prisma as unknown as Parameters<typeof persistReviewDocumentUpload>[1], getReviewDocumentStorage());
+    if (previous.some((version) => version.sha256 !== validated.sha256 || version.projectDocument.originalFileName !== file.name || version.projectDocument.name !== name || (targetDocumentId !== undefined && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
+    const result = await persistReviewDocumentUpload({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name, originalFileName: file.name, category, projectDocumentId: targetDocumentId, idempotencyKey, file, ...validated }, prisma as unknown as Parameters<typeof persistReviewDocumentUpload>[1], getReviewDocumentStorage());
     await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
     await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-replacement", id: result.version.id, payload: result.version.sha256, actorUserId: session.user.id }, prisma);
     return NextResponse.json(result, { status: 201 });
@@ -84,14 +85,19 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     clearDocumentsSchema.parse(await request.json());
     const documents = await prisma.projectDocument.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true, currentVersionId: true } });
     const documentIds = documents.map((document) => document.id);
-    const versionIds = documents.flatMap((document) => document.currentVersionId ? [document.currentVersionId] : []);
-    const versions = versionIds.length > 0 ? await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, projectDocumentId: { in: documentIds } }, select: { id: true, storageKey: true } }) : [];
+    const versions = documentIds.length > 0 ? await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, projectDocumentId: { in: documentIds } }, select: { id: true, projectDocumentId: true, versionNumber: true, originalFileName: true, storageKey: true } }) : [];
     const allVersionIds = versions.map((version) => version.id);
     const runs = await prisma.reviewRun.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true } });
     const runIds = runs.map((run) => run.id);
     const storage = getReviewDocumentStorage();
-    for (const version of versions) await storage.delete({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey });
-    await prisma.$transaction(async (transaction) => {
+    const backups = await Promise.all(versions.map(async (version) => ({ ...version, bytes: await storage.read({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey }) })));
+    const removed: typeof backups = [];
+    try {
+      for (const backup of backups) {
+        await storage.delete({ companyId: scope.project.companyId, projectId, storageKey: backup.storageKey });
+        removed.push(backup);
+      }
+      await prisma.$transaction(async (transaction) => {
       if (runIds.length > 0) {
         await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } } });
         await transaction.reviewFinding.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
@@ -103,7 +109,11 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       if (allVersionIds.length > 0) await transaction.documentVersion.deleteMany({ where: { id: { in: allVersionIds }, companyId: scope.project.companyId, projectId } });
       if (documentIds.length > 0) await transaction.projectDocument.deleteMany({ where: { id: { in: documentIds }, companyId: scope.project.companyId, projectId } });
       if (documentIds.length > 0) await transaction.reviewAuditEvent.create({ data: { companyId: scope.project.companyId, projectId, actorUserId: session.user.id, eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: documentIds.length, versionCount: allVersionIds.length } } });
-    });
+      });
+    } catch (error) {
+      await Promise.all(removed.map((backup) => storage.put({ companyId: scope.project.companyId, projectId, documentId: backup.projectDocumentId, versionNumber: backup.versionNumber, originalFileName: backup.originalFileName, bytes: backup.bytes })));
+      throw error;
+    }
     return NextResponse.json({ deletedDocuments: documentIds.length });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Escribe exactamente ELIMINAR DOCUMENTOS FUENTE para confirmar." }, { status: 400 });

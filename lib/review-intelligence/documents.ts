@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 import { ExtractionStatus, Prisma, ReviewDocumentCategory, type ReviewDocumentCategory as ReviewDocumentCategoryType } from "@prisma/client";
-import { LocalReviewDocumentStorage, type ReviewDocumentStorage, type StoredReviewDocument } from "./storage";
+import { LocalReviewDocumentStorage, verifyTemporaryReadToken, type ReviewDocumentStorage, type StoredReviewDocument, type TemporaryReadTokenPayload } from "./storage";
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".pdf", ".xlsx"]);
@@ -62,13 +62,22 @@ export type PersistReviewDocumentUploadInput = ProjectDocumentInput & {
 };
 
 export function getReviewDocumentStorage(): ReviewDocumentStorage {
-  const signingSecret = process.env.REVIEW_DOCUMENT_STORAGE_SIGNING_SECRET ?? process.env.REVIEW_EVIDENCE_SIGNING_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
-  if (!signingSecret) throw new Error("Review document storage is unavailable until a signing secret is configured.");
+  const signingSecret = reviewDocumentStorageSigningSecret();
   return new LocalReviewDocumentStorage({
     rootDirectory: process.env.REVIEW_DOCUMENT_STORAGE_DIR ?? path.resolve(process.cwd(), "..", "review-document-storage"),
     signingSecret,
     temporaryUrlTtlSeconds: 5 * 60,
   });
+}
+
+export function verifyReviewDocumentReadToken(token: string): TemporaryReadTokenPayload {
+  return verifyTemporaryReadToken(token, { signingSecret: reviewDocumentStorageSigningSecret() });
+}
+
+function reviewDocumentStorageSigningSecret(): string {
+  const signingSecret = process.env.REVIEW_DOCUMENT_STORAGE_SIGNING_SECRET ?? process.env.REVIEW_EVIDENCE_SIGNING_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  if (!signingSecret) throw new Error("Review document storage is unavailable until a signing secret is configured.");
+  return signingSecret;
 }
 
 export async function persistReviewDocumentUpload(
