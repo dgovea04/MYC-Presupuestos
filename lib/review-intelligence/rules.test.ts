@@ -47,6 +47,14 @@ describe("evaluateFindingRules", () => {
     expect(findings[0]).toMatchObject({ type: "MISSING_DOCUMENTATION", evidenceId: "document-1", message: "No encontramos documentación relacionada con suficiente confianza." });
   });
 
+  it("suppresses missing documentation when the relevant source coverage is incomplete", () => {
+    const input = baseInput();
+
+    const findings = evaluateFindingRules({ ...input, evidence: { id: "document-1", primary: true }, link: undefined, hasIncompleteSourceCoverage: true });
+
+    expect(findings).toEqual([]);
+  });
+
   it("does not create inconsistencies from a low-confidence candidate", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({ ...input, link: { evidenceId: "evidence-1", confidence: "LOW", score: new Decimal("0.2") } });

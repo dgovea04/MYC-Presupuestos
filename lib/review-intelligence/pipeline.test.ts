@@ -268,6 +268,19 @@ describe("runReviewJob", () => {
     expect(database.findings.every((finding) => finding.evidenceId === database.evidence[0]?.id)).toBe(true);
   });
 
+  it("suppresses absence findings when a selected document has uncovered extraction coverage", async () => {
+    const database = client();
+    const result = await runReviewJob({
+      ...input(),
+      configuration: { ...input().configuration, findingTypes: ["MISSING_DOCUMENTATION"] },
+      documentVersions: [{ id: "version-1", companyId: "company-1", projectId: "project-1", extractionCoverage: [{ page: 1, coverage: "OCR_REQUIRED" }] }],
+      evidence: [{ ...input().evidence[0], id: "evidence-unrelated", code: "Z-9", description: "Documento de seguridad", confidence: "HIGH" }],
+    }, database);
+
+    expect(result.status).toBe("COMPLETED");
+    expect(database.findings).toHaveLength(0);
+  });
+
   it("evaluates rules against every eligible primary document for each item", async () => {
     const database = client();
     const result = await runReviewJob({
