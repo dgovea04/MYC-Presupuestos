@@ -107,6 +107,46 @@ describe("runReviewJob", () => {
     expect(database.findings).toHaveLength(1);
   });
 
+  it("enforces the company active-run limit while claiming a queued run", async () => {
+    const database = client();
+    const request = { ...input(), defer: true, jobPolicy: { maxConcurrentPerCompany: 1 } };
+    await runReviewJob(request, database);
+    database.runs.push({ id: "company-active", companyId: "company-1", projectId: "project-other", budgetId: "budget-other", status: "RUNNING", progressJson: { checkpoints: [] }, warningsJson: [] });
+
+    await expect(runReviewJob({ ...request, defer: false }, database)).rejects.toThrow("company already has");
+  });
+
+  it("records a timeout when a stage promise never resolves", async () => {
+    const database = client();
+    await expect(runReviewJob({
+      ...input(),
+      jobPolicy: { maxAttempts: 1, stageTimeoutMs: 10 },
+      jobRuntime: { now: () => new Date(1_000), timeout: async () => undefined },
+      shouldCancel: () => new Promise<boolean>(() => undefined),
+    }, database)).rejects.toThrow("timed out");
+
+    expect(database.runs[0]).toMatchObject({ status: "FAILED", failureCode: "STAGE_TIMEOUT" });
+  });
+
+  it("uses the injected clock for leases and stage correlation ids", async () => {
+    const database = client();
+    const timestamp = new Date("2020-01-02T03:04:05.000Z");
+    await runReviewJob({ ...input(), jobRuntime: { now: () => timestamp } }, database);
+
+    expect(database.runs[0].progressJson).toMatchObject({ lease: { expiresAt: new Date(timestamp.getTime() + 5 * 60 * 1000).toISOString() } });
+    expect(database.events[0]?.correlationId).toContain(`:validating:${timestamp.getTime()}`);
+  });
+
+  it("rejects retry input that does not match the persisted project and budget before execution", async () => {
+    const database = client();
+    const request = { ...input(), shouldCancel: () => { throw new Error("temporary failure"); } };
+    await expect(runReviewJob(request, database)).rejects.toThrow("temporary failure");
+    const runCount = database.runs.length;
+
+    await expect(retryReviewRun(database.runs[0].id as string, "company-1", { ...request, projectId: "project-other", budgetReference: { ...request.budgetReference, projectId: "project-other" } }, database)).rejects.toThrow("persisted project");
+    expect(database.runs).toHaveLength(runCount);
+  });
+
   it("rejects a review when the selected documents have no extracted evidence", async () => {
     const database = client();
     await expect(runReviewJob({ ...input(), evidence: [] }, database)).rejects.toThrow("No extracted evidence is available");
