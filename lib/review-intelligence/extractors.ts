@@ -3,9 +3,12 @@ import JSZip from "jszip";
 
 import { extractDigitalPdf } from "@/lib/pdf-import/digital-extraction";
 import { validateDocumentFile, type ReviewDocumentFile } from "./documents";
+import { createOcrAdapter, type OcrAdapter } from "./ocr";
+import type { ConfidenceLevel, ExtractionCoverage, ExtractionMethod } from "./types";
 
 export type ExtractionInput = {
   file: ReviewDocumentFile;
+  ocr?: { adapter?: OcrAdapter; companyId: string; projectId: string; documentVersionId: string };
 };
 
 export type ExtractionLocation = {
@@ -21,7 +24,11 @@ export type ExtractionItem = {
   primary?: boolean;
   location?: ExtractionLocation;
   metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; technicalSpec?: string; technicalSpecification?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
+  extractionMethod?: ExtractionMethod;
+  confidence?: ConfidenceLevel;
 };
+
+export type PdfPageCoverage = { page: number; coverage: ExtractionCoverage; method: ExtractionMethod; confidence: ConfidenceLevel; warnings: string[] };
 
 export type ExtractionOutput = {
   kind: "PDF" | "XLSX";
@@ -32,27 +39,60 @@ export type ExtractionOutput = {
   warnings: string[];
   pageCount?: number;
   sheetCount?: number;
+  coverage?: PdfPageCoverage[];
+  extractionMethod?: ExtractionMethod;
+  extractionConfidence?: ConfidenceLevel;
 };
 
 export async function extractDocument(input: ExtractionInput): Promise<ExtractionOutput> {
   const validated = await validateDocumentFile(input.file);
   if (validated.extension === ".pdf") {
-    return extractPdf(input.file, validated);
+    return extractPdf(input, validated);
   }
   return extractXlsx(validated);
 }
 
-async function extractPdf(file: ReviewDocumentFile, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
-  const digital = await extractDigitalPdf(await file.arrayBuffer());
+async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
+  const digital = await extractDigitalPdf(await input.file.arrayBuffer());
+  const coverage: PdfPageCoverage[] = digital.pages.map((page) => page.text.trim().length > 0
+    ? { page: page.page, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }
+    : { page: page.page, coverage: "OCR_REQUIRED", method: "PDF_TEXT", confidence: "LOW", warnings: [] });
+  const items = digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
+  const uncoveredPages = digital.pages.filter((page) => page.text.trim().length === 0);
+  const pageWarnings: string[] = [];
+  if (uncoveredPages.length > 0 && input.ocr) {
+    const result = await createOcrAdapter(input.ocr.adapter).extractPages({ companyId: input.ocr.companyId, projectId: input.ocr.projectId, documentVersionId: input.ocr.documentVersionId, mimeType: "application/pdf", pages: uncoveredPages.map((page) => ({ pageNumber: page.page, selectableText: page.text })) });
+    const resultsByPage = new Map(result.pages.map((page) => [page.pageNumber, page]));
+    for (const page of uncoveredPages) {
+      const ocrPage = resultsByPage.get(page.page);
+      const warnings = ocrPage?.warnings ?? ["OCR provider did not return a result for this page."];
+      const at = coverage.findIndex((entry) => entry.page === page.page);
+      coverage[at] = { page: page.page, coverage: ocrPage?.coverage ?? "FAILED", method: result.method, confidence: result.confidence, warnings };
+      pageWarnings.push(...warnings.map((warning) => `Page ${page.page}: ${warning}`));
+      if (ocrPage?.coverage === "PROCESSED" && ocrPage.text) items.push(...extractPdfEvidence(ocrPage.text, page.page).map((item) => ({ ...item, extractionMethod: result.method, confidence: result.confidence })));
+    }
+  } else {
+    for (const page of uncoveredPages) {
+      const warning = "OCR is required but extraction was not configured.";
+      const at = coverage.findIndex((entry) => entry.page === page.page);
+      coverage[at] = { ...coverage[at]!, warnings: [warning] };
+      pageWarnings.push(`Page ${page.page}: ${warning}`);
+    }
+  }
+  const hasProcessedOcr = coverage.some((entry) => entry.method === "OCR_PROVIDER" && entry.coverage === "PROCESSED");
   return {
     kind: "PDF",
     sha256: validated.sha256,
     mimeType: validated.mimeType,
     fileSizeBytes: validated.fileSizeBytes,
-    items: digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page)),
+    items,
     pageCount: digital.pageCount,
+    coverage,
+    extractionMethod: hasProcessedOcr ? "OCR_PROVIDER" : "PDF_TEXT",
+    extractionConfidence: coverage.some((entry) => entry.method === "OCR_PROVIDER" && entry.confidence === "HIGH") ? "HIGH" : "MEDIUM",
     warnings: [
       "El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible porque el adaptador compatible no expone página ni bounding boxes verificables.",
+      ...pageWarnings,
     ],
   };
 }

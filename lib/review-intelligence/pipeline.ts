@@ -16,7 +16,7 @@ type TransactionOptions = { isolationLevel?: "Serializable" };
 
 export interface ReviewBudgetItem extends BudgetItemMatchInput, ReviewRuleItem { budgetId: string; companyId?: string; projectId?: string; discipline?: string; baseSnapshotId?: string; }
 export interface ReviewEvidence extends EvidenceMatchInput, ReviewRuleEvidence { documentVersionId: string; originalText: string; normalizedText?: string; sourceHash: string; evidenceType: string; confidence: "LOW" | "MEDIUM" | "HIGH"; locationJson: Record<string, unknown>; companyId?: string; projectId?: string; }
-export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; }
+export interface ReviewDocumentVersionReference { id: string; companyId: string; projectId: string; extractionCoverage?: Array<{ coverage?: string }>; }
 export interface ReviewBudgetReference { id: string; companyId: string; projectId: string; }
 export interface RunReviewJobInput { companyId: string; projectId: string; budgetId: string; budgetReference: ReviewBudgetReference; createdById: string; documentVersionIds: string[]; documentVersions: ReviewDocumentVersionReference[]; configuration: ReviewConfiguration; rulesVersion: string; budgetItems: ReviewBudgetItem[]; evidence: ReviewEvidence[]; extractionWarnings?: WarningJson[]; shouldCancel?: () => boolean | Promise<boolean>; humanReviewRequired?: boolean; automaticBudgetMutation?: boolean; idempotencyKey?: string; defer?: boolean; }
 export interface RunReviewJobResult { reviewRunId: string; status: ReviewRunStatus; stages: ReviewStage[]; warnings: WarningJson[]; idempotencyKey: string; }
@@ -132,7 +132,7 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
         const linkedPrimaryCandidates = candidates.filter((entry) => entry.eligibleForFindings && primaryEvidence.some((evidence) => evidence.id === entry.evidenceId));
         if (linkedPrimaryCandidates.length === 0 && primaryEvidence[0] && configuration.findingTypes.includes("MISSING_DOCUMENTATION")) {
           const evidence = primaryEvidence[0];
-          const findings = evaluateFindingRules({ item, evidence, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: ["MISSING_DOCUMENTATION"] });
+          const findings = evaluateFindingRules({ item, evidence, tolerance: new Decimal(configuration.tolerancePercent), ruleTypes: ["MISSING_DOCUMENTATION"], hasIncompleteSourceCoverage: input.documentVersions.some((version) => version.extractionCoverage?.some((entry) => entry.coverage === "OCR_REQUIRED" || entry.coverage === "FAILED")) });
           for (const finding of findings) {
             if (input.extractionWarnings?.some((warning) => warning.source === evidence.documentVersionId)) continue;
             await transaction.reviewFinding.upsert({ where: { id_companyId_projectId: { id: stableId("finding", runId, finding.budgetItemId, finding.evidenceId, finding.type), companyId: input.companyId, projectId: input.projectId } }, create: findingData(input, runId, finding, undefined), update: {} });

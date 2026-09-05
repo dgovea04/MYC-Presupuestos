@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { extractDocument } from "./extractors";
 import { validateDocumentFile } from "./documents";
+import type { OcrAdapter } from "./ocr";
 
 async function createWorkbookFile(): Promise<File> {
   const workbook = new ExcelJS.Workbook();
@@ -156,5 +157,32 @@ describe("review document extractors", () => {
   it("rejects a PDF with an invalid numeric xref offset", async () => {
     const malformed = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\nstartxref\nnot-a-number\n%%EOF"], "invalid-xref.pdf", { type: "application/pdf" });
     await expect(validateDocumentFile(malformed)).rejects.toThrow("MIME");
+  });
+
+  it("reports digital coverage and routes only uncovered PDF pages to the injected OCR adapter", async () => {
+    const ocr: OcrAdapter = {
+      extractPages: async (input) => {
+        expect(input.pages).toEqual([{ pageNumber: 2, selectableText: "" }]);
+        return { method: "OCR_PROVIDER", confidence: "HIGH", pages: [{ pageNumber: 2, coverage: "PROCESSED", text: "02.01 Acero 10 kg", warnings: [] }] };
+      },
+    };
+    const pdf = new File(["%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<< /Type /Page >>\nendobj\n3 0 obj\n<</Subject (01.01 Concreto 12 m3)>>\nendobj\nxref\n0 1\n0000000000 65535 f \ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "mixed.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf, ocr: { adapter: ocr, companyId: "company-1", projectId: "project-1", documentVersionId: "version-1" } });
+
+    expect(result.coverage).toEqual([
+      { page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] },
+      { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] },
+    ]);
+    expect(result.items).toEqual(expect.arrayContaining([expect.objectContaining({ location: expect.objectContaining({ page: 2 }), extractionMethod: "OCR_PROVIDER", confidence: "HIGH" })]));
+  });
+
+  it("keeps scanned PDF pages uncovered with page-level OCR unavailable warnings", async () => {
+    const pdf = new File(["%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\nxref\n0 1\n0000000000 65535 f \ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "scan.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf, ocr: { companyId: "company-1", projectId: "project-1", documentVersionId: "version-1" } });
+
+    expect(result.coverage).toEqual([expect.objectContaining({ page: 1, coverage: "OCR_REQUIRED", method: "OCR_UNAVAILABLE", confidence: "LOW", warnings: ["OCR provider is not configured."] })]);
+    expect(result.warnings).toEqual(expect.arrayContaining(["Page 1: OCR provider is not configured."]));
   });
 });

@@ -42,6 +42,7 @@ export interface ReviewRuleInput {
   link?: RuleLink;
   tolerance: Decimal;
   ruleTypes?: ReviewFindingType[];
+  hasIncompleteSourceCoverage?: boolean;
 }
 
 export interface FindingCandidate {
@@ -72,7 +73,7 @@ function candidate(input: ReviewRuleInput, type: ReviewFindingType, message: str
 
 export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[] {
   const findings: FindingCandidate[] = [];
-  if (enabled(input, "MISSING_DOCUMENTATION") && input.evidence.primary && (!input.link || input.link.confidence === "LOW")) {
+  if (enabled(input, "MISSING_DOCUMENTATION") && !input.hasIncompleteSourceCoverage && input.evidence.primary && (!input.link || input.link.confidence === "LOW")) {
     findings.push(candidate({ ...input, link: undefined }, "MISSING_DOCUMENTATION", MISSING_DOCUMENTATION_MESSAGE, "MEDIUM"));
   }
   if (!primaryLink(input)) return findings;

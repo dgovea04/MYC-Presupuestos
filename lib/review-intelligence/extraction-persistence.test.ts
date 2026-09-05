@@ -33,4 +33,14 @@ describe("review extraction persistence", () => {
       }),
     }));
   });
+
+  it("persists page coverage and OCR metadata while merging duplicate evidence by source hash", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "PDF", sha256: "hash", mimeType: "application/pdf", fileSizeBytes: 3, items: [{ content: "02.01 Acero 10 kg", location: { page: 2 }, extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }], coverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }], warnings: [], pageCount: 2 });
+    const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    await extractAndPersistDocumentVersion({ file: new File(["pdf"], "file.pdf"), version: { id: "version-1", sha256: "hash" }, companyId: "company-1", projectId: "project-1" }, client);
+
+    expect(client.reviewEvidence.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }), update: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }) }));
+    expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", extractionConfidence: "HIGH", extractionCoverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }] }) }));
+  });
 });
