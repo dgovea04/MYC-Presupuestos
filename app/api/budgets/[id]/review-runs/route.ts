@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const body = requestSchema.parse(await request.json());
     const configuration = parseReviewConfiguration(body.configuration);
-    const versions = await prisma.documentVersion.findMany({ where: { id: { in: body.documentVersionIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, select: { id: true, companyId: true, projectId: true, projectDocumentId: true, fileSizeBytes: true, mimeType: true, pageCount: true, sheetCount: true } });
+    const versions = await prisma.documentVersion.findMany({ where: { id: { in: body.documentVersionIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, select: { id: true, companyId: true, projectId: true, projectDocumentId: true, fileSizeBytes: true, mimeType: true, pageCount: true, sheetCount: true, extractionCoverage: true } });
     if (versions.length !== body.documentVersionIds.length) throw new Error("Alguna versión de documento no pertenece al proyecto solicitado.");
     assertReviewRunLimits(configuration, versions);
     const evidence = await prisma.reviewEvidence.findMany({ where: { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, documentVersionId: { in: body.documentVersionIds } }, select: { id: true, documentVersionId: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, evidenceType: true, metadataJson: true } });

@@ -54,11 +54,11 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
 
 async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
   const digital = await extractDigitalPdf(await input.file.arrayBuffer());
-  const coverage: PdfPageCoverage[] = digital.pages.map((page) => page.text.trim().length > 0
+  const coverage: PdfPageCoverage[] = digital.pages.map((page) => hasSufficientDigitalText(page.text)
     ? { page: page.page, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }
     : { page: page.page, coverage: "OCR_REQUIRED", method: "PDF_TEXT", confidence: "LOW", warnings: [] });
   const items = digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
-  const uncoveredPages = digital.pages.filter((page) => page.text.trim().length === 0);
+  const uncoveredPages = digital.pages.filter((page) => !hasSufficientDigitalText(page.text));
   const pageWarnings: string[] = [];
   if (uncoveredPages.length > 0 && input.ocr) {
     const result = await createOcrAdapter(input.ocr.adapter).extractPages({ companyId: input.ocr.companyId, projectId: input.ocr.projectId, documentVersionId: input.ocr.documentVersionId, mimeType: "application/pdf", pages: uncoveredPages.map((page) => ({ pageNumber: page.page, selectableText: page.text })) });
@@ -267,6 +267,13 @@ async function getZipIndicatorWarnings(bytes: Uint8Array): Promise<string[]> {
 
 function normalizeText(value: string): string {
   return value.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+}
+
+function hasSufficientDigitalText(value: string): boolean {
+  const normalized = normalizeText(value);
+  const meaningfulTokens = normalized.match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+  const alphanumericCharacters = normalized.match(/[\p{L}\p{N}]/gu) ?? [];
+  return normalized.length >= 12 && meaningfulTokens.length >= 2 && alphanumericCharacters.length / normalized.length >= 0.5;
 }
 
 function columnToLetters(column: number): string {

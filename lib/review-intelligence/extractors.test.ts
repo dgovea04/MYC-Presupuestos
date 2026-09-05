@@ -185,4 +185,33 @@ describe("review document extractors", () => {
     expect(result.coverage).toEqual([expect.objectContaining({ page: 1, coverage: "OCR_REQUIRED", method: "OCR_UNAVAILABLE", confidence: "LOW", warnings: ["OCR provider is not configured."] })]);
     expect(result.warnings).toEqual(expect.arrayContaining(["Page 1: OCR provider is not configured."]));
   });
+
+  it("routes token-level selectable PDF text to OCR instead of treating it as usable coverage", async () => {
+    const ocr: OcrAdapter = {
+      extractPages: async (input) => {
+        expect(input.pages).toEqual([{ pageNumber: 1, selectableText: "abc" }]);
+        return { method: "OCR_PROVIDER", confidence: "HIGH", pages: [{ pageNumber: 1, coverage: "PROCESSED", text: "01.01 Concreto 12 m3", warnings: [] }] };
+      },
+    };
+    const pdf = new File(["%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<</Subject (abc)>>\nendobj\nxref\n0 1\n0000000000 65535 f \ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "token.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf, ocr: { adapter: ocr, companyId: "company-1", projectId: "project-1", documentVersionId: "version-1" } });
+
+    expect(result.coverage).toEqual([expect.objectContaining({ page: 1, coverage: "PROCESSED", method: "OCR_PROVIDER" })]);
+    expect(result.items).toEqual(expect.arrayContaining([expect.objectContaining({ extractionMethod: "OCR_PROVIDER", location: expect.objectContaining({ page: 1 }) })]));
+  });
+
+  it("routes garbled selectable PDF text to OCR instead of treating printable symbols as coverage", async () => {
+    const ocr: OcrAdapter = {
+      extractPages: async (input) => {
+        expect(input.pages).toEqual([{ pageNumber: 1, selectableText: "%%%% %%%% %%%% abc" }]);
+        return { method: "OCR_PROVIDER", confidence: "HIGH", pages: [{ pageNumber: 1, coverage: "PROCESSED", text: "01.01 Concreto 12 m3", warnings: [] }] };
+      },
+    };
+    const pdf = new File(["%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n2 0 obj\n<</Subject (%%%% %%%% %%%% abc)>>\nendobj\nxref\n0 1\n0000000000 65535 f \ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "garbled.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf, ocr: { adapter: ocr, companyId: "company-1", projectId: "project-1", documentVersionId: "version-1" } });
+
+    expect(result.coverage).toEqual([expect.objectContaining({ page: 1, coverage: "PROCESSED", method: "OCR_PROVIDER" })]);
+  });
 });
