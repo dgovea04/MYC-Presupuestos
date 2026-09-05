@@ -109,7 +109,7 @@ export function ReviewIntelligencePage({ budgetId, projectId, initialRun, budget
       const response = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}/review-runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": runKey.current ?? (runKey.current = `review-ui-${crypto.randomUUID()}`) },
-        body: JSON.stringify({ documentVersionIds: selectedVersionIds, configuration: { maxFiles: 10, maxPdfPages: 300, maxFileSizeMb: 50, maxXlsxSheets: 20, tolerancePercent: "1.00", findingTypes: ["QUANTITY_MISMATCH", "UNIT_INCONSISTENCY", "TECHNICAL_SPECIFICATION_MISMATCH", "MISSING_DOCUMENTATION", "INCOMPLETE_APU"], ...(Object.keys(selectedSheetNames).length > 0 ? { xlsxSheetNames: selectedSheetNames } : {}) }, rulesVersion: "review-rules-v1" }),
+        body: JSON.stringify({ documentVersionIds: selectedVersionIds, configuration: { maxFiles: 10, maxPdfPages: 300, maxFileSizeMb: 50, maxXlsxSheets: 20, tolerancePercent: "1.00", findingTypes: ["QUANTITY_MISMATCH", "UNIT_INCONSISTENCY", "TECHNICAL_SPEC_MISMATCH", "MISSING_DOCUMENTATION", "INCOMPLETE_APU"], ...(Object.keys(selectedSheetNames).length > 0 ? { xlsxSheetNames: selectedSheetNames } : {}) }, rulesVersion: "review-rules-v1" }),
       });
       if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "No se pudo iniciar la revisión.");
       const result = await response.json().catch(() => null) as { reviewRunId?: string } | null;

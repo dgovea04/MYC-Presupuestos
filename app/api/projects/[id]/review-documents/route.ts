@@ -44,9 +44,15 @@ export async function GET(request: Request, { params }: RouteContext) {
   return NextResponse.json({ documents: documents.slice(0, pageSize).map((document) => {
     const evidence = document.currentVersion?.evidence ?? [];
     const headers = [...new Set(evidence.flatMap((entry) => extractClassificationHeaders(entry.metadataJson)))];
-    const { evidence: _evidence, ...currentVersion } = document.currentVersion ?? {};
-    return { ...document, ...(Object.keys(currentVersion).length > 0 ? { currentVersion } : {}), ...(headers.length > 0 ? { classificationSuggestion: suggestDocumentClassification({ fileName: document.originalFileName, headers }) } : {}) };
+    const currentVersion = document.currentVersion ? withoutEvidence(document.currentVersion) : {};
+    return { ...document, ...(Object.keys(currentVersion).length > 0 ? { currentVersion } : {}), classificationSuggestion: suggestDocumentClassification({ fileName: document.originalFileName, headers }) };
   }), page, pageSize, hasNextPage: documents.length > pageSize });
+}
+
+function withoutEvidence<T extends { evidence?: unknown }>(version: T): Omit<T, "evidence"> {
+  const copy = { ...version };
+  delete copy.evidence;
+  return copy;
 }
 
 function extractClassificationHeaders(value: unknown): string[] {

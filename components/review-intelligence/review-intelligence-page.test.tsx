@@ -50,6 +50,10 @@ describe("ReviewIntelligencePage", () => {
       const body = JSON.parse(init.body) as { configuration?: { xlsxSheetNames?: Record<string, string[]> } };
       return body.configuration?.xlsxSheetNames?.["version-xlsx"]?.join(",") === "Metrados" && body.configuration.xlsxSheetNames["version-xlsx-2"]?.join(",") === "Resumen";
     })).toBe(true));
+    const reviewBody = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")?.[1]?.body;
+    const configuration = JSON.parse(String(reviewBody)).configuration as { findingTypes: string[] };
+    expect(configuration.findingTypes).toContain("TECHNICAL_SPEC_MISMATCH");
+    expect(configuration.findingTypes).not.toContain("TECHNICAL_SPECIFICATION_MISMATCH");
   });
 
   it("selects the newly created run instead of keeping findings from the previous run", async () => {
@@ -122,6 +126,13 @@ describe("ReviewDashboard", () => {
 });
 
 describe("DocumentManager", () => {
+  it("renders persisted classification signals with accessible explanatory copy", () => {
+    const suggestedDocument: ReviewDocumentView = { ...documentView, classificationSuggestion: { category: "QUANTITY_TAKEOFF", score: 0.8, signals: ["filename:metrado", "header:metrado"] } };
+    render(<DocumentManager projectId="project-1" documents={[suggestedDocument]} onChanged={vi.fn()} />);
+
+    expect(screen.getByLabelText("Señales de clasificación de Planos.pdf").textContent).toContain("filename:metrado · header:metrado");
+  });
+
   it("exposes document status, provenance metadata, warning text, and an accessible upload control", () => {
     render(<DocumentManager projectId="project-1" documents={[documentView]} onChanged={vi.fn()} />);
 

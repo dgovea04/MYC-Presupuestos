@@ -109,6 +109,17 @@ describe("review documents API", () => {
     expect(payload.documents[0]?.classificationSuggestion).toEqual(expect.objectContaining({ category: "QUANTITY_TAKEOFF", signals: expect.arrayContaining(["header:metrado"]) }));
   });
 
+  it("keeps deterministic suggestions for headerless PDFs and unknown documents", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([
+      { id: "pdf-document", originalFileName: "planos.pdf", category: "OTHER", currentVersion: { id: "pdf-version", evidence: [] } },
+      { id: "unknown-document", originalFileName: "adjunto.bin", category: "OTHER", currentVersion: { id: "unknown-version", evidence: [] } },
+    ]);
+    const response = await GET(new Request("http://localhost/api/projects/project-1/review-documents"), { params: Promise.resolve({ id: "project-1" }) });
+    const payload = await response.json() as { documents: Array<{ id: string; classificationSuggestion: { category: string; signals: string[] } }> };
+    expect(payload.documents[0]?.classificationSuggestion).toEqual({ category: "PLAN", score: 0.6, signals: ["filename:plan", "extension:pdf"] });
+    expect(payload.documents[1]?.classificationSuggestion).toEqual({ category: "OTHER", score: 0, signals: ["fallback:other"] });
+  });
+
   it("rejects an upload without a file", async () => {
     const response = await POST(new Request("http://localhost/api/projects/project-1/review-documents", { method: "POST", headers: { "Idempotency-Key": "key-empty" }, body: new FormData() }), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(400);
@@ -149,7 +160,7 @@ describe("review documents API", () => {
     mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-2" }, { id: "document-1" }]);
     const response = await GET(new Request("http://localhost/api/projects/project-1/review-documents?pageSize=2"), { params: Promise.resolve({ id: "project-1" }) });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(expect.objectContaining({ documents: [{ id: "document-2" }, { id: "document-1" }], hasNextPage: false }));
+    await expect(response.json()).resolves.toEqual(expect.objectContaining({ documents: [expect.objectContaining({ id: "document-2", classificationSuggestion: expect.any(Object) }), expect.objectContaining({ id: "document-1", classificationSuggestion: expect.any(Object) })], hasNextPage: false }));
   });
 
   it("validates a file before creating a project document", async () => {
