@@ -2268,6 +2268,10 @@ body,
   background: transparent !important;
 }
 
+[data-view-mode="excel"] [data-row-active="true"] > .ui-table-cell.sticky {
+  background: none !important;
+}
+
 [data-view-mode="excel"] [data-row-active="true"] > .ui-table-cell:not(.sticky) .ui-input {
   background: transparent !important;
 }
