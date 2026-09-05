@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
-import { createDocumentVersion, createProjectDocumentAndVersion, validateDocumentFile } from "@/lib/review-intelligence/documents";
+import { getReviewDocumentStorage, persistReviewDocumentUpload, validateDocumentFile } from "@/lib/review-intelligence/documents";
 import { extractAndPersistDocumentVersion } from "@/lib/review-intelligence/extraction-persistence";
 import { markStaleForChange } from "@/lib/review-intelligence/stale";
 
@@ -57,13 +57,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!(file instanceof File)) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
     const category = categorySchema.parse(formData.get("category") ?? "OTHER");
     const validated = await validateDocumentFile(file);
-    const targetDocumentId = String(formData.get("documentId") ?? "");
-    const storageKey = `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}/${targetDocumentId || "new"}/${validated.sha256}`;
-    if (typeof prisma.documentVersion.findMany === "function") {
-      const previous = await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, storageKey: { startsWith: `review-documents/${scope.project.companyId}/${projectId}/${idempotencyKey}/` } }, select: { id: true, projectDocumentId: true, storageKey: true, sha256: true } });
-      if (previous.some((version) => version.storageKey !== storageKey || version.sha256 !== validated.sha256 || (targetDocumentId && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
-    }
-    const result = targetDocumentId ? await createDocumentVersion({ companyId: scope.project.companyId, projectId, projectDocumentId: targetDocumentId, storageKey, file }, prisma as unknown as Parameters<typeof createDocumentVersion>[1]).then((version) => ({ document: { id: targetDocumentId }, version })) : await createProjectDocumentAndVersion({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, storageKey, file }, prisma as unknown as Parameters<typeof createProjectDocumentAndVersion>[1]);
+    const targetDocumentId = String(formData.get("documentId") ?? "") || undefined;
+    const previous = await prisma.documentVersion.findMany({
+      where: { companyId: scope.project.companyId, projectId, storageMetadata: { path: ["idempotencyKey"], equals: idempotencyKey } },
+      select: { projectDocumentId: true, sha256: true },
+    });
+    if (previous.some((version) => version.sha256 !== validated.sha256 || (targetDocumentId !== undefined && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
+    const result = await persistReviewDocumentUpload({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name: String(formData.get("name") ?? file.name), originalFileName: file.name, category, projectDocumentId: targetDocumentId, idempotencyKey, file, ...validated }, prisma as unknown as Parameters<typeof persistReviewDocumentUpload>[1], getReviewDocumentStorage());
     await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
     await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-replacement", id: result.version.id, payload: result.version.sha256, actorUserId: session.user.id }, prisma);
     return NextResponse.json(result, { status: 201 });
@@ -85,21 +85,24 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const documents = await prisma.projectDocument.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true, currentVersionId: true } });
     const documentIds = documents.map((document) => document.id);
     const versionIds = documents.flatMap((document) => document.currentVersionId ? [document.currentVersionId] : []);
-    const versions = versionIds.length > 0 ? await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, projectDocumentId: { in: documentIds } }, select: { id: true } }) : [];
+    const versions = versionIds.length > 0 ? await prisma.documentVersion.findMany({ where: { companyId: scope.project.companyId, projectId, projectDocumentId: { in: documentIds } }, select: { id: true, storageKey: true } }) : [];
     const allVersionIds = versions.map((version) => version.id);
     const runs = await prisma.reviewRun.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true } });
     const runIds = runs.map((run) => run.id);
+    const storage = getReviewDocumentStorage();
+    for (const version of versions) await storage.delete({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey });
     await prisma.$transaction(async (transaction) => {
       if (runIds.length > 0) {
         await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } } });
         await transaction.reviewFinding.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
-        await transaction.reviewAuditEvent.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
+        await transaction.reviewAuditEvent.updateMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId }, data: { reviewRunId: null } });
         await transaction.reviewRunDocumentVersion.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } });
         await transaction.reviewRun.deleteMany({ where: { id: { in: runIds }, companyId: scope.project.companyId, projectId } });
       }
       if (documentIds.length > 0) await transaction.projectDocument.updateMany({ where: { id: { in: documentIds }, companyId: scope.project.companyId, projectId }, data: { currentVersionId: null } });
       if (allVersionIds.length > 0) await transaction.documentVersion.deleteMany({ where: { id: { in: allVersionIds }, companyId: scope.project.companyId, projectId } });
       if (documentIds.length > 0) await transaction.projectDocument.deleteMany({ where: { id: { in: documentIds }, companyId: scope.project.companyId, projectId } });
+      if (documentIds.length > 0) await transaction.reviewAuditEvent.create({ data: { companyId: scope.project.companyId, projectId, actorUserId: session.user.id, eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: documentIds.length, versionCount: allVersionIds.length } } });
     });
     return NextResponse.json({ deletedDocuments: documentIds.length });
   } catch (error) {
