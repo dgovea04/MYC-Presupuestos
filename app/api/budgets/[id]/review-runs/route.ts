@@ -66,7 +66,8 @@ export async function POST(request: Request, { params }: Context) {
     }
     const items = await prisma.budgetItem.findMany({ where: { budgetId: { in: [...budgetIds] } }, select: { id: true, budgetId: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, apu: { select: { name: true, resources: { select: { quantity: true, resource: { select: { code: true, description: true } }, catalogPartida: { select: { description: true } } } } } } } });
     const reviewItems = items.map((item) => ({ ...item, discipline: item.discipline ?? undefined, technicalSpecification: item.apu?.name ?? undefined, apuComponents: item.apu?.resources.map((resource) => resource.resource?.description ?? resource.resource?.code ?? resource.catalogPartida?.description).filter((value): value is string => typeof value === "string" && value.length > 0) }));
-    const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions, configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.map((entry) => { const metadata = typeof entry.metadataJson === "object" && entry.metadataJson !== null && !Array.isArray(entry.metadataJson) ? entry.metadataJson as Record<string, unknown> : {}; const metadataQuantity = typeof metadata.quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(metadata.quantity) ? new Decimal(metadata.quantity) : undefined; const components = Array.isArray(metadata.apuComponents) ? metadata.apuComponents.filter((value): value is string => typeof value === "string") : undefined; return { id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: typeof metadata.unit === "string" ? metadata.unit : entry.unit ?? undefined, quantity: metadataQuantity ?? entry.value ?? undefined, code: typeof metadata.code === "string" ? metadata.code : undefined, description: typeof metadata.description === "string" ? metadata.description : undefined, technicalSpecification: typeof metadata.technicalSpec === "string" ? metadata.technicalSpec : typeof metadata.spec === "string" ? metadata.spec : undefined, discipline: typeof metadata.discipline === "string" ? metadata.discipline : undefined, attributes: typeof metadata.attributes === "object" && metadata.attributes !== null ? metadata.attributes as Record<string, string> : undefined, apuComponents: components, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} }; }) };
+    const selectedSheetNames = configuration.xlsxSheetNames;
+    const input = { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId, budgetReference: { id: budgetId, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, createdById: session.user.id, documentVersionIds: body.documentVersionIds, documentVersions: versions.map((version) => ({ ...version, extractionCoverage: normalizeExtractionCoverage(version.extractionCoverage) })), configuration, rulesVersion: body.rulesVersion, idempotencyKey, defer: true, budgetItems: reviewItems, evidence: evidence.filter((entry) => isSelectedWorksheetEvidence(entry.locationJson, selectedSheetNames)).map((entry) => { const metadata = typeof entry.metadataJson === "object" && entry.metadataJson !== null && !Array.isArray(entry.metadataJson) ? entry.metadataJson as Record<string, unknown> : {}; const metadataQuantity = typeof metadata.quantity === "string" && /^-?\d+(?:\.\d+)?$/.test(metadata.quantity) ? new Decimal(metadata.quantity) : undefined; const components = Array.isArray(metadata.apuComponents) ? metadata.apuComponents.filter((value): value is string => typeof value === "string") : undefined; return { id: entry.id, documentVersionId: entry.documentVersionId, originalText: entry.originalText, normalizedText: entry.normalizedText ?? undefined, sourceHash: entry.sourceHash, evidenceType: entry.evidenceType, confidence: entry.confidence, unit: typeof metadata.unit === "string" ? metadata.unit : entry.unit ?? undefined, quantity: metadataQuantity ?? entry.value ?? undefined, code: typeof metadata.code === "string" ? metadata.code : undefined, description: typeof metadata.description === "string" ? metadata.description : undefined, technicalSpecification: typeof metadata.technicalSpec === "string" ? metadata.technicalSpec : typeof metadata.spec === "string" ? metadata.spec : undefined, discipline: typeof metadata.discipline === "string" ? metadata.discipline : undefined, attributes: typeof metadata.attributes === "object" && metadata.attributes !== null ? metadata.attributes as Record<string, string> : undefined, apuComponents: components, primary: true, locationJson: typeof entry.locationJson === "object" && entry.locationJson !== null && !Array.isArray(entry.locationJson) ? entry.locationJson as Record<string, unknown> : {} }; }) };
     const result = await runReviewJob(input, prisma as unknown as ReviewPipelineClient);
     after(async () => {
       await runReviewJob({ ...input, defer: false }, prisma as unknown as ReviewPipelineClient);
@@ -78,6 +79,29 @@ export async function POST(request: Request, { params }: Context) {
     if (error instanceof Error && /active review run|idempotency key was reused/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 409 });
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo iniciar la revisión" }, { status: 400 });
   }
+}
+
+function isSelectedWorksheetEvidence(location: unknown, selectedSheetNames: string[] | undefined): boolean {
+  if (!selectedSheetNames || selectedSheetNames.length === 0) return true;
+  if (typeof location !== "object" || location === null || Array.isArray(location)) return true;
+  const sheet = (location as Record<string, unknown>).sheet;
+  return typeof sheet !== "string" || selectedSheetNames.includes(sheet);
+}
+
+function normalizeExtractionCoverage(value: unknown): Array<{ coverage?: string; page?: number; worksheet?: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    const coverage = record.coverage;
+    const page = record.page;
+    const worksheet = record.worksheet;
+    return [{
+      ...(typeof coverage === "string" ? { coverage } : {}),
+      ...(typeof page === "number" && Number.isInteger(page) && page > 0 ? { page } : {}),
+      ...(typeof worksheet === "string" && worksheet.length > 0 ? { worksheet } : {}),
+    }];
+  });
 }
 
 export async function DELETE(request: Request, { params }: Context) {

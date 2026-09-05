@@ -5,6 +5,7 @@ import type {
   ReviewFindingType,
   ReviewRunStatus,
 } from "@/lib/review-intelligence/types";
+import type { ClassificationSuggestion } from "@/lib/review-intelligence/classification";
 
 export type ReviewStage = "validating" | "extracting" | "classifying" | "evidence" | "matching" | "rules" | "prioritizing" | "completed";
 
@@ -35,6 +36,7 @@ export interface ReviewDocumentVersionView {
   sheetCount: number | null;
   extractionStatus: string;
   extractionWarnings?: string[];
+  sheetNames?: string[];
 }
 
 export interface ReviewDocumentView {
@@ -45,6 +47,7 @@ export interface ReviewDocumentView {
   status: string;
   currentVersion?: ReviewDocumentVersionView | null;
   warnings: string[];
+  classificationSuggestion?: ClassificationSuggestion;
 }
 
 export interface FindingComparisonView {

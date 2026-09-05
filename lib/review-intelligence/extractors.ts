@@ -9,6 +9,7 @@ import type { ConfidenceLevel, ExtractionCoverage, ExtractionMethod } from "./ty
 export type ExtractionInput = {
   file: ReviewDocumentFile;
   ocr?: { adapter?: OcrAdapter; companyId: string; projectId: string; documentVersionId: string };
+  xlsxSheetNames?: string[];
 };
 
 export type ExtractionLocation = {
@@ -49,7 +50,7 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
   if (validated.extension === ".pdf") {
     return extractPdf(input, validated);
   }
-  return extractXlsx(validated);
+  return extractXlsx(validated, input.xlsxSheetNames);
 }
 
 async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
@@ -57,7 +58,7 @@ async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<
   const coverage: PdfPageCoverage[] = digital.pages.map((page) => hasSufficientDigitalText(page.text)
     ? { page: page.page, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }
     : { page: page.page, coverage: "OCR_REQUIRED", method: "PDF_TEXT", confidence: "LOW", warnings: [] });
-  const items = digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
+  const items: ExtractionItem[] = digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
   const uncoveredPages = digital.pages.filter((page) => !hasSufficientDigitalText(page.text));
   const pageWarnings: string[] = [];
   if (uncoveredPages.length > 0 && input.ocr) {
@@ -97,14 +98,16 @@ async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<
   };
 }
 
-async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
+async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocumentFile>>, selectedSheetNames?: string[]): Promise<ExtractionOutput> {
   const workbook = new ExcelJS.Workbook();
   const workbookInput = validated.bytes as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(workbookInput);
   const warnings: string[] = await getZipIndicatorWarnings(validated.bytes);
   const items: ExtractionItem[] = [];
 
+  const selectedSheets = selectedSheetNames?.length ? new Set(selectedSheetNames) : undefined;
   workbook.eachSheet((worksheet) => {
+    if (selectedSheets && !selectedSheets.has(worksheet.name)) return;
     const rows: string[][] = [];
     let minRow = Number.POSITIVE_INFINITY;
     let maxRow = 0;

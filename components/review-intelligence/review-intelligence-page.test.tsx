@@ -20,6 +20,36 @@ afterEach(() => {
 });
 
 describe("ReviewIntelligencePage", () => {
+  it("sends selected XLSX sheet names in the review configuration", async () => {
+    const xlsxDocument: ReviewDocumentView = {
+      ...documentView,
+      id: "document-xlsx",
+      name: "Metrados.xlsx",
+      originalFileName: "Metrados.xlsx",
+      currentVersion: { ...documentView.currentVersion!, id: "version-xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", sheetNames: ["Metrados", "Resumen"] },
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("review-documents")) return jsonResponse({ documents: [xlsxDocument] });
+      if (url.includes("review-runs?") && init?.method !== "POST") return jsonResponse({ runs: [] });
+      if (init?.method === "POST") return jsonResponse({ reviewRunId: "run-xlsx" }, 201);
+      return jsonResponse({ runs: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ReviewIntelligencePage budgetId="budget-1" projectId="project-1" />);
+    await screen.findByText("Metrados.xlsx");
+    fireEvent.click(screen.getByLabelText("Incluir Metrados.xlsx en la revisión"));
+    fireEvent.click(screen.getByLabelText("Incluir hoja Metrados de Metrados.xlsx"));
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => {
+      if (init?.method !== "POST" || typeof init.body !== "string") return false;
+      const body = JSON.parse(init.body) as { configuration?: { xlsxSheetNames?: string[] } };
+      return body.configuration?.xlsxSheetNames?.join(",") === "Metrados";
+    })).toBe(true));
+  });
+
   it("selects the newly created run instead of keeping findings from the previous run", async () => {
     const newRun: ReviewRunView = { ...runningRun, id: "run-new", status: "QUEUED", progress: { stage: "validating", completed: 0, total: 8, percent: 0 } };
     let created = false;
