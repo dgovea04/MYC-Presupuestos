@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -121,8 +122,8 @@ function safeEqual(left: string, right: string): boolean {
 }
 
 function assertPrivateStorageDirectory(rootDirectory: string): string {
-  const resolvedRoot = path.resolve(rootDirectory);
-  const publicDirectory = path.resolve(process.cwd(), "public");
+  const resolvedRoot = realpathSync(path.resolve(rootDirectory));
+  const publicDirectory = realpathSync(path.resolve(process.cwd(), "public"));
   const relativeToPublic = path.relative(publicDirectory, resolvedRoot);
   if (relativeToPublic === "" || (!relativeToPublic.startsWith(`..${path.sep}`) && relativeToPublic !== ".." && !path.isAbsolute(relativeToPublic))) {
     throw new Error("Review document storage directory must be outside public.");
@@ -133,8 +134,8 @@ function assertPrivateStorageDirectory(rootDirectory: string): string {
 function assertStorageKeyScope(input: TemporaryReadUrlInput): void {
   assertStorageIdentifier(input.companyId, "companyId");
   assertStorageIdentifier(input.projectId, "projectId");
-  const expectedPrefix = `companies/${input.companyId}/projects/${input.projectId}/`;
-  if (!input.storageKey.startsWith(expectedPrefix)) throw new Error("Storage key does not belong to the company and project scope.");
+  const segments = storageKeySegments(input.storageKey);
+  if (segments[1] !== input.companyId || segments[3] !== input.projectId) throw new Error("Storage key does not belong to the company and project scope.");
 }
 
 function assertStorageIdentifier(value: string, field: string): void {
@@ -148,9 +149,24 @@ function documentExtension(fileName: string): ".pdf" | ".xlsx" {
 }
 
 function resolveStoragePath(rootDirectory: string, storageKey: string): string {
-  const resolvedPath = path.resolve(rootDirectory, ...storageKey.split("/"));
+  const resolvedPath = path.resolve(rootDirectory, ...storageKeySegments(storageKey));
   if (path.relative(rootDirectory, resolvedPath).startsWith("..") || path.isAbsolute(path.relative(rootDirectory, resolvedPath))) {
     throw new Error("Storage key escapes the configured directory.");
   }
   return resolvedPath;
+}
+
+function storageKeySegments(storageKey: string): string[] {
+  if (storageKey.includes("\\")) throw new Error("Storage key contains traversal segments.");
+  const segments = storageKey.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) throw new Error("Storage key contains traversal segments.");
+  if (segments.length !== 9 || segments[0] !== "companies" || segments[2] !== "projects" || segments[4] !== "documents" || segments[6] !== "versions") {
+    throw new Error("Storage key has an invalid format.");
+  }
+  assertStorageIdentifier(segments[1], "storage key companyId");
+  assertStorageIdentifier(segments[3], "storage key projectId");
+  assertStorageIdentifier(segments[5], "storage key documentId");
+  if (!/^[1-9]\d*$/.test(segments[7])) throw new Error("Storage key version must be a positive whole number.");
+  if (segments[8] !== "original.pdf" && segments[8] !== "original.xlsx") throw new Error("Storage key original file name is invalid.");
+  return segments;
 }
