@@ -60,6 +60,26 @@ export type EvidenceType = (typeof evidenceTypes)[number];
 export const confidenceLevels = ["LOW", "MEDIUM", "HIGH"] as const;
 export type ConfidenceLevel = (typeof confidenceLevels)[number];
 
+export const extractionCoverages = ["PROCESSED", "OCR_REQUIRED", "FAILED"] as const;
+export type ExtractionCoverage = (typeof extractionCoverages)[number];
+
+export const extractionMethods = ["PDF_TEXT", "XLSX_CELL_RANGE", "OCR_PROVIDER", "OCR_UNAVAILABLE"] as const;
+export type ExtractionMethod = (typeof extractionMethods)[number];
+
+export interface ExtractionCoverageEntry {
+  coverage: ExtractionCoverage;
+  page?: number;
+  worksheet?: string;
+  warnings?: string[];
+}
+
+export interface ReviewDocumentStorageMetadata {
+  provider: "LOCAL";
+  storageKey: string;
+  sha256: string;
+  fileSizeBytes: number;
+}
+
 export interface ReviewConfiguration {
   maxFiles: number;
   maxPdfPages: number;
