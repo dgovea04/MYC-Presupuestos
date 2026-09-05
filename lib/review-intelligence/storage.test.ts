@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -79,6 +79,27 @@ describe("local review document storage", () => {
 
     expect(existsSync(first.absolutePath)).toBe(false);
     expect(existsSync(second.absolutePath)).toBe(true);
+  });
+
+  it("rejects traversal segments before authorizing a temporary URL or deletion", async () => {
+    const { storage } = await createStorage();
+    const traversalKey = "companies/company-1/projects/project-1/../project-2/documents/document-1/versions/1/original.pdf";
+
+    await expect(storage.createTemporaryReadUrl({ companyId: "company-1", projectId: "project-1", storageKey: traversalKey })).rejects.toThrow("traversal");
+    await expect(storage.delete({ companyId: "company-1", projectId: "project-1", storageKey: traversalKey })).rejects.toThrow("traversal");
+  });
+
+  it("rejects a storage root whose symlink resolves inside public", async () => {
+    const rootDirectory = await mkdtemp(path.join(tmpdir(), "mc-review-storage-link-"));
+    temporaryDirectories.push(rootDirectory);
+    const linkPath = path.join(rootDirectory, "private-storage");
+    await symlink(path.resolve(process.cwd(), "public"), linkPath, "junction");
+
+    expect(() => new LocalReviewDocumentStorage({
+      rootDirectory: linkPath,
+      signingSecret: "test-only-signing-secret",
+      temporaryUrlTtlSeconds: 60,
+    })).toThrow("outside public");
   });
 
   it("rejects a signed token whose expiry is not a valid timestamp", () => {

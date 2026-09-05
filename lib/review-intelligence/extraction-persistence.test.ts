@@ -19,4 +19,18 @@ describe("review extraction persistence", () => {
     await expect(extractAndPersistDocumentVersion({ file: new File(["x"], "file.xlsx"), version: { id: "version-1", sha256: "hash" }, companyId: "company-1", projectId: "project-1" }, client)).rejects.toThrow("extract failed");
     expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: { extractionStatus: "FAILED", extractionWarnings: ["extract failed"] } }));
   });
+
+  it("records only PDF pages with actual extraction evidence instead of claiming all pages are covered", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "PDF", sha256: "hash", mimeType: "pdf", fileSizeBytes: 3, items: [{ content: "Plano E-01", location: { page: 1 } }], warnings: [], pageCount: 3 });
+    const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    await extractAndPersistDocumentVersion({ file: new File(["pdf"], "file.pdf"), version: { id: "version-1", sha256: "hash" }, companyId: "company-1", projectId: "project-1" }, client);
+
+    expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        extractionMethod: "PDF_TEXT",
+        extractionCoverage: [{ page: 1, coverage: "PROCESSED" }],
+      }),
+    }));
+  });
 });
