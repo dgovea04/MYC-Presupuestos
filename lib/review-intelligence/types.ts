@@ -16,6 +16,7 @@ export type ReviewRunStatus = (typeof reviewRunStatuses)[number];
 
 export const reviewFindingTypes = [
   "QUANTITY_MISMATCH",
+  "YIELD_MISMATCH",
   "UNIT_INCONSISTENCY",
   "TECHNICAL_SPEC_MISMATCH",
   "MISSING_DOCUMENTATION",

@@ -69,6 +69,17 @@ describe("parseReviewConfiguration", () => {
     });
   });
 
+  it("accepts YIELD_MISMATCH in review configuration", () => {
+    expect(parseReviewConfiguration({
+      maxFiles: 1,
+      maxPdfPages: 1,
+      maxFileSizeMb: 1,
+      maxXlsxSheets: 1,
+      tolerancePercent: "1",
+      findingTypes: ["YIELD_MISMATCH"],
+    }).findingTypes).toEqual(["YIELD_MISMATCH"]);
+  });
+
   it("accepts an optional, bounded XLSX worksheet selection", () => {
     expect(parseReviewConfiguration({
       maxFiles: 1,
