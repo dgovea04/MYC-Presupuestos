@@ -42,10 +42,13 @@ test.describe("Revisión Inteligente", () => {
 
     const budgetWriteRequests: Array<{ method: string; url: string }> = [];
     page.on("request", (request) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(request.method())) return;
+
       const url = request.url();
-      if (request.method() !== "GET" && /\/api\/budgets\/[^/]+(?:\?|$)/.test(url)) {
-        budgetWriteRequests.push({ method: request.method(), url });
-      }
+      const pathname = new URL(url).pathname;
+      const writesBudget = /^\/api\/budgets\/[^/]+$/.test(pathname);
+      const writesBudgetItem = /^\/api\/budget-items\/[^/]+\/.+/.test(pathname);
+      if (writesBudget || writesBudgetItem) budgetWriteRequests.push({ method: request.method(), url });
     });
 
     const completedRun = {
@@ -57,7 +60,7 @@ test.describe("Revisión Inteligente", () => {
         total: 8,
         percent: 100,
         metrics: {
-          coverageByCategory: { quantity: 12, specification: 7, apuComponent: 4, yield: 3 },
+          coverageByCategory: { quantity: 12, unit: 9, specification: 7, apuComponent: 4, yield: 3 },
           partiallyCoveredSources: 2,
         },
       },
@@ -109,6 +112,8 @@ test.describe("Revisión Inteligente", () => {
     const coverage = page.getByRole("region", { name: "Cobertura por categoría" });
     await expect(coverage).toContainText("Metrados");
     await expect(coverage).toContainText("12");
+    await expect(coverage).toContainText("Unidades");
+    await expect(coverage).toContainText("9");
     await expect(coverage).toContainText("Especificaciones");
     await expect(coverage).toContainText("7");
     await expect(coverage).toContainText("APU");

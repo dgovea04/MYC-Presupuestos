@@ -38,7 +38,7 @@ Se marca la corrida afectada cuando cambia una cantidad, unidad, descripción o 
 
 Las métricas siguen persistidas dentro de `ReviewRun.progressJson.metrics`; no se agregaron columnas de métricas. Además de `analyzedItems`, `totalItems`, `coveragePercent`, `evidenceCount`, `linkedEvidenceCount`, los conteos de hallazgos, fallos, incompletitud y delta, V1 escribe:
 
-- `coverageByCategory.quantity`, `unit`, `specification`, `apuComponent` y `yield`: conteos de evidencias que aportan cada clase de dato. La interfaz muestra metrado, especificación, APU y rendimiento; `unit` queda disponible para API y diagnóstico.
+- `coverageByCategory.quantity`, `unit`, `specification`, `apuComponent` y `yield`: conteos de evidencias que aportan cada clase de dato. La interfaz muestra metrado, unidades, especificación, APU y rendimiento; `unit` también queda disponible para API y diagnóstico.
 - `partiallyCoveredSources`: número de versiones de documento distintas con al menos una entrada de cobertura `OCR_REQUIRED` o `FAILED`.
 
 Un campo V1 ausente en una corrida histórica no equivale a cero: significa que la corrida se produjo antes de que se calculara ese dato. Un cero explícito significa que se calculó la métrica y no se encontró evidencia de esa categoría.
