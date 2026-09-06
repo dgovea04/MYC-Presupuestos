@@ -243,13 +243,13 @@ function splitPdfEvidenceLines(line: string): string[] {
 function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
   const codeMatch = line.match(/^([A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+)\s+/);
   const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
-  if (!codeMatch && !number) return undefined;
   const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
   const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
   const explicitUnit = line.match(/\b(?:unidad|und)\s*:\s*([A-Za-z0-9²]+)/i)?.[1];
   const specification = line.match(/(?:especificacion(?: tecnica)?|especificaci\u00f3n(?: t\u00e9cnica)?|especificaciÃ³n(?: tÃ©cnica)?|technical specification|spec)\s*:\s*([^|]+)/i)?.[1]?.trim();
   const yieldValue = line.match(/(?:yield|rendimiento|performance)\s*:\s*([^|]+)/i)?.[1]?.trim();
   const apuComponents = line.match(/(?:apu(?: componentes?)?|componentes?|recurso(?:s)?)\s*:\s*([^|]+)/i)?.[1]?.trim();
+  if (!codeMatch && !number && !explicitUnit && !specification && !yieldValue && !apuComponents) return undefined;
   const unitIndex = line.search(/\b(?:unidad|und)\s*:/i);
   const descriptionEnd = number?.index ?? (unitIndex >= 0 ? unitIndex : line.length);
   return normalizedExtractionMetadata({ code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, descriptionEnd).replace(/\s*\|.*$/, "").trim() || undefined, quantity, unit: unit ?? explicitUnit, technicalSpecification: specification, yield: yieldValue, apuComponents });

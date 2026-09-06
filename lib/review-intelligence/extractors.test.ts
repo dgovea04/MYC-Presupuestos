@@ -161,6 +161,30 @@ describe("review document extractors", () => {
     });
   });
 
+  it("keeps a label-only PDF yield line as page-provenanced evidence", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (Rendimiento: 0.75)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "rendimiento.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf });
+
+    expect(result.items).toEqual([expect.objectContaining({
+      content: "Rendimiento: 0.75",
+      location: { page: 1, textOffsetStart: expect.any(Number), textOffsetEnd: expect.any(Number) },
+      metadata: expect.objectContaining({ yield: "0.75", evidenceType: "OTHER" }),
+    })]);
+  });
+
+  it("keeps a label-only PDF resource line as APU component evidence", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (Recurso: cemento; arena)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "recurso.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf });
+
+    expect(result.items).toEqual([expect.objectContaining({
+      content: "Recurso: cemento; arena",
+      location: { page: 1, textOffsetStart: expect.any(Number), textOffsetEnd: expect.any(Number) },
+      metadata: expect.objectContaining({ apuComponents: ["cemento", "arena"], evidenceType: "APU_COMPONENT" }),
+    })]);
+  });
+
   it("finds structured headers after title rows so quantities remain comparable", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Metrados");
