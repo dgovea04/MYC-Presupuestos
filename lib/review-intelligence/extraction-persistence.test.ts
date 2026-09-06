@@ -72,4 +72,15 @@ describe("review extraction persistence", () => {
     expect(result.warnings).toContain("El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible.");
     expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionStatus: "COMPLETED" }) }));
   });
+
+  it("keeps failed coverage partial even when the extractor returns no warning text", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "PDF", sha256: "hash", mimeType: "application/pdf", fileSizeBytes: 3, items: [], coverage: [{ page: 2, coverage: "FAILED", method: "OCR_UNAVAILABLE", confidence: "LOW", warnings: [] }], warnings: [], pageCount: 3 });
+    const client = { reviewEvidence: { upsert: vi.fn() }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    const result = await reprocessDocumentCoverage({ file: new File(["pdf"], "file.pdf", { type: "application/pdf" }), version: { id: "version-1", sha256: "hash", extractionCoverage: [{ page: 2, coverage: "OCR_REQUIRED" }] }, companyId: "company-1", projectId: "project-1", pages: [2] }, client);
+
+    expect(result.partial).toBe(true);
+    expect(result.warnings).toEqual([]);
+    expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionStatus: "COMPLETED_WITH_WARNINGS" }) }));
+  });
 });

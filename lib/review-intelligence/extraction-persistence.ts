@@ -23,7 +23,7 @@ export async function reprocessDocumentCoverage(
   await persistEvidence(extracted, input.version, input.companyId, input.projectId, client);
   const coverage = mergeCoverage(coverageEntries(input.version.extractionCoverage), extracted.coverage ?? worksheetCoverage(extracted));
   const warnings = uniqueWarnings([...warningEntries(input.version.extractionWarnings), ...extracted.warnings]);
-  const partial = warnings.some((warning) => !isInformativeWarning(warning));
+  const partial = warnings.some((warning) => !isInformativeWarning(warning)) || coverage.some((entry) => entry.coverage !== undefined && entry.coverage !== "PROCESSED");
   await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: partial ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: warnings, extractionCoverage: coverage, extractionMethod: extracted.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE"), extractionConfidence: extracted.extractionConfidence ?? "MEDIUM" } });
   return { coverage, warnings, partial };
 }
