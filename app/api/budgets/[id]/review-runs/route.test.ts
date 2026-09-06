@@ -129,6 +129,16 @@ describe("review runs API", () => {
     expect(input.budgetItems[0]?.yield?.toString()).toBe("0.125");
   });
 
+  it("maps persisted evidence yield aliases into the review pipeline", async () => {
+    mocks.reviewEvidenceFindMany.mockResolvedValue([{ id: "evidence-yield", documentVersionId: "version-1", originalText: "Rendimiento", normalizedText: "Rendimiento", locationJson: { page: 1 }, value: null, unit: null, extractionMethod: "PDF_TEXT", confidence: "MEDIUM", sourceHash: "yield", evidenceType: "OTHER", metadataJson: { rendimiento: "0.125" } }]);
+    mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean; idempotencyKey?: string }) => ({ reviewRunId: "review-evidence-yield", status: input.defer ? "QUEUED" : "RUNNING", idempotencyKey: input.idempotencyKey ?? "key-evidence-yield" }));
+
+    await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-evidence-yield" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
+
+    const input = mocks.runReviewJob.mock.calls[0]?.[0] as { evidence: Array<{ yield?: { toString(): string } }> };
+    expect(input.evidence[0]?.yield?.toString()).toBe("0.125");
+  });
+
   it("returns 409 when an active run already exists", async () => {
     mocks.runReviewJob.mockRejectedValue(new Error("An active review run already exists for this budget."));
     const response = await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-1" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });

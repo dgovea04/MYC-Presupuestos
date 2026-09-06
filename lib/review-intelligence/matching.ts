@@ -117,16 +117,20 @@ function hierarchySignal(left: string[] | undefined, right: string[] | undefined
   return common / Math.max(left.length, right.length);
 }
 
-function yieldSignal(left: Decimal | undefined, right: Decimal | undefined): number {
-  if (!left || !right) return 0;
-  if (left.equals(right)) return 1;
+function yieldSignal(left: Decimal | undefined, right: Decimal | undefined): Decimal {
+  if (!left || !right) return new Decimal(0);
+  if (left.equals(right)) return new Decimal(1);
   const largest = Decimal.max(left.abs(), right.abs());
-  return largest.isZero() ? 0 : Decimal.max(0, new Decimal(1).minus(left.minus(right).abs().dividedBy(largest))).toNumber();
+  return largest.isZero() ? new Decimal(0) : Decimal.max(0, new Decimal(1).minus(left.minus(right).abs().dividedBy(largest)));
 }
 
 function componentSignal(left: string[] | undefined, right: string[] | undefined): number {
   return listSignal(left, right);
 }
+
+function hasText(value: string | undefined): boolean { return normalizedText(value).length > 0; }
+function hasEntries(value: Record<string, string> | undefined): boolean { return Object.keys(value ?? {}).length > 0; }
+function hasValues(value: string[] | undefined): boolean { return (value?.length ?? 0) > 0; }
 
 export function matchBudgetItemToEvidence(
   item: BudgetItemMatchInput,
@@ -136,6 +140,7 @@ export function matchBudgetItemToEvidence(
   const thresholds = { ...DEFAULTS, ...options };
   validateThresholds(thresholds);
   return evidence.map((entry) => {
+    const yieldSimilarity = yieldSignal(item.yield, entry.yield);
     const signals: EntityLinkCandidate["signals"] = {
       code: item.code !== undefined && entry.code !== undefined && normalizedCode(item.code) === normalizedCode(entry.code) ? 1 : 0,
       description: descriptionSignal(item.description, entry.description),
@@ -147,17 +152,17 @@ export function matchBudgetItemToEvidence(
       sectionHeader: item.sectionHeader && entry.sectionHeader && normalizedText(item.sectionHeader) === normalizedText(entry.sectionHeader) ? 1 : 0,
       crossReference: listSignal(item.crossReferences, entry.crossReferences),
       specification: descriptionSignal(item.technicalSpecification ?? "", entry.technicalSpecification),
-      yield: yieldSignal(item.yield, entry.yield),
+      yield: yieldSimilarity.toNumber(),
       apuComponents: componentSignal(item.apuComponents, entry.apuComponents),
       unitAlias: item.unit && entry.unit && item.unit.trim() !== entry.unit.trim() && normalizeUnit(item.unit).canonical === normalizeUnit(entry.unit).canonical ? 1 : 0,
       confirmedMatch: item.previouslyConfirmedEvidenceIds?.includes(entry.id) || entry.previouslyConfirmed === true ? 1 : 0,
     };
     const weights: Readonly<Record<string, string>> = { code: "0.3", description: "0.2", unit: "0.12", discipline: "0.08", attributes: "0.08", proximity: "0.05", hierarchy: "0.06", sectionHeader: "0.04", crossReference: "0.03", specification: "0.07", yield: "0.05", apuComponents: "0.07", unitAlias: "0.02", confirmedMatch: "0.04" };
     const available: Readonly<Record<string, boolean>> = {
-      code: entry.code !== undefined, description: entry.description !== undefined, unit: entry.unit !== undefined,
-      discipline: entry.discipline !== undefined, attributes: entry.attributes !== undefined, proximity: entry.location?.row !== undefined,
-      hierarchy: entry.hierarchy !== undefined, sectionHeader: entry.sectionHeader !== undefined, crossReference: entry.crossReferences !== undefined,
-      specification: item.technicalSpecification !== undefined && entry.technicalSpecification !== undefined,
+      code: hasText(item.code) && hasText(entry.code), description: hasText(item.description) && hasText(entry.description), unit: hasText(item.unit) && hasText(entry.unit),
+      discipline: hasText(item.discipline) && hasText(entry.discipline), attributes: hasEntries(item.attributes) && hasEntries(entry.attributes), proximity: item.location?.row !== undefined && entry.location?.row !== undefined,
+      hierarchy: hasValues(item.hierarchy) && hasValues(entry.hierarchy), sectionHeader: hasText(item.sectionHeader) && hasText(entry.sectionHeader), crossReference: hasValues(item.crossReferences) && hasValues(entry.crossReferences),
+      specification: hasText(item.technicalSpecification) && hasText(entry.technicalSpecification),
       yield: item.yield !== undefined && entry.yield !== undefined,
       apuComponents: item.apuComponents !== undefined && entry.apuComponents !== undefined,
       unitAlias: item.unit !== undefined && entry.unit !== undefined && signals.unitAlias === 1,
@@ -174,7 +179,7 @@ export function matchBudgetItemToEvidence(
       .plus(new Decimal(signals.sectionHeader).times(weights.sectionHeader))
       .plus(new Decimal(signals.crossReference).times(weights.crossReference))
       .plus(new Decimal(signals.specification).times(weights.specification))
-      .plus(new Decimal(signals.yield).times(weights.yield))
+      .plus(yieldSimilarity.times(weights.yield))
       .plus(new Decimal(signals.apuComponents).times(weights.apuComponents))
       .plus(new Decimal(signals.unitAlias).times(weights.unitAlias))
       .plus(new Decimal(signals.confirmedMatch).times(weights.confirmedMatch));

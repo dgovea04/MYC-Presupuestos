@@ -125,4 +125,14 @@ describe("matchBudgetItemToEvidence", () => {
 
     expect(withMissingTechnicalFields.score.equals(baseline.score)).toBe(true);
   });
+
+  it("does not normalize a match against evidence-only code and unit fields", () => {
+    const [candidate] = matchBudgetItemToEvidence(
+      { id: "item-one-sided", description: "Concreto" },
+      [{ id: "evidence-one-sided", primary: true, code: "A-1", description: "Concreto", unit: "m3" }],
+    );
+
+    expect(candidate.score.equals(1)).toBe(true);
+    expect(candidate.confidence).toBe("HIGH");
+  });
 });
