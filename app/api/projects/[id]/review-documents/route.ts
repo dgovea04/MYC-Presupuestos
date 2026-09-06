@@ -7,6 +7,9 @@ import { getReviewDocumentStorage, persistReviewDocumentUpload, validateDocument
 import { extractAndPersistDocumentVersion } from "@/lib/review-intelligence/extraction-persistence";
 import { markStaleForChange } from "@/lib/review-intelligence/stale";
 import { suggestDocumentClassification } from "@/lib/review-intelligence/classification";
+import { getPdfImportAiConfiguration } from "@/lib/pdf-import/provider";
+import { createPdfImportOcrProvider } from "@/lib/pdf-import/ocr";
+import { createPdfImportOcrAdapter } from "@/lib/review-intelligence/ocr";
 
 const categorySchema = z.enum(["PLAN", "TECHNICAL_SPECIFICATION", "QUANTITY_TAKEOFF", "BUDGET", "APU", "OTHER"]);
 const pageSchema = z.coerce.number().int().min(1).default(1);
@@ -83,7 +86,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     });
     if (previous.some((version) => version.sha256 !== validated.sha256 || version.projectDocument.originalFileName !== file.name || version.projectDocument.name !== name || (targetDocumentId !== undefined && version.projectDocumentId !== targetDocumentId))) throw new Error("Idempotency key conflict: target or payload differs.");
     const result = await persistReviewDocumentUpload({ companyId: scope.project.companyId, projectId, createdById: session.user.id, name, originalFileName: file.name, category, projectDocumentId: targetDocumentId, idempotencyKey, file, ...validated }, prisma as unknown as Parameters<typeof persistReviewDocumentUpload>[1], getReviewDocumentStorage());
-    await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
+    const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
+    const ocrProvider = aiConfiguration.apiKey ? createPdfImportOcrProvider(aiConfiguration) : undefined;
+    await extractAndPersistDocumentVersion({ file, version: result.version, companyId: scope.project.companyId, projectId, ocrAdapter: createPdfImportOcrAdapter(ocrProvider) }, prisma as unknown as Parameters<typeof extractAndPersistDocumentVersion>[1]);
     await markStaleForChange({ companyId: scope.project.companyId, projectId, kind: "document-replacement", id: result.version.id, payload: result.version.sha256, actorUserId: session.user.id }, prisma);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

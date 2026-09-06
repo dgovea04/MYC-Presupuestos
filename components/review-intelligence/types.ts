@@ -37,6 +37,7 @@ export interface ReviewDocumentVersionView {
   extractionStatus: string;
   extractionWarnings?: string[];
   sheetNames?: string[];
+  extractionCoverage?: Array<{ page?: number; worksheet?: string; coverage: string }>;
 }
 
 export interface ReviewDocumentView {

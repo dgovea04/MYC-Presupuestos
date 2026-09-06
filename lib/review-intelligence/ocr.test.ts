@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { createOcrAdapter, type OcrAdapter } from "./ocr";
+import { createOcrAdapter, createPdfImportOcrAdapter, type OcrAdapter } from "./ocr";
 
 const pdfPageWithoutSelectableText = {
   companyId: "company-1",
@@ -8,6 +8,12 @@ const pdfPageWithoutSelectableText = {
   documentVersionId: "version-1",
   mimeType: "application/pdf" as const,
   pages: [{ pageNumber: 1, selectableText: "" }],
+};
+
+const pdfPageWithBytes = {
+  ...pdfPageWithoutSelectableText,
+  fileName: "budget.pdf",
+  pdfBytes: new Uint8Array([37, 80, 68, 70]),
 };
 
 describe("OCR extraction boundary", () => {
@@ -50,6 +56,18 @@ describe("OCR extraction boundary", () => {
       method: "OCR_PROVIDER",
       confidence: "HIGH",
       pages: [{ pageNumber: 1, coverage: "PROCESSED", text: "Plano E-01", warnings: [] }],
+    });
+  });
+
+  it("adapts the supported PDF OCR provider and forwards the document bytes per page", async () => {
+    const extractText = vi.fn().mockResolvedValue({ text: "1.01 CONCRETO 2 m3", confidence: 0.75 });
+    const result = await createPdfImportOcrAdapter({ extractText }).extractPages(pdfPageWithBytes);
+
+    expect(extractText).toHaveBeenCalledWith({ fileName: "budget.pdf", pageNumber: 1, pdfBytes: pdfPageWithBytes.pdfBytes });
+    expect(result).toEqual({
+      method: "OCR_PROVIDER",
+      confidence: "MEDIUM",
+      pages: [{ pageNumber: 1, coverage: "PROCESSED", text: "1.01 CONCRETO 2 m3", warnings: [] }],
     });
   });
 });

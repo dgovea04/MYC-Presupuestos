@@ -57,3 +57,15 @@ git diff --check
 ```
 
 `prisma migrate status` requiere `DATABASE_URL`; `migrate diff` puede requerir `shadowDatabaseUrl`. Las migraciones del dominio deben revisarse en una base de staging antes de producción.
+
+## Almacenamiento, OCR y reprocesamiento selectivo
+
+Los originales se guardan mediante `REVIEW_DOCUMENT_STORAGE_DIR`, siempre fuera de `public/`. Configura `REVIEW_DOCUMENT_STORAGE_SIGNING_SECRET` con al menos 16 caracteres. Las vistas binarias usan URLs firmadas de corta duración y vuelven a autorizar empresa, proyecto y versión antes de leer.
+
+El extractor marca cada página PDF como `PROCESSED`, `OCR_REQUIRED` o `FAILED`. Sin proveedor OCR, las páginas escaneadas quedan advertidas y no generan `MISSING_DOCUMENTATION`. No se ejecutan macros VBA, fórmulas externas, scripts, hipervínculos ni enlaces externos de XLSX.
+
+Un editor puede llamar `POST /api/review-documents/:id/reprocess` con `{ "pages": [2, 3] }` o `{ "worksheets": ["Metrados"] }`. La operación conserva evidencia válida, fusiona cobertura, evita duplicados por hash y marca como `STALE` las corridas afectadas.
+
+## Jobs y reintentos
+
+Cada corrida persiste intento, deadline de etapa, próximo reintento y código de fallo. Los reintentos usan backoff determinista, respetan la concurrencia por empresa y reanudan desde el checkpoint sin sobrescribir evidencia ni decisiones históricas.

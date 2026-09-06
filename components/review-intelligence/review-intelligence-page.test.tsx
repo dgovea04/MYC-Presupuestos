@@ -149,6 +149,16 @@ describe("DocumentManager", () => {
     expect(screen.getByRole("heading", { name: "Limpiar documentos fuente" })).toBeTruthy();
     expect(screen.getByText(/documentos fuente.*evidencias.*revisiones/i)).toBeTruthy();
   });
+
+  it("exposes an accessible action for pending page coverage", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ coverage: [], warnings: [] }, 200));
+    vi.stubGlobal("fetch", fetchMock);
+    const pendingDocument: ReviewDocumentView = { ...documentView, currentVersion: { ...documentView.currentVersion!, extractionCoverage: [{ page: 8, coverage: "OCR_REQUIRED" }] } };
+    render(<DocumentManager projectId="project-1" documents={[pendingDocument]} onChanged={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reprocesar cobertura de Planos.pdf" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/review-documents/document-1/reprocess", expect.objectContaining({ method: "POST", body: JSON.stringify({ pages: [8] }) })));
+  });
 });
 
 describe("FindingQueue", () => {

@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   storageRead: vi.fn(),
   storageDelete: vi.fn(),
   storagePut: vi.fn(),
+  getPdfImportAiConfiguration: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
@@ -54,6 +55,7 @@ vi.mock("@/lib/review-intelligence/documents", () => ({
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: mocks.assertWorkspaceMembership }));
 vi.mock("@/lib/review-intelligence/extraction-persistence", () => ({ extractAndPersistDocumentVersion: mocks.extractAndPersistDocumentVersion }));
 vi.mock("@/lib/review-intelligence/stale", () => ({ markStaleForChange: mocks.markStaleForChange }));
+vi.mock("@/lib/pdf-import/provider", () => ({ getPdfImportAiConfiguration: mocks.getPdfImportAiConfiguration }));
 
 import { DELETE, GET, POST } from "@/app/api/projects/[id]/review-documents/route";
 
@@ -69,6 +71,7 @@ describe("review documents API", () => {
     mocks.reviewRunFindMany.mockResolvedValue([]);
     mocks.storageRead.mockResolvedValue(new Uint8Array([1]));
     mocks.getReviewDocumentStorage.mockReturnValue({ read: mocks.storageRead, delete: mocks.storageDelete, put: mocks.storagePut, createTemporaryReadUrl: vi.fn() });
+    mocks.getPdfImportAiConfiguration.mockResolvedValue({ provider: "openai", apiKey: "", model: undefined });
     mocks.persistReviewDocumentUpload.mockResolvedValue({ document: { id: "document-1", companyId: "company-1", projectId: "project-1", originalFileName: "spec.pdf" }, version: { id: "version-1", projectDocumentId: "document-1", versionNumber: 1, sha256: "hash" } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
       projectDocument: { updateMany: mocks.projectDocumentUpdateMany, deleteMany: mocks.projectDocumentDeleteMany },
