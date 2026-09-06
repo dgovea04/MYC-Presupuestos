@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { extractAndPersistDocumentVersion } from "./extraction-persistence";
+import { extractAndPersistDocumentVersion, reprocessDocumentCoverage } from "./extraction-persistence";
 
 vi.mock("./extractors", () => ({ extractDocument: vi.fn() }));
 import { extractDocument } from "./extractors";
@@ -42,5 +42,15 @@ describe("review extraction persistence", () => {
 
     expect(client.reviewEvidence.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }), update: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }) }));
     expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionMethod: "OCR_PROVIDER", extractionConfidence: "HIGH", extractionCoverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }] }) }));
+  });
+
+  it("merges only reprocessed page evidence by source hash without replacing existing coverage", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "PDF", sha256: "hash", mimeType: "application/pdf", fileSizeBytes: 3, items: [{ content: "02.01 Acero 10 kg", location: { page: 2 }, extractionMethod: "OCR_PROVIDER", confidence: "HIGH" }], coverage: [{ page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }], warnings: [], pageCount: 3 });
+    const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    await reprocessDocumentCoverage({ file: new File(["pdf"], "file.pdf", { type: "application/pdf" }), version: { id: "version-1", sha256: "hash", extractionCoverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "OCR_REQUIRED", method: "PDF_TEXT", confidence: "LOW", warnings: [] }] }, companyId: "company-1", projectId: "project-1", pages: [2] }, client);
+
+    expect(client.reviewEvidence.upsert).toHaveBeenCalledOnce();
+    expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionCoverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }] }) }));
   });
 });

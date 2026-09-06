@@ -10,6 +10,7 @@ export type ExtractionInput = {
   file: ReviewDocumentFile;
   ocr?: { adapter?: OcrAdapter; companyId: string; projectId: string; documentVersionId: string };
   xlsxSheetNames?: string[];
+  pdfPages?: number[];
 };
 
 export type ExtractionLocation = {
@@ -55,11 +56,13 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
 
 async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
   const digital = await extractDigitalPdf(await input.file.arrayBuffer());
-  const coverage: PdfPageCoverage[] = digital.pages.map((page) => hasSufficientDigitalText(page.text)
+  const requestedPages = input.pdfPages?.length ? new Set(input.pdfPages) : undefined;
+  const pages = requestedPages ? digital.pages.filter((page) => requestedPages.has(page.page)) : digital.pages;
+  const coverage: PdfPageCoverage[] = pages.map((page) => hasSufficientDigitalText(page.text)
     ? { page: page.page, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }
     : { page: page.page, coverage: "OCR_REQUIRED", method: "PDF_TEXT", confidence: "LOW", warnings: [] });
-  const items: ExtractionItem[] = digital.pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
-  const uncoveredPages = digital.pages.filter((page) => !hasSufficientDigitalText(page.text));
+  const items: ExtractionItem[] = pages.flatMap((page) => extractPdfEvidence(page.text, page.page).map((item) => ({ ...item, extractionMethod: "PDF_TEXT" as const, confidence: "MEDIUM" as const })));
+  const uncoveredPages = pages.filter((page) => !hasSufficientDigitalText(page.text));
   const pageWarnings: string[] = [];
   if (uncoveredPages.length > 0 && input.ocr) {
     const result = await createOcrAdapter(input.ocr.adapter).extractPages({ companyId: input.ocr.companyId, projectId: input.ocr.projectId, documentVersionId: input.ocr.documentVersionId, mimeType: "application/pdf", pages: uncoveredPages.map((page) => ({ pageNumber: page.page, selectableText: page.text })) });
