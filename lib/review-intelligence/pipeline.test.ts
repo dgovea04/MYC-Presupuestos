@@ -394,6 +394,34 @@ describe("runReviewJob", () => {
     expect(database.evidence[0]?.metadataJson).toMatchObject({ technicalSpec: "f'c 210", apuComponents: ["cemento", "arena"] });
   });
 
+  it("persists enriched evidence, category coverage, and a yield mismatch deterministically", async () => {
+    const database = client();
+    const request = {
+      ...input(),
+      configuration: { ...input().configuration, findingTypes: ["YIELD_MISMATCH"] },
+      budgetItems: [{ ...input().budgetItems[0], yield: new Decimal("4") }],
+      documentVersions: [{ id: "version-1", companyId: "company-1", projectId: "project-1", extractionCoverage: [{ page: 2, coverage: "OCR_REQUIRED" }] }],
+      evidence: [
+        { ...input().evidence[0], sourceHash: "quantity-source", quantity: new Decimal("12"), attributes: { grade: "f'c 210" } },
+        { ...input().evidence[0], id: "unit-source", sourceHash: "unit-source", evidenceType: "UNIT", quantity: undefined, unit: "m3" },
+        { ...input().evidence[0], id: "spec-source", sourceHash: "spec-source", evidenceType: "TECHNICAL_SPECIFICATION", quantity: undefined, technicalSpecification: "Concreto f'c 210" },
+        { ...input().evidence[0], id: "component-source", sourceHash: "component-source", evidenceType: "APU_COMPONENT", quantity: undefined, apuComponents: ["cemento", "arena"] },
+        { ...input().evidence[0], id: "yield-source", sourceHash: "yield-source", evidenceType: "OTHER", quantity: undefined, yield: new Decimal("8") },
+      ],
+    };
+
+    const first = await runReviewJob(request, database);
+    const second = await runReviewJob(request, database);
+
+    expect(second.reviewRunId).toBe(first.reviewRunId);
+    expect(database.evidence).toHaveLength(5);
+    expect(database.evidence.find((entry) => entry.sourceHash === "quantity-source")).toMatchObject({ value: "12", metadataJson: { attributes: { grade: "f'c 210" } } });
+    expect(database.evidence.find((entry) => entry.sourceHash === "yield-source")).toMatchObject({ metadataJson: { yield: "8" } });
+    expect(database.links[0]?.signalsJson).toMatchObject({ specification: expect.any(Number), yield: expect.any(Number), apuComponents: expect.any(Number) });
+    expect(database.findings).toEqual(expect.arrayContaining([expect.objectContaining({ findingType: "YIELD_MISMATCH", comparisonJson: expect.objectContaining({ documentValue: "8", budgetValue: "4" }) })]));
+    expect(database.runs[0]?.progressJson).toMatchObject({ metrics: { coverageByCategory: { quantity: 1, unit: 5, specification: 1, apuComponent: 1, yield: 1 }, partiallyCoveredSources: 1 } });
+  });
+
   it("evaluates missing documentation for every item without a primary match", async () => {
     const database = client();
     database.budgetItem.findFirst = async ({ where }) => ({ id: String(where.id) });
