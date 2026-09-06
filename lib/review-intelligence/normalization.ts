@@ -16,22 +16,22 @@ export interface NormalizedEvidenceMetadata {
 }
 
 const aliases = {
-  code: new Set(["code", "codigo"]),
-  description: new Set(["description", "descripcion"]),
-  quantity: new Set(["quantity", "cantidad", "metrado", "qty"]),
-  unit: new Set(["unit", "unidad"]),
-  technicalSpecification: new Set(["spec", "technicalspec", "technicalspecification", "especificacion"]),
-  discipline: new Set(["discipline", "disciplina"]),
-  yield: new Set(["yield", "rendimiento", "performance"]),
-  apuComponents: new Set(["apucomponents", "componentes", "componente", "recurso"]),
-  evidenceType: new Set(["evidencetype", "tipoevidencia"]),
+  code: ["code", "codigo"],
+  description: ["description", "descripcion"],
+  quantity: ["quantity", "cantidad", "metrado", "qty"],
+  unit: ["unit", "unidad"],
+  technicalSpecification: ["technicalspecification", "technicalspec", "spec", "especificacion"],
+  discipline: ["discipline", "disciplina"],
+  yield: ["yield", "rendimiento", "performance"],
+  apuComponents: ["apucomponents", "componentes", "componente", "recurso"],
+  evidenceType: ["evidencetype", "tipoevidencia"],
 } as const;
 
-const recognizedKeys = new Set(Object.values(aliases).flatMap((keys) => [...keys]));
+const recognizedKeys: Set<string> = new Set(Object.values(aliases).flatMap((keys) => keys));
 const numericTextPattern = /^[+-]?(?:(?:\d+(?:[.,]\d*)?)|(?:[.,]\d+))(?:[eE][+-]?\d+)?$/;
 
 function keyOf(value: string): string {
-  return value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+  return value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 function textValue(value: unknown): string | undefined {
@@ -40,9 +40,10 @@ function textValue(value: unknown): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
-function firstValue(metadata: Record<string, unknown>, names: ReadonlySet<string>): unknown {
-  for (const [key, value] of Object.entries(metadata)) {
-    if (names.has(keyOf(key))) return value;
+function firstValue(metadata: Record<string, unknown>, names: readonly string[]): unknown {
+  for (const name of names) {
+    const matchingEntry = Object.entries(metadata).find(([key]) => keyOf(key) === name);
+    if (matchingEntry) return matchingEntry[1];
   }
   return undefined;
 }

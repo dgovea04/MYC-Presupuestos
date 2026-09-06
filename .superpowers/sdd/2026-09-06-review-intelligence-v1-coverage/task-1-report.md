@@ -44,3 +44,31 @@ La ejecución literal de `npm.cmd run typecheck` no pudo escribir `tsconfig.buil
 
 - El typecheck del script estándar depende de poder escribir el archivo incremental en el worktree; el código sí pasó el typecheck equivalente sin incremental.
 - No se añadió migración ni integración con extractores, conforme al alcance de Task 1.
+
+## Fix report — review round 1
+
+### Findings addressed
+
+- Replaced locale-sensitive `toLocaleLowerCase()` with locale-independent `toLowerCase()` after Unicode accent normalization.
+- Changed alias definitions to ordered arrays and lookup to canonical-alias-first precedence, making conflicting metadata deterministic regardless of source object key order.
+- Added focused coverage for a locale-sensitive dotted-I key, conflicting aliases, accented `especificación`, and `technicalSpec`.
+
+### TDD evidence
+
+- `npm.cmd test -- lib/review-intelligence/normalization.test.ts` before the implementation fix: 1 failing test (`expected '2' to be '1'`), demonstrating insertion-order alias resolution.
+- `npm.cmd test -- lib/review-intelligence/normalization.test.ts` after the fix: 1 file, 10 tests passed.
+
+### Verification after fixes
+
+- `npm.cmd test -- lib/review-intelligence/normalization.test.ts`: 1 file, 10 tests passed.
+- `npm.cmd test -- lib/review-intelligence`: 25 files, 173 tests passed.
+- The new tests cover locale-independent alias matching, canonical precedence across reversed object insertion order, `especificación`, and `technicalSpec`.
+
+### Final verification note
+
+- The first post-fix strict typecheck reported `TS2345` at `normalization.ts(76,29)`: `recognizedKeys` had inferred a literal-union key type incompatible with the normalized string key lookup.
+- The fix explicitly types `recognizedKeys` as `Set<string>`.
+- `npm.cmd test -- lib/review-intelligence/normalization.test.ts`: 1 file, 10 tests passed after the type fix.
+- `npm.cmd test -- lib/review-intelligence`: 25 files, 173 tests passed after the type fix.
+- `node ./node_modules/typescript/bin/tsc --project tsconfig.build.json --noEmit --incremental false`: passed after the type fix.
+- No test hang or focused-test blocker occurred.

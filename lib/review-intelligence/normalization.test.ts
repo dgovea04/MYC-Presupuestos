@@ -52,6 +52,27 @@ describe("normalizeEvidenceMetadata", () => {
     expect(result.apuComponents).toEqual(["agua", "cemento", "arena"]);
   });
 
+  it("normalizes aliases with locale-independent case folding", () => {
+    const result = normalizeEvidenceMetadata({ DİSCIPLINE: "estructuras", QUANTITY: "3" });
+
+    expect(result.discipline).toBe("estructuras");
+    expect(result.quantity?.toString()).toBe("3");
+  });
+
+  it("uses canonical alias precedence regardless of source key order", () => {
+    const first = normalizeEvidenceMetadata({ cantidad: "2", quantity: "1", spec: "spec corta", technicalSpec: "spec canónica" });
+    const second = normalizeEvidenceMetadata({ technicalSpec: "spec canónica", quantity: "1", spec: "spec corta", cantidad: "2" });
+
+    expect(first.quantity?.toString()).toBe("1");
+    expect(first.technicalSpecification).toBe("spec canónica");
+    expect(second).toEqual(first);
+  });
+
+  it("recognizes accented and technicalSpec specification aliases", () => {
+    expect(normalizeEvidenceMetadata({ "especificación": "f'c 210" }).technicalSpecification).toBe("f'c 210");
+    expect(normalizeEvidenceMetadata({ technicalSpec: "f'c 280" }).technicalSpecification).toBe("f'c 280");
+  });
+
   it("preserves arbitrary source attributes as strings", () => {
     const result = normalizeEvidenceMetadata({
       material: 210,
