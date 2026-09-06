@@ -67,6 +67,10 @@ const RULE_VERSION = "review-rules-v1";
 
 function enabled(input: ReviewRuleInput, type: ReviewFindingType): boolean { return input.ruleTypes === undefined || input.ruleTypes.includes(type); }
 function comparableText(value: string | undefined): string { return (value ?? "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, ""); }
+function comparableComponent(value: string): string {
+  const parts = value.split("|").map((part) => part.trim());
+  return comparableText(parts.length >= 3 ? parts.slice(2).join("|") : value);
+}
 function primaryLink(input: ReviewRuleInput): boolean { return input.evidence.primary && input.link?.evidenceId === input.evidence.id && input.link.confidence !== "LOW"; }
 function hasComparableUnits(input: ReviewRuleInput): boolean {
   if (!input.item.unit || !input.evidence.unit) return false;
@@ -93,7 +97,7 @@ export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[]
     }
   }
   if (enabled(input, "YIELD_MISMATCH") && input.item.yield?.isFinite() && input.evidence.yield?.isFinite() && hasComparableUnits(input)) {
-    const comparison = calculateQuantityDifference({ documentValue: input.evidence.yield, budgetValue: input.item.yield, tolerance: input.tolerance });
+    const comparison = calculateQuantityDifference({ documentValue: input.evidence.yield, budgetValue: input.item.yield, tolerance: input.tolerance, minimumAbsoluteTolerance: new Decimal(0) });
     if (comparison.exceedsTolerance) {
       findings.push(candidate(input, "YIELD_MISMATCH", "El rendimiento documentado supera la tolerancia configurada.", "HIGH", {
         documentValue: comparison.documentValue.toString(),
@@ -120,7 +124,10 @@ export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[]
     }
     findings.push(candidate(input, "TECHNICAL_SPEC_MISMATCH", "La descripciÃ³n o especificaciÃ³n tÃ©cnica documentada puede ser incompatible.", "HIGH", { details }));
   }
-  if (enabled(input, "INCOMPLETE_APU") && input.item.technicalSpecification && input.evidence.technicalSpecification && input.item.apuComponents && input.evidence.apuComponents && input.item.apuComponents.some((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component)))) findings.push(candidate(input, "INCOMPLETE_APU", "El APU documentado puede estar incompleto.", "MEDIUM", { details: { missingComponents: input.item.apuComponents.filter((component) => !input.evidence.apuComponents?.some((seen) => comparableText(seen) === comparableText(component))).join(", ") } }));
+  if (enabled(input, "INCOMPLETE_APU") && input.item.apuComponents && input.evidence.apuComponents) {
+    const missingComponents = input.item.apuComponents.filter((component) => !input.evidence.apuComponents?.some((seen) => comparableComponent(seen) === comparableComponent(component)));
+    if (missingComponents.length > 0) findings.push(candidate(input, "INCOMPLETE_APU", "El APU documentado puede estar incompleto.", "MEDIUM", { details: { missingComponents: missingComponents.join(", ") } }));
+  }
   return findings;
 }
 

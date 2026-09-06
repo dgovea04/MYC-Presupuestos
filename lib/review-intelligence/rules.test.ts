@@ -63,6 +63,24 @@ describe("evaluateFindingRules", () => {
     expect(findings.some((finding) => finding.type === "YIELD_MISMATCH")).toBe(false);
   });
 
+  it("detects a percentage mismatch for fractional yields without an absolute floor", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({
+      ...input,
+      item: { ...input.item, yield: new Decimal("0.125") },
+      evidence: { ...input.evidence, unit: "m3", yield: new Decimal("0.130") },
+      tolerance: new Decimal("1"),
+      ruleTypes: ["YIELD_MISMATCH"],
+    });
+
+    expect(findings.find((finding) => finding.type === "YIELD_MISMATCH")?.comparison).toMatchObject({
+      documentValue: "0.13",
+      budgetValue: "0.125",
+      difference: "0.005",
+      percentage: "4",
+    });
+  });
+
   it("produces quantity, unit, technical and incomplete APU findings from primary evidence", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, unit: "m3" } });
@@ -110,9 +128,30 @@ describe("evaluateFindingRules", () => {
     expect(input.item.apuComponents).toEqual(["cemento", "arena"]);
   });
 
-  it("does not flag an incomplete APU without technical specification evidence", () => {
+  it("flags an incomplete APU independently of technical specification evidence", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, technicalSpecification: undefined } });
+
+    expect(findings.find((finding) => finding.type === "INCOMPLETE_APU")?.comparison?.details).toEqual({
+      missingComponents: "arena",
+    });
+  });
+
+  it("compares simple resource names with structured budget APU components", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({
+      ...input,
+      item: {
+        ...input.item,
+        apuComponents: ["MATERIAL | 0.250 | Cemento", "MATERIAL | 0.500 | Arena gruesa"],
+      },
+      evidence: {
+        ...input.evidence,
+        technicalSpecification: input.item.technicalSpecification,
+        apuComponents: ["Cemento", "Arena gruesa"],
+      },
+      ruleTypes: ["INCOMPLETE_APU"],
+    });
 
     expect(findings.some((finding) => finding.type === "INCOMPLETE_APU")).toBe(false);
   });
