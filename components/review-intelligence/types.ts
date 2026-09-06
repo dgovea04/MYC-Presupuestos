@@ -15,6 +15,8 @@ export interface ReviewWarningView {
   source?: string;
 }
 
+export type ReviewCoverageByCategory = Partial<Record<"quantity" | "specification" | "apuComponent" | "yield", number>>;
+
 export interface ReviewRunView {
   id: string;
   budgetId: string;
@@ -24,7 +26,7 @@ export interface ReviewRunView {
   createdAt: string;
   updatedAt: string;
   finishedAt?: string | null;
-  metrics?: { coveragePercent?: number; analyzedItems?: number; totalItems?: number; evidenceCount?: number; linkedEvidenceCount?: number; findingsByStatus?: Record<string, number>; findingsByType?: Record<string, number>; incompleteItems?: number; failedChecks?: number; failures?: number; incompleteness?: number; deltaVsPrevious?: number | null };
+  metrics?: { coveragePercent?: number; analyzedItems?: number; totalItems?: number; evidenceCount?: number; linkedEvidenceCount?: number; findingsByStatus?: Record<string, number>; findingsByType?: Record<string, number>; incompleteItems?: number; failedChecks?: number; failures?: number; incompleteness?: number; deltaVsPrevious?: number | null; coverageByCategory?: ReviewCoverageByCategory; partiallyCoveredSources?: number };
 }
 
 export interface ReviewDocumentVersionView {

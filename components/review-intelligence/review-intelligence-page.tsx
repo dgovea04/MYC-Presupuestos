@@ -177,6 +177,12 @@ function parseMetrics(value: Record<string, unknown> | null): ReviewRunView["met
     if (!candidate) return undefined;
     return Object.fromEntries(Object.entries(candidate).filter(([, count]) => typeof count === "number")) as Record<string, number>;
   };
-  return { totalItems: numberValue(value.totalItems), analyzedItems: numberValue(value.analyzedItems), coveragePercent: numberValue(value.coveragePercent), evidenceCount: numberValue(value.evidenceCount), linkedEvidenceCount: numberValue(value.linkedEvidenceCount), findingsByStatus: recordMap("findingsByStatus"), findingsByType: recordMap("findingsByType"), incompleteItems: numberValue(value.incompleteItems, numberValue(value.incompleteness)), failedChecks: numberValue(value.failedChecks, numberValue(value.failures)), failures: numberValue(value.failures), incompleteness: numberValue(value.incompleteness), deltaVsPrevious: typeof value.deltaVsPrevious === "number" ? value.deltaVsPrevious : null };
+  const coverageSource = record(value.coverageByCategory);
+  const coverageByCategory = coverageSource ? Object.fromEntries(["quantity", "specification", "apuComponent", "yield"].flatMap((category) => {
+    const count = coverageSource[category];
+    return typeof count === "number" && Number.isFinite(count) && count >= 0 ? [[category, count]] : [];
+  })) : undefined;
+  const partiallyCoveredSources = typeof value.partiallyCoveredSources === "number" && Number.isFinite(value.partiallyCoveredSources) && value.partiallyCoveredSources >= 0 ? value.partiallyCoveredSources : undefined;
+  return { totalItems: numberValue(value.totalItems), analyzedItems: numberValue(value.analyzedItems), coveragePercent: numberValue(value.coveragePercent), evidenceCount: numberValue(value.evidenceCount), linkedEvidenceCount: numberValue(value.linkedEvidenceCount), findingsByStatus: recordMap("findingsByStatus"), findingsByType: recordMap("findingsByType"), incompleteItems: numberValue(value.incompleteItems, numberValue(value.incompleteness)), failedChecks: numberValue(value.failedChecks, numberValue(value.failures)), failures: numberValue(value.failures), incompleteness: numberValue(value.incompleteness), deltaVsPrevious: typeof value.deltaVsPrevious === "number" ? value.deltaVsPrevious : null, ...(coverageByCategory && Object.keys(coverageByCategory).length > 0 ? { coverageByCategory } : {}), ...(partiallyCoveredSources === undefined ? {} : { partiallyCoveredSources }) };
 }
 function parseFindingPage(value: PaginatedFindings): PaginatedFindings { return { findings: Array.isArray(value.findings) ? value.findings : [], page: numberValue(value.page, 1), pageSize: numberValue(value.pageSize, 25), hasNextPage: value.hasNextPage === true }; }
