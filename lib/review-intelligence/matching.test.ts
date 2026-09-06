@@ -135,4 +135,11 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.score.equals(1)).toBe(true);
     expect(candidate.confidence).toBe("HIGH");
   });
+
+  it("keeps empty APU component arrays out of score normalization", () => {
+    const [baseline] = matchBudgetItemToEvidence({ id: "item-empty-components", description: "Concreto" }, [{ id: "evidence-empty-components", primary: true, description: "Concreto" }]);
+    const [withEmptyComponents] = matchBudgetItemToEvidence({ id: "item-empty-components", description: "Concreto", apuComponents: [] }, [{ id: "evidence-empty-components", primary: true, description: "Concreto", apuComponents: [] }]);
+
+    expect(withEmptyComponents.score.equals(baseline.score)).toBe(true);
+  });
 });

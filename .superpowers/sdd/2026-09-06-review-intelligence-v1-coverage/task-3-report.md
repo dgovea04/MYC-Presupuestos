@@ -99,3 +99,31 @@ npm.cmd test -- lib/review-intelligence
 Test Files  25 passed (25)
 Tests       182 passed (182)
 ```
+
+## Fix round 2 — empty APU components
+
+`apuComponents` is now available to score normalization only when both sides contain at least one component, matching the semantics of the other list signals.
+
+### TDD evidence
+
+RED command:
+
+```text
+npm.cmd test -- lib/review-intelligence/matching.test.ts
+Test Files  1 failed (1)
+Tests       1 failed | 12 passed (13)
+```
+
+The new regression showed that two empty component arrays reduced the normalized score relative to identical inputs without that optional field.
+
+GREEN verification:
+
+```text
+npm.cmd test -- lib/review-intelligence/matching.test.ts
+Test Files  1 passed (1)
+Tests       13 passed (13)
+
+npm.cmd test -- lib/review-intelligence
+Test Files  25 passed (25)
+Tests       183 passed (183)
+```

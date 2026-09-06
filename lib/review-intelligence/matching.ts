@@ -164,7 +164,7 @@ export function matchBudgetItemToEvidence(
       hierarchy: hasValues(item.hierarchy) && hasValues(entry.hierarchy), sectionHeader: hasText(item.sectionHeader) && hasText(entry.sectionHeader), crossReference: hasValues(item.crossReferences) && hasValues(entry.crossReferences),
       specification: hasText(item.technicalSpecification) && hasText(entry.technicalSpecification),
       yield: item.yield !== undefined && entry.yield !== undefined,
-      apuComponents: item.apuComponents !== undefined && entry.apuComponents !== undefined,
+      apuComponents: hasValues(item.apuComponents) && hasValues(entry.apuComponents),
       unitAlias: item.unit !== undefined && entry.unit !== undefined && signals.unitAlias === 1,
       confirmedMatch: entry.previouslyConfirmed !== undefined || item.previouslyConfirmedEvidenceIds !== undefined,
     };
