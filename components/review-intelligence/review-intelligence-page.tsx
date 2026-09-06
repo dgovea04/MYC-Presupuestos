@@ -178,7 +178,7 @@ function parseMetrics(value: Record<string, unknown> | null): ReviewRunView["met
     return Object.fromEntries(Object.entries(candidate).filter(([, count]) => typeof count === "number")) as Record<string, number>;
   };
   const coverageSource = record(value.coverageByCategory);
-  const coverageByCategory = coverageSource ? Object.fromEntries(["quantity", "specification", "apuComponent", "yield"].flatMap((category) => {
+  const coverageByCategory = coverageSource ? Object.fromEntries(["quantity", "unit", "specification", "apuComponent", "yield"].flatMap((category) => {
     const count = coverageSource[category];
     return typeof count === "number" && Number.isFinite(count) && count >= 0 ? [[category, count]] : [];
   })) : undefined;

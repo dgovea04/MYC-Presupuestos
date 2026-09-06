@@ -133,7 +133,7 @@ describe("ReviewDashboard", () => {
         total: 8,
         percent: 100,
         metrics: {
-          coverageByCategory: { quantity: 12, specification: 7, apuComponent: 4, yield: 3, ignored: "invalid" },
+          coverageByCategory: { quantity: 12, unit: 9, specification: 7, apuComponent: 4, yield: 3, ignored: "invalid" },
           partiallyCoveredSources: 2,
         },
       },
@@ -154,6 +154,8 @@ describe("ReviewDashboard", () => {
     const coverage = await screen.findByRole("region", { name: "Cobertura por categoría" });
     expect(coverage.textContent).toContain("Metrados");
     expect(coverage.textContent).toContain("12");
+    expect(coverage.textContent).toContain("Unidades");
+    expect(coverage.textContent).toContain("9");
     expect(coverage.textContent).toContain("Especificaciones");
     expect(coverage.textContent).toContain("7");
     expect(coverage.textContent).toContain("APU");

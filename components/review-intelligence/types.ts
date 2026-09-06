@@ -15,7 +15,7 @@ export interface ReviewWarningView {
   source?: string;
 }
 
-export type ReviewCoverageByCategory = Partial<Record<"quantity" | "specification" | "apuComponent" | "yield", number>>;
+export type ReviewCoverageByCategory = Partial<Record<"quantity" | "unit" | "specification" | "apuComponent" | "yield", number>>;
 
 export interface ReviewRunView {
   id: string;
