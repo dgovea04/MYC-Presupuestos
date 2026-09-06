@@ -117,6 +117,50 @@ describe("review document extractors", () => {
     expect(result.items[1]?.metadata?.code).toBe("01.02");
   });
 
+  it("normalizes structured takeoff and APU headers while retaining sheet and row provenance", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Metrados APU");
+    sheet.addRow(["Item", "Partida", "Metrado", "Unidad", "Rendimiento", "Recurso", "Tipo recurso", "Cantidad recurso", "Especificación técnica", "Disciplina"]);
+    sheet.addRow(["03.04", "Concreto ciclópeo", "12,50", "M2", "0.75", "Cemento; arena", "Material", "3.25", "f'c 140", "Estructuras"]);
+    const bytes = await workbook.xlsx.writeBuffer();
+
+    const result = await extractDocument({ file: new File([bytes], "metrado-apu.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) });
+
+    expect(result.items).toEqual([expect.objectContaining({
+      location: { sheet: "Metrados APU", range: "A2:J2" },
+      metadata: expect.objectContaining({
+        code: "03.04",
+        description: "Concreto ciclópeo",
+        quantity: "12.5",
+        unit: "M2",
+        yield: "0.75",
+        technicalSpecification: "f'c 140",
+        discipline: "Estructuras",
+        apuComponents: ["Cemento", "arena"],
+        attributes: expect.objectContaining({ "Tipo recurso": "Material", "Cantidad recurso": "3.25" }),
+      }),
+    })]);
+  });
+
+  it("extracts PDF yield and component labels with page and text offsets", async () => {
+    const pdf = new File(["%PDF-1.7\nxref\n0 1\n0000000000 65535 f \n1 0 obj\n<</Subject (03.04 Concreto ciclópeo 12.5 m3 | Rendimiento: 0.75 | Recurso: cemento; arena | Tipo recurso: Material | Cantidad recurso: 3.25 | Especificación técnica: f'c 140)>>\nendobj\ntrailer\n<<>>\nstartxref\n9\n%%EOF"], "apu.pdf", { type: "application/pdf" });
+
+    const result = await extractDocument({ file: pdf });
+
+    expect(result.items[0]).toMatchObject({
+      location: { page: 1, textOffsetStart: expect.any(Number), textOffsetEnd: expect.any(Number) },
+      metadata: {
+        code: "03.04",
+        quantity: "12.5",
+        unit: "m3",
+        yield: "0.75",
+        technicalSpecification: "f'c 140",
+        apuComponents: ["cemento", "arena"],
+        evidenceType: "QUANTITY",
+      },
+    });
+  });
+
   it("finds structured headers after title rows so quantities remain comparable", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Metrados");
