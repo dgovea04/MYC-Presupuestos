@@ -422,6 +422,46 @@ describe("runReviewJob", () => {
     expect(database.runs[0]?.progressJson).toMatchObject({ metrics: { coverageByCategory: { quantity: 1, unit: 5, specification: 1, apuComponent: 1, yield: 1 }, partiallyCoveredSources: 1 } });
   });
 
+  it("compares every APU resource row from the same document without dropping valid evidence", async () => {
+    const database = client();
+    const request = {
+      ...input(),
+      configuration: { ...input().configuration, findingTypes: ["INCOMPLETE_APU" as const] },
+      budgetItems: [{
+        ...input().budgetItems[0],
+        technicalSpecification: "Concreto estructural",
+        apuComponents: ["MATERIAL | 0.250 | Cemento", "MATERIAL | 0.500 | Arena gruesa"],
+      }],
+      evidence: [
+        {
+          ...input().evidence[0],
+          id: "apu-cemento",
+          sourceHash: "apu-cemento",
+          evidenceType: "APU_COMPONENT",
+          quantity: undefined,
+          technicalSpecification: "Concreto estructural",
+          apuComponents: ["Cemento"],
+        },
+        {
+          ...input().evidence[0],
+          id: "apu-arena",
+          sourceHash: "apu-arena",
+          evidenceType: "APU_COMPONENT",
+          quantity: undefined,
+          technicalSpecification: "Concreto estructural",
+          apuComponents: ["Arena gruesa"],
+        },
+      ],
+    };
+
+    const result = await runReviewJob(request, database);
+
+    expect(result.status).toBe("COMPLETED");
+    expect(database.evidence).toHaveLength(2);
+    expect(database.links).toHaveLength(2);
+    expect(database.findings).toHaveLength(0);
+  });
+
   it("evaluates missing documentation for every item without a primary match", async () => {
     const database = client();
     database.budgetItem.findFirst = async ({ where }) => ({ id: String(where.id) });

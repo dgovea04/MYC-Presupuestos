@@ -117,6 +117,11 @@ function hierarchySignal(left: string[] | undefined, right: string[] | undefined
   return common / Math.max(left.length, right.length);
 }
 
+function componentKey(value: string): string {
+  const parts = value.split("|").map((part) => normalizedText(part)).filter(Boolean);
+  return parts.length >= 3 ? parts[2] : parts[parts.length - 1] ?? normalizedText(value);
+}
+
 function yieldSignal(left: Decimal | undefined, right: Decimal | undefined): Decimal {
   if (!left || !right) return new Decimal(0);
   if (left.equals(right)) return new Decimal(1);
@@ -125,7 +130,13 @@ function yieldSignal(left: Decimal | undefined, right: Decimal | undefined): Dec
 }
 
 function componentSignal(left: string[] | undefined, right: string[] | undefined): number {
-  return listSignal(left, right);
+  if (!left?.length || !right?.length) return 0;
+  const normalizedRight = new Set(right.map(componentKey));
+  const matches = left.filter((value) => {
+    const key = componentKey(value);
+    return Array.from(normalizedRight).some((candidate) => candidate === key || candidate.includes(key) || key.includes(candidate));
+  }).length;
+  return matches > 0 ? 1 : 0;
 }
 
 function hasText(value: string | undefined): boolean { return normalizedText(value).length > 0; }
@@ -188,7 +199,7 @@ export function matchBudgetItemToEvidence(
     const evidenceCode = normalizedCode(entry.code);
     const codeConflict = itemCode.length > 0 && evidenceCode.length > 0 && itemCode !== evidenceCode;
     const effectiveScore = codeConflict ? new Decimal(0) : score;
-    const confidence = confidenceFor(effectiveScore.toNumber(), thresholds);
+    const confidence = codeConflict ? "LOW" : signals.apuComponents === 1 ? "MEDIUM" : confidenceFor(effectiveScore.toNumber(), thresholds);
     const explanation = Object.entries(signals).filter(([, value]) => value > 0).map(([signal, value]) => `${signal}=${value.toFixed(3)}`);
     if (codeConflict) explanation.push("codeConflict=1.000");
     return { budgetItemId: item.id, evidenceId: entry.id, score: effectiveScore, confidence, eligibleForFindings: !codeConflict && confidence !== "LOW", signals, explanation };

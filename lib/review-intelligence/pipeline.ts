@@ -240,9 +240,19 @@ async function processStage(stage: ReviewStage, input: RunReviewJobInput, client
           const evidence = entry.evidence;
           const hasApplicableRule = evidence.evidenceType !== "QUANTITY" || evidence.technicalSpecification !== undefined || evidence.unit !== undefined;
           if (!hasApplicableRule) continue;
-          const key = `${evidence.documentVersionId}:${evidence.evidenceType}`;
+          const key = evidence.evidenceType === "APU" ? evidence.id : `${evidence.documentVersionId}:${evidence.evidenceType}`;
           const current = ruleEvidence.get(key);
           if (!current || entry.candidate.score.greaterThan(current.candidate.score)) ruleEvidence.set(key, entry);
+        }
+        const apuEntries = linkedEvidence.filter(({ evidence }) => evidence.evidenceType === "APU_COMPONENT" && evidence.apuComponents?.length);
+        if (apuEntries.length > 1) {
+          const representative = apuEntries.reduce((best, entry) => entry.candidate.score.greaterThan(best.candidate.score) ? entry : best);
+          const components = Array.from(new Set(apuEntries.flatMap(({ evidence }) => evidence.apuComponents ?? [])));
+          ruleEvidence.set(`apu:${representative.evidence.documentVersionId}`, {
+            candidate: representative.candidate,
+            evidence: { ...representative.evidence, apuComponents: components },
+          });
+          for (const entry of apuEntries) ruleEvidence.delete(`${entry.evidence.documentVersionId}:${entry.evidence.evidenceType}`);
         }
         for (const { candidate, evidence } of ruleEvidence.values()) {
           const persistedLink = await transaction.entityLink.findFirst({ where: { budgetItemId: candidate.budgetItemId, evidenceId: candidate.evidenceId, companyId: input.companyId, projectId: input.projectId } });

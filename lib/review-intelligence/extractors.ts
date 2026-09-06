@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { extractDigitalPdf } from "@/lib/pdf-import/digital-extraction";
 import { validateDocumentFile, type ReviewDocumentFile } from "./documents";
 import { createOcrAdapter, type OcrAdapter } from "./ocr";
-import { classifyEvidenceType, normalizeEvidenceMetadata } from "./normalization";
+import { classifyEvidenceType, normalizeEvidenceMetadata, parseDecimalText } from "./normalization";
 import type { ConfidenceLevel, ExtractionCoverage, ExtractionMethod } from "./types";
 import { parseReviewCsv } from "./csv";
 
@@ -160,7 +160,10 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
         for (let rowNumber = headerRow + 1; rowNumber <= maxRow; rowNumber += 1) {
           const row = rows[rowNumber - 1] ?? [];
           const rowContent = row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t").trim();
-          if (rowContent) items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, headerRow, rowNumber, minColumn, maxColumn) });
+          if (rowContent) {
+            warnings.push(...invalidNumericWarnings(headers, row.slice(minColumn - 1, maxColumn), worksheet.name, rowNumber));
+            items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, headerRow, rowNumber, minColumn, maxColumn) });
+          }
         }
       } else items.push({ content, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}` }, metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn) });
     }
@@ -183,7 +186,8 @@ function findHeaderRow(rows: string[][], minRow: number, maxRow: number, minColu
     const headers = rows[rowNumber - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
     const hasDescription = headers.some((header) => /desc|partida/i.test(header));
     const hasQuantity = headers.some((header) => /cant|metr|qty/i.test(header));
-    if (hasDescription && hasQuantity) return rowNumber;
+    const hasResource = headers.some((header) => /recurso|componente/i.test(header));
+    if ((hasDescription || hasResource) && hasQuantity) return rowNumber;
   }
   return minRow;
 }
@@ -192,6 +196,16 @@ function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minC
   const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
   const values = rows[maxRow - 1]?.slice(minColumn - 1, maxColumn) ?? [];
   return metadataFromHeaders(headers, values);
+}
+
+function invalidNumericWarnings(headers: string[], values: string[], worksheet: string, row: number): string[] {
+  const warnings: string[] = [];
+  headers.forEach((header, index) => {
+    if (!/^(quantity|cantidad|metrado|qty|yield|rendimiento|performance)$/i.test(headerKey(header))) return;
+    const value = values[index]?.trim() ?? "";
+    if (value && parseDecimalText(value) === undefined) warnings.push(`Hoja ${worksheet}, fila ${row}: valor numérico inválido en ${header}.`);
+  });
+  return warnings;
 }
 
 function metadataFromHeaders(headers: string[], values: string[]): ExtractionItem["metadata"] {

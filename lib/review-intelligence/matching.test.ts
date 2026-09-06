@@ -142,4 +142,24 @@ describe("matchBudgetItemToEvidence", () => {
 
     expect(withEmptyComponents.score.equals(baseline.score)).toBe(true);
   });
+
+  it("matches resource names against TIPO | CANTIDAD | DESCRIPCION APU representations", () => {
+    const [candidate] = matchBudgetItemToEvidence({
+      id: "item-resource-row",
+      description: "Concreto ciclÃ³peo",
+      apuComponents: [
+        "MATERIAL | 0.250 | Cemento Portland Tipo I",
+        "MANO DE OBRA | 0.100 | Operario",
+      ],
+    }, [{
+      id: "evidence-resource-row",
+      primary: true,
+      description: "Cemento Portland Tipo I",
+      apuComponents: ["Cemento Portland Tipo I"],
+    }]);
+
+    expect(candidate.signals.apuComponents).toBe(1);
+    expect(candidate.confidence).not.toBe("LOW");
+    expect(candidate.eligibleForFindings).toBe(true);
+  });
 });
