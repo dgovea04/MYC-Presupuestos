@@ -89,4 +89,40 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.score.lessThanOrEqualTo(1)).toBe(true);
     expect(candidate.score.toFixed(9)).toBe("0.838709677");
   });
+
+  it("adds normalized specification, yield, and APU component signals when technical data is compatible", () => {
+    const [candidate] = matchBudgetItemToEvidence({
+      ...item,
+      technicalSpecification: "Concreto f'c 210 kg/cm²",
+      yield: new Decimal("0.125"),
+      apuComponents: ["Material | 1 | Cemento Portland", "Agregado | 2 | Arena gruesa"],
+    }, [evidence({
+      technicalSpecification: "CONCRETO FC 210 KG/CM2",
+      yield: new Decimal("0.125"),
+      apuComponents: ["agregado 2 arena gruesa", "Material 1 cemento portland", "Agua"],
+    })]);
+
+    expect(candidate.signals).toMatchObject({ yield: 1, apuComponents: 1, unitAlias: 1 });
+    expect(candidate.signals.specification).toBeGreaterThan(0);
+    expect(candidate.explanation).toEqual(expect.arrayContaining([
+      expect.stringContaining("specification="),
+      "yield=1.000",
+      "apuComponents=1.000",
+      "unitAlias=1.000",
+    ]));
+  });
+
+  it("recognizes equivalent units through the unit alias signal", () => {
+    const [candidate] = matchBudgetItemToEvidence({ ...item, unit: "m3" }, [evidence({ unit: "M3" })]);
+
+    expect(candidate.signals.unit).toBe(1);
+    expect(candidate.signals.unitAlias).toBe(1);
+  });
+
+  it("keeps optional technical signals out of score normalization when they are missing", () => {
+    const [baseline] = matchBudgetItemToEvidence({ id: "item-3", description: "Concreto", unit: "m3" }, [{ id: "evidence-3", primary: true, description: "Concreto", unit: "m3" }]);
+    const [withMissingTechnicalFields] = matchBudgetItemToEvidence({ id: "item-3", description: "Concreto", unit: "m3", technicalSpecification: undefined, yield: undefined, apuComponents: undefined }, [{ id: "evidence-3", primary: true, description: "Concreto", unit: "m3", technicalSpecification: undefined, yield: undefined, apuComponents: undefined }]);
+
+    expect(withMissingTechnicalFields.score.equals(baseline.score)).toBe(true);
+  });
 });

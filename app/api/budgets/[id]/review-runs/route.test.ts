@@ -119,11 +119,14 @@ describe("review runs API", () => {
     expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ evidence: [expect.objectContaining({ id: "xlsx-selected" }), expect.objectContaining({ id: "pdf" })] }), expect.anything());
   });
 
-  it("transports the persisted APU specification and resources into the review pipeline", async () => {
-    mocks.budgetItemFindMany.mockResolvedValue([{ id: "item-1", budgetId: "budget-1", code: "A-1", description: "Concreto", unit: "m3", quantity: "10", unitPrice: "100", discipline: "Estructuras", apu: { name: "f'c 210 kg/cm2", resources: [{ quantity: "1", resource: { code: "MAT-1", description: "Cemento" }, catalogPartida: null }, { quantity: "2", resource: null, catalogPartida: { description: "Arena" } }] } }]);
+  it("transports the persisted APU performance and resources into the review pipeline", async () => {
+    mocks.budgetItemFindMany.mockResolvedValue([{ id: "item-1", budgetId: "budget-1", code: "A-1", description: "Concreto", unit: "m3", quantity: "10", unitPrice: "100", discipline: "Estructuras", apu: { name: "f'c 210 kg/cm2", performance: "0.125", resources: [{ quantity: "1", resourceType: "MATERIAL", resource: { code: "MAT-1", description: "Cemento" }, catalogPartida: null }, { quantity: "2", resourceType: "MATERIAL", resource: null, catalogPartida: { description: "Arena" } }] } }]);
     mocks.runReviewJob.mockImplementation(async (input: { defer?: boolean; idempotencyKey?: string }) => ({ reviewRunId: "review-technical", status: input.defer ? "QUEUED" : "RUNNING", idempotencyKey: input.idempotencyKey ?? "key-technical" }));
     await POST(new Request("http://localhost/api/budgets/budget-1/review-runs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-technical" }, body: JSON.stringify({ configuration, documentVersionIds: ["version-1"] }) }), { params: Promise.resolve({ id: "budget-1" }) });
-    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ budgetItems: [expect.objectContaining({ technicalSpecification: "f'c 210 kg/cm2", apuComponents: ["Cemento", "Arena"] })] }), expect.anything());
+    expect(mocks.budgetItemFindMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ apu: { select: expect.objectContaining({ performance: true, resources: { select: expect.objectContaining({ quantity: true, resourceType: true }) } }) } }) }));
+    expect(mocks.runReviewJob).toHaveBeenCalledWith(expect.objectContaining({ budgetItems: [expect.objectContaining({ technicalSpecification: "f'c 210 kg/cm2", yield: expect.objectContaining({ toString: expect.any(Function) }), apuComponents: ["MATERIAL | 1 | Cemento", "MATERIAL | 2 | Arena"] })] }), expect.anything());
+    const input = mocks.runReviewJob.mock.calls[0]?.[0] as { budgetItems: Array<{ yield?: { toString(): string } }> };
+    expect(input.budgetItems[0]?.yield?.toString()).toBe("0.125");
   });
 
   it("returns 409 when an active run already exists", async () => {
