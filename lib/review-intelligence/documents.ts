@@ -5,7 +5,8 @@ import { ExtractionStatus, Prisma, ReviewDocumentCategory, type ReviewDocumentCa
 import { LocalReviewDocumentStorage, verifyTemporaryReadToken, type ReviewDocumentStorage, type StoredReviewDocument, type TemporaryReadTokenPayload } from "./storage";
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
-const SUPPORTED_EXTENSIONS = new Set([".pdf", ".xlsx"]);
+const SUPPORTED_EXTENSIONS = new Set([".pdf", ".xlsx", ".csv"]);
+const CSV_MIME = "text/csv";
 const PDF_MIME = "application/pdf";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -256,8 +257,8 @@ export async function createDocumentVersion(
 export type ValidatedDocument = {
   bytes: Uint8Array;
   sha256: string;
-  mimeType: typeof PDF_MIME | typeof XLSX_MIME;
-  extension: ".pdf" | ".xlsx";
+  mimeType: typeof PDF_MIME | typeof XLSX_MIME | typeof CSV_MIME;
+  extension: ".pdf" | ".xlsx" | ".csv";
   fileSizeBytes: number;
 };
 
@@ -271,7 +272,7 @@ export async function validateDocumentFile(file: ReviewDocumentFile): Promise<Va
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const supportedExtension: ".pdf" | ".xlsx" = extension === ".pdf" ? ".pdf" : ".xlsx";
+  const supportedExtension: ".pdf" | ".xlsx" | ".csv" = extension === ".pdf" ? ".pdf" : extension === ".xlsx" ? ".xlsx" : ".csv";
   const detectedMime = await detectMime(bytes);
   if (detectedMime === null || detectedMime !== expectedMime(supportedExtension)) {
     throw new Error("El MIME real del documento no coincide con la extensión.");
@@ -289,16 +290,16 @@ export async function validateDocumentFile(file: ReviewDocumentFile): Promise<Va
   };
 }
 
-function getExtension(fileName: string): ".pdf" | ".xlsx" | string {
+function getExtension(fileName: string): ".pdf" | ".xlsx" | ".csv" | string {
   const dot = fileName.lastIndexOf(".");
   return dot >= 0 ? fileName.slice(dot).toLowerCase() : "";
 }
 
-function expectedMime(extension: string): typeof PDF_MIME | typeof XLSX_MIME | null {
-  return extension === ".pdf" ? PDF_MIME : extension === ".xlsx" ? XLSX_MIME : null;
+function expectedMime(extension: string): typeof PDF_MIME | typeof XLSX_MIME | typeof CSV_MIME | null {
+  return extension === ".pdf" ? PDF_MIME : extension === ".xlsx" ? XLSX_MIME : extension === ".csv" ? CSV_MIME : null;
 }
 
-async function detectMime(bytes: Uint8Array): Promise<typeof PDF_MIME | typeof XLSX_MIME | null> {
+async function detectMime(bytes: Uint8Array): Promise<typeof PDF_MIME | typeof XLSX_MIME | typeof CSV_MIME | null> {
   const prefix = new TextDecoder().decode(bytes.slice(0, 5));
   if (prefix === "%PDF-") {
     return isValidPdfStructure(bytes) ? PDF_MIME : null;
@@ -315,7 +316,8 @@ async function detectMime(bytes: Uint8Array): Promise<typeof PDF_MIME | typeof X
       return null;
     }
   }
-  return null;
+  const text = new TextDecoder().decode(bytes.slice(0, 4096));
+  return text.includes(",") || text.includes(";") || text.includes("\t") ? CSV_MIME : null;
 }
 
 function isValidPdfStructure(bytes: Uint8Array): boolean {

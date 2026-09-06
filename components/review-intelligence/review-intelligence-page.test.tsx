@@ -7,6 +7,7 @@ import { FindingDetail } from "@/components/review-intelligence/finding-detail";
 import { FindingQueue } from "@/components/review-intelligence/finding-queue";
 import { ReviewDashboard } from "@/components/review-intelligence/review-dashboard";
 import { ReviewIntelligencePage } from "@/components/review-intelligence/review-intelligence-page";
+import { RunComparisonPanel } from "@/components/review-intelligence/run-comparison-panel";
 import type {
   FindingView,
   PaginatedFindings,
@@ -161,6 +162,20 @@ describe("DocumentManager", () => {
   });
 });
 
+describe("RunComparisonPanel", () => {
+  it("loads and renders comparison summary for the selected base run", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ summary: { new: 2, persistent: 3, resolved: 1, changed: 4 } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RunComparisonPanel budgetId="budget-1" selectedRun={runningRun} runs={[runningRun, { ...runningRun, id: "run-0" }]} />);
+    fireEvent.click(screen.getByRole("combobox", { name: "Ejecución base para comparar" }));
+    fireEvent.click(await screen.findByRole("option", { name: /run-0/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Comparar" }));
+    await waitFor(() => expect(screen.getByText(/Nuevos: 2/)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("baseRunId=run-0"));
+  });
+});
+
 describe("FindingQueue", () => {
   it("emits accessible filter changes and opens a selected finding", () => {
     const onFilterChange = vi.fn();
@@ -178,6 +193,17 @@ describe("FindingQueue", () => {
 });
 
 describe("FindingDetail", () => {
+  it("assigns a finding to a project member from the detail panel", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ findingId: "finding-1", assignedToId: "member-1" }, 200));
+    vi.stubGlobal("fetch", fetchMock);
+    const onChanged = vi.fn();
+    render(<FindingDetail finding={finding} canResolve onChanged={onChanged} />);
+    fireEvent.change(screen.getByLabelText("ID del responsable"), { target: { value: "member-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar responsable" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/review-findings/finding-1/assignment", expect.objectContaining({ method: "PUT" })));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
   it("shows provenance and sends an explicit human decision without budget mutation", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ id: "decision-1" }, 201));
     vi.stubGlobal("fetch", fetchMock);

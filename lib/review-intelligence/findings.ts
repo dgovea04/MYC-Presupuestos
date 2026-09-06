@@ -12,7 +12,7 @@ type FindingRow = Prisma.ReviewFindingGetPayload<{
   select: {
     id: true; companyId: true; projectId: true; budgetId: true; reviewRunId: true; budgetItemId: true; entityLinkId: true; evidenceId: true;
     findingType: true; status: true; severity: true; priority: true; confidence: true; score: true; potentialImpact: true; ruleKey: true; discipline: true; baseSnapshotId: true;
-    comparisonJson: true; humanReviewRequired: true; automaticBudgetMutation: true; createdAt: true; updatedAt: true;
+    comparisonJson: true; humanReviewRequired: true; automaticBudgetMutation: true; assignedToId: true; assignedAt: true; createdAt: true; updatedAt: true;
     budgetItem: { select: { id: true; code: true; description: true; unit: true; quantity: true; unitPrice: true; discipline: true; levelId: true } };
     evidence: { select: { id: true; documentVersionId: true; evidenceType: true; originalText: true; normalizedText: true; locationJson: true; value: true; unit: true; extractionMethod: true; confidence: true; sourceHash: true; metadataJson: true; documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } };
     entityLink: { select: { id: true; score: true; confidence: true; validationStatus: true; signalsJson: true } };
@@ -22,6 +22,7 @@ type FindingRow = Prisma.ReviewFindingGetPayload<{
 
 export type FindingFilters = {
   companyId: string; projectId?: string; budgetId?: string; reviewRunId: string; page: number; pageSize: number;
+  assignedToId?: string | null;
   status?: FindingStatus; findingType?: Prisma.ReviewFindingWhereInput["findingType"]; severity?: string; confidence?: Prisma.ReviewFindingWhereInput["confidence"]; priority?: number; discipline?: string; subbudget?: string; document?: string;
 };
 export type PaginatedFindings = { findings: Array<Record<string, unknown>>; page: number; pageSize: number; hasNextPage: boolean };
@@ -76,7 +77,7 @@ function serializeFinding(row: FindingRow): Record<string, unknown> {
     budgetItemId: row.budgetItemId, entityLinkId: row.entityLinkId, evidenceId: row.evidenceId, findingType: row.findingType,
     status: row.status, severity: row.severity, priority: decimal(row.priority), confidence: row.confidence, score: decimal(row.score), discipline: row.discipline,
     potentialImpact: decimal(row.potentialImpact), ruleKey: row.ruleKey, comparison: row.comparisonJson, humanReviewRequired: row.humanReviewRequired,
-    automaticBudgetMutation: row.automaticBudgetMutation, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+    automaticBudgetMutation: row.automaticBudgetMutation, assignedToId: row.assignedToId, assignedAt: row.assignedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     budgetItem: row.budgetItem ? { ...row.budgetItem, quantity: decimal(row.budgetItem.quantity), unitPrice: decimal(row.budgetItem.unitPrice) } : null,
     evidence, entityLink: row.entityLink ? { ...row.entityLink, score: decimal(row.entityLink.score) } : null,
     latestDecision: row.decisions[0] ? { ...row.decisions[0], expectedUpdatedAt: row.decisions[0].expectedUpdatedAt.toISOString(), createdAt: row.decisions[0].createdAt.toISOString() } : null,
@@ -87,7 +88,7 @@ function serializeFinding(row: FindingRow): Record<string, unknown> {
 const findingSelect = {
   id: true, companyId: true, projectId: true, budgetId: true, reviewRunId: true, budgetItemId: true, entityLinkId: true, evidenceId: true,
   findingType: true, status: true, severity: true, priority: true, confidence: true, score: true, potentialImpact: true, ruleKey: true, discipline: true, baseSnapshotId: true,
-  comparisonJson: true, humanReviewRequired: true, automaticBudgetMutation: true, createdAt: true, updatedAt: true,
+  comparisonJson: true, humanReviewRequired: true, automaticBudgetMutation: true, assignedToId: true, assignedAt: true, createdAt: true, updatedAt: true,
   budgetItem: { select: { id: true, code: true, description: true, unit: true, quantity: true, unitPrice: true, discipline: true, levelId: true } },
   evidence: { select: { id: true, documentVersionId: true, evidenceType: true, originalText: true, normalizedText: true, locationJson: true, value: true, unit: true, extractionMethod: true, confidence: true, sourceHash: true, metadataJson: true, documentVersion: { select: { versionNumber: true, projectDocument: { select: { name: true, originalFileName: true } } } } } },
   entityLink: { select: { id: true, score: true, confidence: true, validationStatus: true, signalsJson: true } },
@@ -107,7 +108,7 @@ export async function listFindings(filters: FindingFilters, client: Client = pri
   }
   if (filters.subbudget !== undefined && (!budgetIds.has(filters.subbudget) || !budgets.some((budget) => budget.id === filters.subbudget && budget.kind === "SUB_BUDGET"))) return { findings: [], page: filters.page, pageSize: filters.pageSize, hasNextPage: false };
   const scopedBudgetIds = filters.subbudget === undefined ? [...budgetIds] : [filters.subbudget];
-  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: { in: scopedBudgetIds }, reviewRunId: run.id, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
+  const where: Prisma.ReviewFindingWhereInput = { companyId: filters.companyId, projectId: run.projectId, budgetId: { in: scopedBudgetIds }, reviewRunId: run.id, assignedToId: filters.assignedToId === undefined ? undefined : filters.assignedToId, status: filters.status, findingType: filters.findingType, severity: filters.severity, confidence: filters.confidence, discipline: filters.discipline, ...(filters.priority === undefined ? {} : { priority: { gte: filters.priority } }), ...(filters.document === undefined ? {} : { OR: [{ evidenceId: filters.document }, { evidence: { documentVersion: { projectDocumentId: filters.document } } }] }) };
   const rows = await client.reviewFinding.findMany({ where, orderBy: [{ priority: "desc" }, { potentialImpact: "desc" }, { confidence: "desc" }, { budgetItem: { code: "asc" } }, { id: "asc" }], skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize + 1, select: findingSelect });
   return { findings: rows.slice(0, filters.pageSize).map(serializeFinding), page: filters.page, pageSize: filters.pageSize, hasNextPage: rows.length > filters.pageSize };
 }

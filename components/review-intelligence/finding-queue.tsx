@@ -31,6 +31,7 @@ export function FindingQueue({ data, filters, onFilterChange, onOpenFinding }: {
         <TextFilter label="Disciplina" aria="Filtrar por disciplina" value={current.discipline} onChange={(value) => update("discipline", value)} />
         <TextFilter label="Subpresupuesto" aria="Filtrar por subpresupuesto" value={current.subbudget} onChange={(value) => update("subbudget", value)} />
         <TextFilter label="Documento" aria="Filtrar por documento" value={current.document} onChange={(value) => update("document", value)} />
+        <TextFilter label="Responsable" aria="Filtrar por responsable" value={current.assignedToId ?? undefined} onChange={(value) => update("assignedToId", value)} />
       </div>
     </CardHeader>
     <CardContent className="space-y-3">

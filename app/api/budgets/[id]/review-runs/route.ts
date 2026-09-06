@@ -118,7 +118,8 @@ export async function DELETE(request: Request, { params }: Context) {
     await prisma.$transaction(async (transaction) => {
       await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } } });
       await transaction.reviewFinding.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
-      await transaction.reviewAuditEvent.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
+      await transaction.reviewAuditEvent.updateMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId }, data: { reviewRunId: null } });
+      await transaction.reviewAuditEvent.create({ data: { companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, actorUserId: session.user.id, eventType: "REVIEW_HISTORY_CLEARED", payloadJson: { runCount: runIds.length, runIds } } });
       await transaction.reviewRunDocumentVersion.deleteMany({ where: { reviewRunId: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId } });
       await transaction.reviewRun.deleteMany({ where: { id: { in: runIds }, companyId: scope.budget.project.companyId, projectId: scope.budget.projectId, budgetId } });
     });

@@ -129,6 +129,8 @@ export interface FindingView {
   updatedAt: string;
   humanReviewRequired: boolean;
   automaticBudgetMutation: boolean;
+  assignedToId?: string | null;
+  assignedAt?: string | null;
   budgetId?: string;
   budgetItem?: FindingBudgetItemView | null;
   comparison?: FindingComparisonView | null;
@@ -154,4 +156,5 @@ export interface FindingFilterState {
   priority?: number;
   discipline?: string;
   subbudget?: string;
+  assignedToId?: string | null;
 }

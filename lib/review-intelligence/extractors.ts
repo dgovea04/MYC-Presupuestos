@@ -5,6 +5,7 @@ import { extractDigitalPdf } from "@/lib/pdf-import/digital-extraction";
 import { validateDocumentFile, type ReviewDocumentFile } from "./documents";
 import { createOcrAdapter, type OcrAdapter } from "./ocr";
 import type { ConfidenceLevel, ExtractionCoverage, ExtractionMethod } from "./types";
+import { parseReviewCsv } from "./csv";
 
 export type ExtractionInput = {
   file: ReviewDocumentFile;
@@ -34,7 +35,7 @@ export type ExtractionCoverageRecord = { page?: number; worksheet?: string; cove
 export type PdfPageCoverage = ExtractionCoverageRecord & { page: number };
 
 export type ExtractionOutput = {
-  kind: "PDF" | "XLSX";
+  kind: "PDF" | "XLSX" | "CSV";
   sha256: string;
   mimeType: string;
   fileSizeBytes: number;
@@ -52,7 +53,13 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
   if (validated.extension === ".pdf") {
     return extractPdf(input, validated);
   }
+  if (validated.extension === ".csv") return extractCsv(validated);
   return extractXlsx(validated, input.xlsxSheetNames);
+}
+
+function extractCsv(validated: Awaited<ReturnType<typeof validateDocumentFile>>): ExtractionOutput {
+  const parsed = parseReviewCsv(validated.bytes);
+  return { kind: "CSV", sha256: validated.sha256, mimeType: validated.mimeType, fileSizeBytes: validated.fileSizeBytes, items: parsed.rows.map((row) => ({ content: row.values.join("\t"), primary: true, location: { row: row.location.row, range: `A${row.location.row}:${columnToLetters(Math.max(1, row.values.length))}${row.location.row}` }, metadata: { attributes: Object.fromEntries(parsed.headers.map((header, index) => [header, row.values[index] ?? ""])), evidenceType: "OTHER" as const }, extractionMethod: "CSV_CELL_RANGE", confidence: "MEDIUM" })), warnings: parsed.warnings, sheetCount: 1, coverage: [{ worksheet: validated.extension, coverage: "PROCESSED", method: "CSV_CELL_RANGE", confidence: "MEDIUM", warnings: parsed.warnings }] };
 }
 
 async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {

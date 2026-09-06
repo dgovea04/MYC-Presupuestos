@@ -154,9 +154,9 @@ function assertStorageIdentifier(value: string, field: string): void {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error(`${field} contains unsupported characters.`);
 }
 
-function documentExtension(fileName: string): ".pdf" | ".xlsx" {
+function documentExtension(fileName: string): ".pdf" | ".xlsx" | ".csv" {
   const extension = path.extname(fileName).toLowerCase();
-  if (extension !== ".pdf" && extension !== ".xlsx") throw new Error("Review document storage only accepts PDF and XLSX originals.");
+  if (extension !== ".pdf" && extension !== ".xlsx" && extension !== ".csv") throw new Error("Review document storage only accepts PDF, XLSX, and CSV originals.");
   return extension;
 }
 
@@ -179,6 +179,6 @@ function storageKeySegments(storageKey: string): string[] {
   assertStorageIdentifier(segments[3], "storage key projectId");
   assertStorageIdentifier(segments[5], "storage key documentId");
   if (!/^[1-9]\d*$/.test(segments[7])) throw new Error("Storage key version must be a positive whole number.");
-  if (segments[8] !== "original.pdf" && segments[8] !== "original.xlsx") throw new Error("Storage key original file name is invalid.");
+  if (segments[8] !== "original.pdf" && segments[8] !== "original.xlsx" && segments[8] !== "original.csv") throw new Error("Storage key original file name is invalid.");
   return segments;
 }

@@ -20,6 +20,8 @@ export function FindingDetail({ finding: selected, canResolve, onChanged, runSta
   const [version, setVersion] = useState("");
   const [reconfirm, setReconfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assigneeId, setAssigneeId] = useState(selected?.assignedToId ?? "");
+  const [assigning, setAssigning] = useState(false);
 
   if (!selected) return <Card><CardContent className="p-6">Selecciona un hallazgo para ver comparación, evidencia y acciones.</CardContent></Card>;
   const finding = selected;
@@ -42,6 +44,12 @@ export function FindingDetail({ finding: selected, canResolve, onChanged, runSta
     if (!response.ok) { setError(await responseError(response, "No se pudo actualizar el vínculo.")); return; }
     onChanged();
   }
+  async function saveAssignment() {
+    setAssigning(true); setError(null);
+    const response = await fetch(`/api/review-findings/${finding.id}/assignment`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assigneeId: assigneeId.trim() || null, expectedUpdatedAt: finding.updatedAt }) });
+    if (!response.ok) setError(await responseError(response, "No se pudo asignar el hallazgo.")); else onChanged();
+    setAssigning(false);
+  }
 
   return <Card data-testid="finding-detail">
     <CardHeader><CardTitle>{finding.budgetItem?.code ?? "Hallazgo"}</CardTitle>{error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}</CardHeader>
@@ -58,6 +66,7 @@ export function FindingDetail({ finding: selected, canResolve, onChanged, runSta
         </div>
       </section>
       {finding.decisionHistory.length ? <section className="space-y-2"><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Historial de decisiones</h4><ul className="space-y-2 text-xs text-[var(--app-text-muted)]">{finding.decisionHistory.map((decision) => <li key={decision.id} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2"><span className="font-medium text-[var(--app-text-strong)]">{reviewLabel(resolutionLabels, decision.resolution)}</span>{decision.note ? `: ${decision.note}` : ""}</li>)}</ul></section> : null}
+      {canResolve ? <section aria-label="Asignación del hallazgo" className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4"><div><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Responsable</h4><p className="mt-1 text-xs text-[var(--app-text-muted)]">Usa el ID de un miembro del proyecto. Déjalo vacío para desasignar.</p></div><div className="flex flex-col gap-2 sm:flex-row"><input aria-label="ID del responsable" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-2.5 text-sm" placeholder="ID de usuario" /><Button type="button" size="sm" variant="outline" onClick={() => void saveAssignment()} loading={assigning}>Guardar responsable</Button></div></section> : null}
       <section aria-label="Revisión y decisión" className="space-y-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
         <div><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Decisión de revisión</h4><p className="mt-1 text-xs text-[var(--app-text-muted)]">Registra el criterio aplicado al hallazgo.</p></div>
         {stale ? <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><input type="checkbox" checked={reconfirm} onChange={(event) => setReconfirm(event.target.checked)} className="mt-0.5" />Confirmo el resultado obsoleto antes de decidir.</label> : null}

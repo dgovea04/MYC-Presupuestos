@@ -646,6 +646,7 @@ model User {
   teamMemberships               WorkspaceTeamMember[]
   reviewRunsCreated             ReviewRun[]                    @relation("ReviewRunCreatedBy")
   findingDecisions              FindingDecision[]
+  assignedReviewFindings        ReviewFinding[]                @relation("ReviewFindingAssignee")
   reviewAuditEvents             ReviewAuditEvent[]
   projectDocumentsCreated      ProjectDocument[]
   entityLinksValidated         EntityLink[]                 @relation("EntityLinkValidator")
@@ -3231,6 +3232,8 @@ model ReviewFinding {
   comparisonJson          Json
   humanReviewRequired     Boolean            @default(true)
   automaticBudgetMutation Boolean            @default(false)
+  assignedToId             String?
+  assignedAt               DateTime?
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
   company                 Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -3242,12 +3245,14 @@ model ReviewFinding {
   evidence                ReviewEvidence     @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   baseSnapshot           BudgetVersionSnapshot? @relation("ReviewFindingBaseSnapshot", fields: [baseSnapshotId], references: [id], onDelete: Restrict)
   decisions               FindingDecision[]
+  assignedTo              User?              @relation("ReviewFindingAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([companyId, projectId, status])
   @@index([reviewRunId, findingType, priority])
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
   @@index([entityLinkId])
+  @@index([companyId, projectId, assignedToId])
   @@unique([id, companyId, projectId])
   @@map("ReviewFinding")
 }

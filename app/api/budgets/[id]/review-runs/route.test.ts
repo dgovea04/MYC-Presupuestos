@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
   reviewEvidenceFindMany: vi.fn(),
   reviewFindingDeleteMany: vi.fn(),
   findingDecisionDeleteMany: vi.fn(),
-  reviewAuditEventDeleteMany: vi.fn(),
+  reviewAuditEventUpdateMany: vi.fn(),
+  reviewAuditEventCreate: vi.fn(),
   reviewRunDocumentVersionDeleteMany: vi.fn(),
   reviewRunDeleteMany: vi.fn(),
   transaction: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {
   reviewEvidence: { findMany: mocks.reviewEvidenceFindMany },
   reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
   findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
-  reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+  reviewAuditEvent: { updateMany: mocks.reviewAuditEventUpdateMany, create: mocks.reviewAuditEventCreate },
   reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
   $transaction: mocks.transaction,
 } }));
@@ -62,7 +63,7 @@ describe("review runs API", () => {
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback({
       reviewFinding: { deleteMany: mocks.reviewFindingDeleteMany },
       findingDecision: { deleteMany: mocks.findingDecisionDeleteMany },
-      reviewAuditEvent: { deleteMany: mocks.reviewAuditEventDeleteMany },
+      reviewAuditEvent: { updateMany: mocks.reviewAuditEventUpdateMany, create: mocks.reviewAuditEventCreate },
       reviewRunDocumentVersion: { deleteMany: mocks.reviewRunDocumentVersionDeleteMany },
       reviewRun: { deleteMany: mocks.reviewRunDeleteMany },
     }));
@@ -137,6 +138,8 @@ describe("review runs API", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ deletedRuns: 2 });
     expect(mocks.reviewFindingDeleteMany).toHaveBeenCalledWith({ where: { reviewRunId: { in: ["run-2", "run-1"] }, companyId: "company-1", projectId: "project-1" } });
+    expect(mocks.reviewAuditEventUpdateMany).toHaveBeenCalledWith({ where: { reviewRunId: { in: ["run-2", "run-1"] }, companyId: "company-1", projectId: "project-1" }, data: { reviewRunId: null } });
+    expect(mocks.reviewAuditEventCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ eventType: "REVIEW_HISTORY_CLEARED", payloadJson: { runCount: 2, runIds: ["run-2", "run-1"] } }) });
     expect(mocks.reviewRunDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["run-2", "run-1"] }, companyId: "company-1", projectId: "project-1", budgetId: "budget-1" } });
   });
 

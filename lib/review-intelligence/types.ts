@@ -63,7 +63,7 @@ export type ConfidenceLevel = (typeof confidenceLevels)[number];
 export const extractionCoverages = ["PROCESSED", "OCR_REQUIRED", "FAILED"] as const;
 export type ExtractionCoverage = (typeof extractionCoverages)[number];
 
-export const extractionMethods = ["PDF_TEXT", "XLSX_CELL_RANGE", "OCR_PROVIDER", "OCR_UNAVAILABLE"] as const;
+export const extractionMethods = ["PDF_TEXT", "XLSX_CELL_RANGE", "CSV_CELL_RANGE", "OCR_PROVIDER", "OCR_UNAVAILABLE"] as const;
 export type ExtractionMethod = (typeof extractionMethods)[number];
 
 export interface ExtractionCoverageEntry {
