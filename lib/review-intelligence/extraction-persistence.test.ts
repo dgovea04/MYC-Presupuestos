@@ -53,4 +53,23 @@ describe("review extraction persistence", () => {
     expect(client.reviewEvidence.upsert).toHaveBeenCalledOnce();
     expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionCoverage: [{ page: 1, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }, { page: 2, coverage: "PROCESSED", method: "OCR_PROVIDER", confidence: "HIGH", warnings: [] }] }) }));
   });
+
+  it("rejects service-level selectors outside persisted coverage before extraction", async () => {
+    vi.mocked(extractDocument).mockClear();
+    const client = { reviewEvidence: { upsert: vi.fn() }, documentVersion: { update: vi.fn() } };
+
+    await expect(reprocessDocumentCoverage({ file: new File(["pdf"], "file.pdf", { type: "application/pdf" }), version: { id: "version-1", sha256: "hash", extractionCoverage: [{ page: 2, coverage: "OCR_REQUIRED" }] }, companyId: "company-1", projectId: "project-1", pages: [9] }, client)).rejects.toThrow("outside persisted coverage");
+    expect(extractDocument).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful selected PDF page completed despite an informative coordinate caveat", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "PDF", sha256: "hash", mimeType: "application/pdf", fileSizeBytes: 3, items: [], coverage: [{ page: 2, coverage: "PROCESSED", method: "PDF_TEXT", confidence: "MEDIUM", warnings: [] }], warnings: ["El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible."], pageCount: 3 });
+    const client = { reviewEvidence: { upsert: vi.fn(), }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    const result = await reprocessDocumentCoverage({ file: new File(["pdf"], "file.pdf", { type: "application/pdf" }), version: { id: "version-1", sha256: "hash", extractionCoverage: [{ page: 2, coverage: "OCR_REQUIRED" }] }, companyId: "company-1", projectId: "project-1", pages: [2] }, client);
+
+    expect(result.partial).toBe(false);
+    expect(result.warnings).toContain("El conteo de páginas PDF puede ser estimado; la ubicación exacta no está disponible.");
+    expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionStatus: "COMPLETED" }) }));
+  });
 });

@@ -18,12 +18,14 @@ export async function reprocessDocumentCoverage(
   client: ExtractionClient,
 ): Promise<{ coverage: CoverageEntry[]; warnings: string[]; partial: boolean }> {
   if ((input.pages?.length ?? 0) + (input.sheetNames?.length ?? 0) === 0) throw new Error("Select at least one page or worksheet to reprocess.");
+  validateReprocessSelection(input);
   const extracted = await extractDocument({ file: input.file, pdfPages: input.pages, xlsxSheetNames: input.sheetNames, ocr: { adapter: input.ocrAdapter, companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id } });
   await persistEvidence(extracted, input.version, input.companyId, input.projectId, client);
   const coverage = mergeCoverage(coverageEntries(input.version.extractionCoverage), extracted.coverage ?? worksheetCoverage(extracted));
   const warnings = uniqueWarnings([...warningEntries(input.version.extractionWarnings), ...extracted.warnings]);
-  await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: warnings.length > 0 ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: warnings, extractionCoverage: coverage, extractionMethod: extracted.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE"), extractionConfidence: extracted.extractionConfidence ?? "MEDIUM" } });
-  return { coverage, warnings, partial: warnings.length > 0 };
+  const partial = warnings.some((warning) => !isInformativeWarning(warning));
+  await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: partial ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: warnings, extractionCoverage: coverage, extractionMethod: extracted.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE"), extractionConfidence: extracted.extractionConfidence ?? "MEDIUM" } });
+  return { coverage, warnings, partial };
 }
 
 export async function extractAndPersistDocumentVersion(input: { file: ReviewDocumentFile; version: PersistedVersion; companyId: string; projectId: string; ocrAdapter?: OcrAdapter }, client: ExtractionClient): Promise<ExtractionOutput> {
@@ -63,5 +65,12 @@ async function persistEvidence(extracted: ExtractionOutput, version: PersistedVe
 function coverageEntries(value: unknown): CoverageEntry[] { return Array.isArray(value) ? value.flatMap((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry) ? [entry as CoverageEntry] : []) : []; }
 function warningEntries(value: unknown): string[] { return Array.isArray(value) ? value.filter((warning): warning is string => typeof warning === "string") : []; }
 function uniqueWarnings(warnings: string[]): string[] { return [...new Set(warnings)]; }
+function validateReprocessSelection(input: { pages?: number[]; sheetNames?: string[]; version: ReprocessableVersion }): void {
+  if (input.pages?.length && input.sheetNames?.length) throw new Error("Select pages or worksheets, but not both.");
+  const coverage = coverageEntries(input.version.extractionCoverage);
+  if (input.pages?.some((page) => !coverage.some((entry) => entry.page === page))) throw new Error("Requested page is outside persisted coverage.");
+  if (input.sheetNames?.some((sheet) => !coverage.some((entry) => entry.worksheet === sheet))) throw new Error("Requested worksheet is outside persisted coverage.");
+}
+function isInformativeWarning(warning: string): boolean { return /conteo de .*p.ginas PDF.*ubicaci.n exacta/i.test(warning); }
 function worksheetCoverage(extracted: ExtractionOutput): CoverageEntry[] { return extracted.kind === "XLSX" ? [...new Set(extracted.items.map((item) => item.location?.sheet).filter((sheet): sheet is string => typeof sheet === "string"))].map((worksheet) => ({ worksheet, coverage: "PROCESSED" })) : []; }
 function mergeCoverage(existing: CoverageEntry[], updated: Array<CoverageEntry | PdfPageCoverage>): CoverageEntry[] { const merged = new Map<string, CoverageEntry>(); for (const entry of [...existing, ...updated]) { const worksheet = "worksheet" in entry ? entry.worksheet : undefined; const key = typeof entry.page === "number" ? `page:${entry.page}` : typeof worksheet === "string" ? `worksheet:${worksheet}` : ""; if (key) merged.set(key, { ...entry, ...(worksheet ? { worksheet } : {}) }); } return [...merged.values()]; }
