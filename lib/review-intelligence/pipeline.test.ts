@@ -128,6 +128,39 @@ describe("runReviewJob", () => {
     expect(database.runs[0]).toMatchObject({ status: "FAILED", failureCode: "STAGE_TIMEOUT" });
   });
 
+  it("clears the losing stage timer after normal completion", async () => {
+    const database = client();
+    let cancelledTimers = 0;
+    await runReviewJob({
+      ...input(),
+      jobRuntime: {
+        createTimeout: () => ({ promise: new Promise<void>(() => undefined), cancel: () => { cancelledTimers += 1; } }),
+      },
+    }, database);
+
+    expect(cancelledTimers).toBe(16);
+  });
+
+  it("aborts a timed-out stage so its cooperative callback cannot continue", async () => {
+    const database = client();
+    let observedSignal: AbortSignal | undefined;
+    let resolveTimeout: (() => void) | undefined;
+    await expect(runReviewJob({
+      ...input(),
+      jobPolicy: { maxAttempts: 1, stageTimeoutMs: 10 },
+      jobRuntime: {
+        createTimeout: () => ({ promise: new Promise<void>((resolve) => { resolveTimeout = resolve; }), cancel: () => undefined }),
+      },
+      shouldCancel: (signal) => {
+        observedSignal = signal;
+        resolveTimeout?.();
+        return new Promise<boolean>(() => undefined);
+      },
+    }, database)).rejects.toThrow("timed out");
+
+    expect(observedSignal?.aborted).toBe(true);
+  });
+
   it("uses the injected clock for leases and stage correlation ids", async () => {
     const database = client();
     const timestamp = new Date("2020-01-02T03:04:05.000Z");
