@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { resolveBudgetOwnership } from "@/lib/collaboration/authorization";
-import { retrievePrivateExamples } from "@/lib/private-learning/retrieval";
+import { recordPrivateLearningUsage, retrievePrivateExamples } from "@/lib/private-learning/retrieval";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAuthSession();
@@ -12,6 +12,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const url = new URL(request.url);
     const signalType = url.searchParams.get("signalType") ?? "EXPLICIT_CORRECTION";
     const suggestions = await retrievePrivateExamples({ companyId, signalType, normalizedInput: {}, schemaVersion: url.searchParams.get("schemaVersion") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 10) });
+    const requestId = request.headers.get("x-request-id")?.trim() || `${budgetId}:${signalType}:${Date.now()}`;
+    await Promise.all(suggestions.map((suggestion) => recordPrivateLearningUsage({ companyId, exampleId: suggestion.id, budgetId, requestId })));
     return NextResponse.json({ suggestions, guardrail: "Las sugerencias privadas no modifican automáticamente el presupuesto." });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudieron recuperar sugerencias" }, { status: 403 }); }
 }
