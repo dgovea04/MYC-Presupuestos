@@ -22,6 +22,7 @@
     "prisma:normalize-resource-iu": "node ./node_modules/tsx/dist/cli.mjs prisma/normalize-resource-iu-codes.ts",
     "prisma:repair-companies": "node ./node_modules/tsx/dist/cli.mjs prisma/repair-company-duplicates.ts",
     "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
+    "seed:e2e:collaboration": "node ./node_modules/tsx/dist/cli.mjs scripts/seed-collaboration-e2e.ts",
     "test:e2e:install": "node ./node_modules/@playwright/test/cli.js install chromium",
     "test:e2e:report": "node ./node_modules/@playwright/test/cli.js show-report",
     "stripe:version": ".\\.tools\\stripe\\stripe.exe version",

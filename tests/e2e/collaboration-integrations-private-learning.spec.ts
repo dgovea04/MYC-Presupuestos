@@ -18,9 +18,9 @@ test.describe("collaboration, controlled integrations and private learning", () 
     await signIn(page);
     const budgetId = process.env.E2E_COLLABORATION_BUDGET_ID as string;
     const comments = await page.request.get(`/api/budgets/${budgetId}/collaboration/comments?entityType=BUDGET&entityId=${budgetId}`);
-    expect([200, 403]).toContain(comments.status());
+    expect(comments.status()).toBe(200);
     const suggestions = await page.request.get(`/api/budgets/${budgetId}/private-learning/suggestions?signalType=EXPLICIT_CORRECTION`);
-    expect([200, 403]).toContain(suggestions.status());
+    expect(suggestions.status()).toBe(200);
     const invalid = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions`, { data: { adapter: "xlsx-csv", payload: "not-json", requestId: `e2e-invalid-${Date.now()}` } });
     expect([400, 403]).toContain(invalid.status());
   });
@@ -46,12 +46,14 @@ test.describe("collaboration, controlled integrations and private learning", () 
     expect(stale.status()).toBe(409);
   });
 
-  test("runs staged preview, explicit confirmation and rollback for an empty synthetic integration", async ({ page }) => {
+  test("runs staged preview, explicit confirmation and rollback against a real budget item", async ({ page }) => {
     test.skip(!process.env.E2E_COLLABORATION_BUDGET_ID, "Requires a synthetic authenticated budget fixture");
     await signIn(page);
     const budgetId = process.env.E2E_COLLABORATION_BUDGET_ID as string;
     const requestId = `e2e-session-${Date.now()}`;
-    const created = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions`, { data: { adapter: "xlsx-csv", contractVersion: "1", payload: JSON.stringify({ updates: [] }), requestId } });
+    const itemId = process.env.E2E_COLLABORATION_BUDGET_ITEM_ID;
+    expect(itemId).toBeTruthy();
+    const created = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions`, { data: { adapter: "xlsx-csv", contractVersion: "1", payload: JSON.stringify({ updates: [{ id: itemId, description: "Ítem E2E actualizado", quantity: "2", unitPrice: "12.50" }] }), requestId } });
     expect(created.status()).toBe(201);
     const createdBody = await created.json() as { session: { id: string } };
     const sessionId = createdBody.session.id;
@@ -61,7 +63,22 @@ test.describe("collaboration, controlled integrations and private learning", () 
     const preview = await previewResponse.json() as { status: string; confirmationToken: string; expectedVersion: number };
     expect(preview.status).toBe("PREVIEW_READY");
     const applied = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/confirm`, { data: { confirmationToken: preview.confirmationToken, expectedVersion: preview.expectedVersion, requestId: `${requestId}:apply` } });
-    expect(applied.status()).toBe(200);
+    expect(applied.status(), await applied.text()).toBe(200);
     expect((await page.request.post(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/rollback`, { data: { requestId: `${requestId}:rollback` } })).status()).toBe(200);
+  });
+
+  test("opens and closes the authenticated SSE stream without reconnecting after abort", async ({ page }) => {
+    test.skip(!process.env.E2E_COLLABORATION_BUDGET_ID, "Requires a real authenticated budget fixture");
+    await signIn(page);
+    const budgetId = process.env.E2E_COLLABORATION_BUDGET_ID as string;
+    const result = await page.evaluate(async (id) => {
+      const controller = new AbortController();
+      const response = await fetch(`/api/budgets/${id}/collaboration/stream`, { headers: { Accept: "text/event-stream" }, signal: controller.signal });
+      const reader = response.body?.getReader();
+      const first = await reader?.read();
+      controller.abort();
+      return { status: response.status, hasPreamble: Boolean(first?.value && first.value.length > 0) };
+    }, budgetId);
+    expect(result).toEqual({ status: 200, hasPreamble: true });
   });
 });

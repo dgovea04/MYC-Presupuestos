@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { IntegrationSessionStatus } from "./types";
 import { assertValidIntegrationTransition } from "./types";
 import { getIntegrationAdapter } from "./registry";
 import { validateStagedData } from "./staging";
 import type { StagedIntegrationData } from "./types";
+import { buildIntegrationUpdates } from "./mapping";
 import "./adapters";
 
 export type IntegrationSessionView = { id: string; companyId: string; projectId: string; budgetId: string; adapter: string; status: IntegrationSessionStatus; payloadHash: string; requestId: string; confirmationToken: string | null; createdAt: string; updatedAt: string };
@@ -41,15 +43,19 @@ export async function stageIntegrationSession(input: { sessionId: string; compan
       : payload;
   const staged = await adapter.stage(external);
   const validated = await validateStagedData(staged as StagedIntegrationData);
-  const preview = { rows: validated.rows.map((row) => ({ externalKey: row.externalKey, action: row.internalCandidateId ? "UPDATE" : "CREATE", description: row.values.description, provenance: row.provenance, conflict: validated.conflicts.find((conflict) => conflict.externalKey === row.externalKey)?.message })) };
+  const mapping = buildIntegrationUpdates(validated.rows);
+  const mappingConflicts = mapping.unresolved.map((item) => ({ externalKey: item.externalKey, kind: item.reason, message: "No existe una partida interna compatible para aplicar esta fila." }));
+  const finalData: StagedIntegrationData = { ...validated, conflicts: [...validated.conflicts, ...mappingConflicts], counts: { total: validated.rows.length, valid: Math.max(0, validated.rows.length - validated.conflicts.length - mappingConflicts.length), conflicts: validated.conflicts.length + mappingConflicts.length } };
+  const preview = { rows: finalData.rows.map((row) => ({ externalKey: row.externalKey, action: row.internalCandidateId ? "UPDATE" : "CREATE", description: row.values.description, provenance: row.provenance, conflict: finalData.conflicts.find((conflict) => conflict.externalKey === row.externalKey)?.message })) };
   await prisma.$transaction(async (tx) => {
     await tx.integrationConflict.deleteMany({ where: { sessionId: session.id } });
     await tx.integrationMapping.deleteMany({ where: { sessionId: session.id } });
-    if (validated.conflicts.length) await tx.integrationConflict.createMany({ data: validated.conflicts.map((conflict) => ({ sessionId: session.id, externalKey: conflict.externalKey, kind: conflict.kind, message: conflict.message, details: conflict.details })) });
-    if (validated.rows.length) await tx.integrationMapping.createMany({ data: validated.rows.map((row) => ({ sessionId: session.id, externalKey: row.externalKey, internalId: row.internalCandidateId, mappingType: row.internalCandidateId ? "CANDIDATE" : "UNRESOLVED", metadata: row.provenance })) });
-    await tx.integrationSession.update({ where: { id: session.id }, data: { stagedPayload: { ...payload, staged: validated } as object, counts: validated.counts, preview } });
+    if (finalData.conflicts.length) await tx.integrationConflict.createMany({ data: finalData.conflicts.map((conflict) => ({ sessionId: session.id, externalKey: conflict.externalKey, kind: conflict.kind, message: conflict.message, ...(conflict.details ? { details: conflict.details as Prisma.InputJsonValue } : {}) })) });
+    if (finalData.rows.length) await tx.integrationMapping.createMany({ data: finalData.rows.map((row) => ({ sessionId: session.id, externalKey: row.externalKey, internalId: row.internalCandidateId, mappingType: row.internalCandidateId ? "CANDIDATE" : "UNRESOLVED", metadata: row.provenance })) });
+    const explicitUpdates = Array.isArray(payload.updates) ? payload.updates : [];
+    await tx.integrationSession.update({ where: { id: session.id }, data: { stagedPayload: { ...payload, updates: [...explicitUpdates, ...mapping.updates], staged: finalData } as object, counts: finalData.counts, preview } });
   });
-  return validated;
+  return finalData;
 }
 
 function serializeSession(session: { id: string; companyId: string; projectId: string; budgetId: string; adapter: string; status: string; payloadHash: string; requestId: string; confirmationToken: string | null; createdAt: Date; updatedAt: Date }): IntegrationSessionView {

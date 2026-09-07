@@ -9,4 +9,4 @@ CREATE TABLE "private_learning_policies" (
   CONSTRAINT "private_learning_policies_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "private_learning_policies_companyId_key" ON "private_learning_policies"("companyId");
-ALTER TABLE "private_learning_policies" ADD CONSTRAINT "private_learning_policies_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "private_learning_policies" ADD CONSTRAINT "private_learning_policies_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;

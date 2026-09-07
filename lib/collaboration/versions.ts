@@ -131,8 +131,12 @@ export async function restoreBudgetVersionSnapshot(
   versionId: string,
   budgetId: string,
   userId: string,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<BudgetVersionDetailRecord> {
-  const detail = await getBudgetVersionSnapshot(versionId, budgetId, userId);
+  await resolveBudgetOwnership(budgetId, userId);
+  const version = await client.budgetVersionSnapshot.findFirst({ where: { id: versionId, budgetId }, include: { createdBy: { select: { name: true } } } });
+  if (!version) throw new Error("Version no encontrada");
+  const detail = serializeVersionWithSnapshot(version as unknown as RawVersion);
 
   // Create a new version before restoring (as a safety net)
   await createBudgetVersionSnapshot(
@@ -140,6 +144,7 @@ export async function restoreBudgetVersionSnapshot(
     userId,
     `Auto-guardado antes de restaurar v${detail.versionNumber}`,
     "Restauracion de version",
+    client,
   );
 
   const snapshot = detail.snapshot as {
@@ -197,7 +202,7 @@ export async function restoreBudgetVersionSnapshot(
   };
 
   // Restore budget header
-  await prisma.budget.update({
+  await client.budget.update({
     where: { id: budgetId },
     data: {
       name: snapshot.name,
@@ -214,13 +219,13 @@ export async function restoreBudgetVersionSnapshot(
   });
 
   // Delete current levels and items
-  await prisma.budgetItem.deleteMany({ where: { budgetId } });
-  await prisma.budgetLevel.deleteMany({ where: { budgetId } });
+  await client.budgetItem.deleteMany({ where: { budgetId } });
+  await client.budgetLevel.deleteMany({ where: { budgetId } });
 
   // Re-create levels from snapshot
   if (snapshot.levels && snapshot.levels.length > 0) {
     for (const level of snapshot.levels) {
-      await prisma.budgetLevel.create({
+      await client.budgetLevel.create({
         data: {
           id: level.id,
           budgetId,
@@ -237,7 +242,7 @@ export async function restoreBudgetVersionSnapshot(
   // Re-create items from snapshot
   if (snapshot.items && snapshot.items.length > 0) {
     for (const item of snapshot.items) {
-      await prisma.budgetItem.create({
+      await client.budgetItem.create({
         data: {
           id: item.id,
           budgetId,
@@ -253,7 +258,7 @@ export async function restoreBudgetVersionSnapshot(
       });
 
       if (item.apu) {
-        await prisma.apu.create({
+        await client.apu.create({
           data: {
             id: item.apu.id,
             budgetItemId: item.id,
@@ -266,7 +271,7 @@ export async function restoreBudgetVersionSnapshot(
 
         if (item.apu.resources && item.apu.resources.length > 0) {
           for (const resource of item.apu.resources) {
-            await prisma.apuResource.create({
+            await client.apuResource.create({
               data: {
                 id: resource.id,
                 apuId: item.apu.id,
@@ -292,6 +297,7 @@ export async function restoreBudgetVersionSnapshot(
     userId,
     `Restaurado de v${detail.versionNumber}`,
     "Restauracion completada",
+    client,
   );
 
   publishBudgetEvent(budgetId, "version.restored", {
@@ -309,7 +315,7 @@ export async function restoreBudgetVersionSnapshot(
 function serializeBudgetToPlainObject(budget: Record<string, unknown>): Record<string, unknown> {
   function serialize(value: unknown): unknown {
     if (value === null || value === undefined) return value;
-    if (typeof value === "object" && "constructor" in value && (value as { constructor: { name: string } }).constructor.name === "Decimal") {
+    if (typeof value === "object" && "toNumber" in value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
       return Number((value as { toNumber: () => number }).toNumber());
     }
     if (value instanceof Date) return value.toISOString();

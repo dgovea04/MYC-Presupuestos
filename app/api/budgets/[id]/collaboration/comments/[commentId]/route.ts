@@ -27,9 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Solo se permite resolver o reabrir comentarios" }, { status: 400 });
   } catch (error) {
     console.error("PATCH comment failed", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo actualizar el comentario" },
-      { status: getWorkspaceFeatureAccessStatus(error) },
-    );
+    const message = error instanceof Error ? error.message : "No se pudo actualizar el comentario";
+    return NextResponse.json({ error: message }, { status: message.includes("cambi") ? 409 : getWorkspaceFeatureAccessStatus(error) });
   }
 }
