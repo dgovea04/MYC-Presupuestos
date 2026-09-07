@@ -3,7 +3,7 @@ import { getPrivateLearningPolicy } from "./policy";
 import type { JsonObject, PrivateLearningSuggestion } from "./types";
 
 export async function retrievePrivateExamples(input: { companyId: string; signalType: string; normalizedInput: JsonObject; schemaVersion?: string; limit?: number }): Promise<PrivateLearningSuggestion[]> {
-  if (!getPrivateLearningPolicy(input.companyId).enabled) return [];
+  if (!(await getPrivateLearningPolicy(input.companyId)).enabled) return [];
   const rows = await prisma.privateLearningExample.findMany({ where: { companyId: input.companyId, signalType: input.signalType, status: "ACTIVE", expiresAt: { gt: new Date() }, ...(input.schemaVersion ? { schemaVersion: input.schemaVersion } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: Math.min(input.limit ?? 10, 50) });
   return rows.map((row, index) => ({ id: row.id, companyId: row.companyId, sourceType: row.sourceType, sourceId: row.sourceId, signalType: row.signalType, contentHash: row.contentHash, schemaVersion: row.schemaVersion, status: row.status, expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString(), confidence: Math.max(0.5, 1 - index * 0.05), provenance: { sourceType: row.sourceType, sourceId: row.sourceId, createdAt: row.createdAt.toISOString() }, exampleApplied: false }));
 }

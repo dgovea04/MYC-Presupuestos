@@ -4,7 +4,7 @@ import { privateLearningContentHash, sanitizePrivateLearningPayload } from "./sa
 import type { JsonObject, PrivateLearningExampleView } from "./types";
 
 export async function captureConfirmedExample(input: { companyId: string; createdById: string; sourceType: string; sourceId: string; signalType: string; inputJson: JsonObject; resultJson: JsonObject; schemaVersion: string; confirmed: boolean }): Promise<PrivateLearningExampleView | null> {
-  const policy = getPrivateLearningPolicy(input.companyId);
+  const policy = await getPrivateLearningPolicy(input.companyId);
   if (!policy.enabled || !input.confirmed) return null;
   const inputJson = sanitizePrivateLearningPayload(input.inputJson);
   const resultJson = sanitizePrivateLearningPayload(input.resultJson);
