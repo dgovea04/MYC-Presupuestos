@@ -240,6 +240,30 @@ enum ConfidenceLevel {
   HIGH
 }
 
+enum KnowledgeScope {
+  GLOBAL
+  COMPANY
+  PROJECT
+  USER
+}
+
+enum KnowledgeStatus {
+  OBSERVED
+  CONFIRMED
+  VERIFIED
+  CANONICAL
+  DEPRECATED
+  REJECTED
+}
+
+enum KnowledgeConfidence {
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
 enum ReviewDocumentCategory {
   PLAN
   TECHNICAL_SPECIFICATION
@@ -2765,6 +2789,280 @@ model ApuResource {
   @@index([apuId])
   @@index([resourceId])
   @@index([catalogPartidaId])
+}
+
+model KnowledgeSource {
+  id          String   @id @default(cuid())
+  sourceType  String
+  label       String
+  privacy     String   @default("PRIVATE")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  evidences   KnowledgeEvidence[]
+  events      KnowledgeEvent[]
+  priceObservations PriceObservation[]
+  yieldObservations YieldObservation[]
+
+  @@index([sourceType, createdAt(sort: Desc)])
+  @@map("knowledge_sources")
+}
+
+model KnowledgeEvidence {
+  id          String   @id @default(cuid())
+  sourceId    String
+  documentId  String?
+  fileName    String?
+  page        String?
+  sheet       String?
+  cellRange   String?
+  url         String?
+  quote       String?  @db.Text
+  checksum    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  source      KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  events      KnowledgeEvent[]
+  priceObservations PriceObservation[]
+  yieldObservations YieldObservation[]
+
+  @@index([sourceId, createdAt(sort: Desc)])
+  @@index([checksum])
+  @@map("knowledge_evidence")
+}
+
+model KnowledgeEvent {
+  id              String          @id @default(cuid())
+  eventType       String
+  scope           KnowledgeScope
+  companyId       String?
+  projectId       String?
+  userId          String?
+  entityType      String
+  entityId        String
+  previousValue   Json?
+  newValue        Json?
+  sourceType      String
+  sourceId        String?
+  evidenceId      String?
+  metadata        Json?
+  idempotencyKey  String          @unique
+  payloadHash     String
+  createdAt       DateTime        @default(now())
+  source          KnowledgeSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([scope, companyId, projectId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@map("knowledge_events")
+}
+
+model CanonicalItem {
+  id              String          @id @default(cuid())
+  name            String
+  normalizedName  String
+  canonicalUnit   String?
+  classification  String?
+  specialty       String?
+  scope           KnowledgeScope  @default(GLOBAL)
+  companyId       String?
+  status          KnowledgeStatus @default(OBSERVED)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  aliases         CanonicalItemAlias[]
+
+  @@index([normalizedName])
+  @@index([scope, companyId, normalizedName])
+  @@map("knowledge_canonical_items")
+}
+
+model CanonicalItemAlias {
+  id              String        @id @default(cuid())
+  canonicalItemId String
+  alias           String
+  normalizedAlias String
+  confirmed       Boolean       @default(false)
+  canonicalItem   CanonicalItem @relation(fields: [canonicalItemId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalItemId, normalizedAlias])
+  @@index([normalizedAlias])
+  @@map("knowledge_canonical_item_aliases")
+}
+
+model CanonicalResource {
+  id              String          @id @default(cuid())
+  name            String
+  normalizedName  String
+  category        String
+  canonicalUnit   String?
+  scope           KnowledgeScope  @default(GLOBAL)
+  companyId       String?
+  status          KnowledgeStatus @default(OBSERVED)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  aliases         CanonicalResourceAlias[]
+
+  @@index([normalizedName])
+  @@index([scope, companyId, normalizedName])
+  @@map("knowledge_canonical_resources")
+}
+
+model CanonicalResourceAlias {
+  id                 String             @id @default(cuid())
+  canonicalResourceId String
+  alias              String
+  normalizedAlias    String
+  confirmed          Boolean            @default(false)
+  canonicalResource  CanonicalResource  @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalResourceId, normalizedAlias])
+  @@index([normalizedAlias])
+  @@map("knowledge_canonical_resource_aliases")
+}
+
+model KnowledgeApuVersion {
+  id              String          @id @default(cuid())
+  apuId           String
+  versionNumber   Int
+  name            String
+  unit            String
+  performance     Decimal         @db.Decimal(18, 4)
+  contentHash     String
+  scope           KnowledgeScope
+  companyId       String?
+  projectId       String?
+  sourceId        String?
+  evidenceId      String?
+  createdAt       DateTime        @default(now())
+  resources       KnowledgeApuResource[]
+
+  @@unique([apuId, versionNumber])
+  @@index([apuId, createdAt(sort: Desc)])
+  @@index([scope, companyId, projectId])
+  @@map("knowledge_apu_versions")
+}
+
+model KnowledgeApuResource {
+  id            String            @id @default(cuid())
+  apuVersionId  String
+  resourceId    String?
+  description   String
+  unit          String
+  quantity      Decimal           @db.Decimal(18, 4)
+  unitPrice     Decimal           @db.Decimal(18, 4)
+  resourceType  String
+  sortOrder     Int               @default(0)
+  apuVersion    KnowledgeApuVersion @relation(fields: [apuVersionId], references: [id], onDelete: Cascade)
+
+  @@index([apuVersionId, sortOrder])
+  @@index([resourceId])
+  @@map("knowledge_apu_resources")
+}
+
+model KnowledgeRegion {
+  id          String   @id @default(cuid())
+  level       String
+  name        String
+  normalizedName String
+  parentId    String?
+  createdAt   DateTime @default(now())
+  parent      KnowledgeRegion? @relation("KnowledgeRegionTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    KnowledgeRegion[] @relation("KnowledgeRegionTree")
+
+  @@unique([level, normalizedName, parentId])
+  @@index([parentId])
+  @@map("knowledge_regions")
+}
+
+model KnowledgeSupplier {
+  id          String   @id @default(cuid())
+  name        String
+  legalName   String?
+  ruc         String?
+  regionId    String?
+  website     String?
+  phone       String?
+  email       String?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ruc])
+  @@index([regionId])
+  @@map("knowledge_suppliers")
+}
+
+model PriceObservation {
+  id          String          @id @default(cuid())
+  resourceId  String
+  value       Decimal         @db.Decimal(18, 6)
+  currency    String
+  unit        String
+  regionId    String?
+  supplierId  String?
+  companyId   String?
+  projectId   String?
+  sourceId    String?
+  evidenceId  String?
+  observedAt  DateTime
+  scope       KnowledgeScope
+  status      KnowledgeStatus @default(OBSERVED)
+  confidence  KnowledgeConfidence
+  createdAt   DateTime        @default(now())
+  source      KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence    KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId, observedAt(sort: Desc)])
+  @@index([scope, companyId, projectId, observedAt(sort: Desc)])
+  @@index([regionId, observedAt(sort: Desc)])
+  @@map("knowledge_price_observations")
+}
+
+model YieldObservation {
+  id              String          @id @default(cuid())
+  canonicalItemId String
+  apuVersionId    String?
+  value           Decimal         @db.Decimal(18, 6)
+  unit            String
+  crew            Decimal?        @db.Decimal(18, 4)
+  projectType     String?
+  regionId        String?
+  companyId       String?
+  projectId       String?
+  sourceId        String?
+  evidenceId      String?
+  observedAt      DateTime
+  scope           KnowledgeScope
+  status          KnowledgeStatus @default(OBSERVED)
+  confidence      KnowledgeConfidence
+  createdAt       DateTime        @default(now())
+  source          KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([canonicalItemId, observedAt(sort: Desc)])
+  @@index([scope, companyId, projectId, observedAt(sort: Desc)])
+  @@map("knowledge_yield_observations")
+}
+
+model KnowledgeAssertion {
+  id          String          @id @default(cuid())
+  subjectType String
+  subjectId   String
+  predicate    String
+  value       Json
+  scope       KnowledgeScope
+  status      KnowledgeStatus
+  confidence  KnowledgeConfidence
+  companyId   String?
+  projectId   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([subjectId, predicate])
+  @@index([scope, companyId, projectId])
+  @@map("knowledge_assertions")
 }
 
 model GeneralExpense {

@@ -6,6 +6,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
 import { importProjectPackageToMyc } from "@/lib/mcp/import-persistence";
+import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
 
 const maxMcpUploadBytes = 40 * 1024 * 1024;
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         mode: "restore_as_new_project",
       },
     );
+    await safelyRecordKnowledgeImport({ userId: session.user.id, companyId: input.companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "MCP_IMPORT" });
 
     await safelyTrackImportCompleted({
       userId: session.user.id,
@@ -83,6 +85,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {
+  try { await recordImportKnowledgeEvent(input); } catch (error) { console.warn("Knowledge import event was not recorded", error); }
 }
 
 async function readImportRequestInput(request: Request) {

@@ -7,6 +7,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
 import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
+import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
 
 const maxSnapshotUploadBytes = 40 * 1024 * 1024;
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
       budgetCode: input.budgetCode,
       companyId: input.companyId,
     });
+    await safelyRecordKnowledgeImport({ userId: session.user.id, companyId: input.companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "S10_IMPORT" });
 
     await safelyTrackImportCompleted({
       userId: session.user.id,
@@ -59,6 +61,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {
+  try { await recordImportKnowledgeEvent(input); } catch (error) { console.warn("Knowledge import event was not recorded", error); }
 }
 
 function parseSnapshotOrThrow(snapshotJson: string) {
