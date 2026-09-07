@@ -11,7 +11,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { companyId } = await resolveBudgetOwnership(budgetId, session.user.id);
     const url = new URL(request.url);
     const signalType = url.searchParams.get("signalType") ?? "EXPLICIT_CORRECTION";
-    const suggestions = await retrievePrivateExamples({ companyId, signalType, normalizedInput: {}, schemaVersion: url.searchParams.get("schemaVersion") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 10) });
+    const normalizedInput = { code: url.searchParams.get("code") ?? "", description: url.searchParams.get("description") ?? "", unit: url.searchParams.get("unit") ?? "" };
+    const suggestions = await retrievePrivateExamples({ companyId, signalType, normalizedInput, schemaVersion: url.searchParams.get("schemaVersion") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 10) });
     const requestId = request.headers.get("x-request-id")?.trim() || `${budgetId}:${signalType}:${Date.now()}`;
     await Promise.all(suggestions.map((suggestion) => recordPrivateLearningUsage({ companyId, exampleId: suggestion.id, budgetId, requestId })));
     return NextResponse.json({ suggestions, guardrail: "Las sugerencias privadas no modifican automáticamente el presupuesto." });

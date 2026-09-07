@@ -22,6 +22,7 @@ import { analyzeS2kFileLocally } from "@/lib/s10/s2k-analyzer-client";
 import type { S10ImportPreview } from "@/lib/s10/s2k-analyzer";
 import type { S10ImportDraftPreview } from "@/lib/s10/import-preview";
 import type { S10SnapshotContract } from "@/lib/s10/snapshot-contract";
+import { IntegrationSessionLauncher } from "@/components/integrations/integration-session-panel";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 type RestoreBackupSourceMode = "path" | "upload";
@@ -957,6 +958,7 @@ export function S10ImporterPageContent({ companies, localToolsEnabled }: S10Impo
               </div>
             </div>
           ) : null}
+          {importResult ? <div className="mt-4"><IntegrationSessionLauncher budgetId={importResult.generalBudgetId} adapter="s10" payload={JSON.stringify({ source: draftPreview.source, sourceBudgetCode: draftPreview.sourceBudgetCode, projectName: draftPreview.projectName, itemCount: totalItems })} /></div> : null}
 
           <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
             <Metric label="Materiales" value={draftPreview.resourcesByCategory.MATERIAL.toString()} />

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { downloadBlob, requestExportBlob } from "@/lib/exports/download";
 import type { ExportDefinition, ExportFormat, ExportOptions, ExportPreset, ExportRequest, ExportTarget, WorkbookExportScope } from "@/lib/exports/definitions";
+import { IntegrationSessionLauncher } from "@/components/integrations/integration-session-panel";
 
 type ExportPanelProps = {
   definition: ExportDefinition;
@@ -291,6 +292,7 @@ export function ExportPanel({
               </div>
               <p className="theme-muted-text mt-3 text-xs leading-5">La descarga se genera al momento y no se guarda en historial.</p>
               </section>
+              {definition.target === "budget" && (resolvedFormat === "xlsx" || resolvedFormat === "csv") ? <section className="theme-muted-panel rounded-2xl border p-4"><p className="theme-muted-text mb-2 text-xs font-semibold uppercase tracking-wide">Integración auditable</p><IntegrationSessionLauncher budgetId={targetId} adapter="xlsx-csv" payload={JSON.stringify(payload)} canApply={false} /></section> : null}
 
               {status === "error" ? <p className="theme-status-error rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
             </div>
@@ -399,4 +401,3 @@ function buildExportOptionSummary(options: Partial<ExportOptions>, target: Expor
 
   return summary;
 }
-

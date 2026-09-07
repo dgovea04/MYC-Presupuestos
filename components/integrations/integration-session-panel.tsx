@@ -2,6 +2,27 @@
 import { useState } from "react";
 import { IntegrationPreviewTable } from "./integration-preview-table";
 type Session = { id: string; status: string; confirmationToken?: string | null; requestId: string; counts?: { total?: number; conflicts?: number } | null; preview?: { rows?: Array<{ externalKey: string; action: string; description?: string; conflict?: string }> } | null };
+export function IntegrationSessionLauncher({ budgetId, adapter, payload, canApply = true }: { budgetId: string; adapter: string; payload: string; canApply?: boolean }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function prepare() {
+    setBusy(true); setError(null);
+    try {
+      const created = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}/integrations/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ adapter, contractVersion: "1", payload, requestId: `${adapter}:${budgetId}:${payload.length}` }) });
+      const createdBody = await created.json() as { session?: Session; error?: string };
+      if (!created.ok || !createdBody.session) throw new Error(createdBody.error ?? "No se pudo crear la sesión");
+      const staged = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}/integrations/sessions/${createdBody.session.id}/validate`, { method: "POST" });
+      if (!staged.ok) throw new Error("No se pudo validar la sesión");
+      const preview = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}/integrations/sessions/${createdBody.session.id}/preview`);
+      const previewBody = await preview.json() as Session & { error?: string };
+      if (!preview.ok) throw new Error(previewBody.error ?? "No se pudo cargar la preview");
+      setSession({ ...createdBody.session, ...previewBody });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo preparar la sesión"); }
+    finally { setBusy(false); }
+  }
+  return <div className="space-y-3"><button type="button" onClick={() => void prepare()} disabled={busy} className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 disabled:opacity-50">{busy ? "Preparando sesión…" : "Preparar sesión controlada"}</button>{error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}{session ? <IntegrationSessionPanel budgetId={budgetId} session={session} canApply={canApply} onRefresh={() => setSession(null)} /> : null}</div>;
+}
 export function IntegrationSessionPanel({ budgetId, session, canApply, onRefresh }: { budgetId: string; session: Session; canApply: boolean; onRefresh?: () => void }) {
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null);
   async function rollback() { setBusy(true); try { const response = await fetch(`/api/budgets/${budgetId}/integrations/sessions/${session.id}/rollback`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requestId: `${session.id}:rollback` }) }); if (!response.ok) throw new Error("No se pudo revertir la sesión"); setMessage("Sesión revertida"); onRefresh?.(); } catch (error) { setMessage(error instanceof Error ? error.message : "Error"); } finally { setBusy(false); } }

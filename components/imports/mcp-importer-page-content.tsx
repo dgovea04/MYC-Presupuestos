@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { IntegrationSessionLauncher } from "@/components/integrations/integration-session-panel";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 
@@ -316,6 +317,7 @@ export function McpImporterPageContent({ companies }: McpImporterPageContentProp
               </div>
             </div>
           ) : null}
+          {importResult ? <div className="mt-4"><IntegrationSessionLauncher budgetId={importResult.generalBudgetId} adapter="mcp" payload={JSON.stringify({ projectId: importResult.projectId, projectName: importResult.projectName, budgetCount: importResult.budgetCount, itemCount: importResult.itemCount })} /></div> : null}
 
           <div className="mt-5 overflow-hidden rounded-xl border border-[var(--app-border-soft)]">
             <div className="border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-4 py-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FindingView } from "./types";
@@ -22,6 +22,15 @@ export function FindingDetail({ finding: selected, canResolve, onChanged, runSta
   const [error, setError] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState(selected?.assignedToId ?? "");
   const [assigning, setAssigning] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; confidence: number; provenance: { sourceType: string; sourceId: string; createdAt: string } }>>([]);
+
+  useEffect(() => {
+    if (!selected?.budgetId || !selected.budgetItem) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ signalType: "EXPLICIT_CORRECTION", code: selected.budgetItem.code, description: selected.budgetItem.description, unit: selected.budgetItem.unit, limit: "3" });
+    void fetch(`/api/budgets/${encodeURIComponent(selected.budgetId)}/private-learning/suggestions?${params.toString()}`, { signal: controller.signal, headers: { "x-request-id": `review:${selected.id}` } }).then(async (response) => response.ok ? await response.json() as { suggestions?: typeof suggestions } : { suggestions: [] }).then((payload) => setSuggestions(payload.suggestions ?? [])).catch(() => { if (!controller.signal.aborted) setSuggestions([]); });
+    return () => controller.abort();
+  }, [selected]);
 
   if (!selected) return <Card><CardContent className="p-6">Selecciona un hallazgo para ver comparación, evidencia y acciones.</CardContent></Card>;
   const finding = selected;
@@ -66,6 +75,7 @@ export function FindingDetail({ finding: selected, canResolve, onChanged, runSta
         </div>
       </section>
       {finding.decisionHistory.length ? <section className="space-y-2"><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Historial de decisiones</h4><ul className="space-y-2 text-xs text-[var(--app-text-muted)]">{finding.decisionHistory.map((decision) => <li key={decision.id} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2"><span className="font-medium text-[var(--app-text-strong)]">{reviewLabel(resolutionLabels, decision.resolution)}</span>{decision.note ? `: ${decision.note}` : ""}</li>)}</ul></section> : null}
+      {suggestions.length ? <section aria-label="Sugerencias privadas" className="space-y-2 rounded-xl border border-violet-200 bg-violet-50 p-4"><div><h4 className="text-sm font-semibold text-violet-950">Sugerencias privadas de la empresa</h4><p className="mt-1 text-xs text-violet-800">Provenance derivada de decisiones confirmadas. No modifica el presupuesto.</p></div><ul className="space-y-2 text-xs text-violet-950">{suggestions.map((suggestion) => <li key={suggestion.id} className="rounded-lg border border-violet-200 bg-white/70 px-3 py-2">Confianza {Math.round(suggestion.confidence * 100)}% · {suggestion.provenance.sourceType} · {suggestion.provenance.sourceId}</li>)}</ul></section> : null}
       {canResolve ? <section aria-label="Asignación del hallazgo" className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4"><div><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Responsable</h4><p className="mt-1 text-xs text-[var(--app-text-muted)]">Usa el ID de un miembro del proyecto. Déjalo vacío para desasignar.</p></div><div className="flex flex-col gap-2 sm:flex-row"><input aria-label="ID del responsable" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-2.5 text-sm" placeholder="ID de usuario" /><Button type="button" size="sm" variant="outline" onClick={() => void saveAssignment()} loading={assigning}>Guardar responsable</Button></div></section> : null}
       <section aria-label="Revisión y decisión" className="space-y-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
         <div><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Decisión de revisión</h4><p className="mt-1 text-xs text-[var(--app-text-muted)]">Registra el criterio aplicado al hallazgo.</p></div>
