@@ -33,6 +33,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
   const budgetItems = budgetFiles.flatMap((file) => parseBudgetItems(file.fileName, file.text, file.confidence));
   const budgetLevels = budgetFiles.flatMap((file) => parseBudgetLevels(file.fileName, file.text));
   const budgetFooterRows = budgetFiles.flatMap((file) => parseBudgetFooterRows(file.text));
+  const sourceMetadata = parsePdfSourceMetadata(budgetFiles[0]?.text ?? "");
   const linkedBudgetItems = budgetItems.map((item) => ({
     ...item,
     levelId: findBudgetLevelId(item.code, budgetLevels),
@@ -62,7 +63,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
   const draft: PdfAiImportDraft = {
     source: "PDF_AI",
     project: {
-      name: input.projectName?.trim() || "Proyecto importado desde PDF",
+      name: input.projectName?.trim() || sourceMetadata.projectName || "Proyecto importado desde PDF",
       currency,
     },
     sourceFiles: input.files.map((file) => ({
@@ -75,7 +76,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
     budgets: [
       {
         id: "budget-pdf-general",
-        name: "Presupuesto importado",
+        name: sourceMetadata.subBudgetName || "Presupuesto importado",
         kind: "SUB_BUDGET",
         currency,
         levels: budgetLevels,
@@ -94,6 +95,18 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
   const priceTolerance = input.priceTolerance ?? "0.01";
   const linkedDraft = linkPdfImportDraft(calculatePdfImportDraftTotals(draft), { priceTolerance });
   return createPdfImportWarnings(linkedDraft, { priceTolerance });
+}
+
+function parsePdfSourceMetadata(text: string) {
+  const projectName = readPdfHeaderValue(text, "PROYECTO", ["SUBPRESUPUESTO", "CLIENTE", "UBICACION", "FECHA BASE", "MONEDA"]);
+  const subBudgetName = readPdfHeaderValue(text, "SUBPRESUPUESTO", ["CLIENTE", "UBICACION", "FECHA BASE", "MONEDA"]);
+  return { projectName, subBudgetName };
+}
+
+function readPdfHeaderValue(text: string, label: string, followingLabels: string[]) {
+  const following = followingLabels.join("|");
+  const match = text.match(new RegExp(`${label}\\s*:\\s*(.*?)(?=\\s+(?:${following})\\s*:|\\s+ITEM\\s+PARTIDA|$)`, "i"));
+  return match?.[1]?.trim() || null;
 }
 
 function parseBudgetFooterRows(text: string): PdfImportedBudgetFooterRow[] {

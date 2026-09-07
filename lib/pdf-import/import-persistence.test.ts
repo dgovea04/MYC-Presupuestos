@@ -77,6 +77,26 @@ describe("pdf import persistence", () => {
     expect(tx.apuResource.createMany).toHaveBeenCalled();
   });
 
+  it("persists budget level hierarchy and links items to their level", async () => {
+    const tx = createTransactionMock();
+    mocks.prisma.$transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<unknown>) => handler(tx));
+    const draft = createDraft();
+    draft.budgets[0]!.levels = [
+      { id: "level-8", code: "8", name: "PROTECCION AMBIENTAL", type: "TITLE", parentId: null, sortOrder: 1 },
+      { id: "level-8-1", code: "8.1", name: "PROGRAMA DE CIERRE DE OBRA", type: "SUBTITLE", parentId: "level-8", sortOrder: 2 },
+    ];
+    draft.budgets[0]!.items[0]!.levelId = "level-8-1";
+
+    await importPdfAiDraftToMyc("user-1", draft, { companyId: "company-1" });
+
+    const levelRows = tx.budgetLevel.createMany.mock.calls[0]?.[0].data;
+    const persistedTitleId = levelRows[0].id;
+    expect(levelRows[1].parentId).toBe(persistedTitleId);
+    expect(tx.budgetItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ levelId: levelRows[1].id })],
+    });
+  });
+
   it("persists subpartidas as catalog partidas and links APU rows to them", async () => {
     const tx = createTransactionMock();
     mocks.prisma.$transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<unknown>) => handler(tx));

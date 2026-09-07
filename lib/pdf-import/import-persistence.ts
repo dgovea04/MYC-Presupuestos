@@ -95,17 +95,23 @@ export async function importPdfAiDraftToMyc(
       });
       subBudgetIds.push(persistedBudget.id);
 
+      const persistedLevelIds = new Map<string, string>();
       if (budget.levels.length > 0) {
-        await tx.budgetLevel.createMany({
-          data: budget.levels.map((level) => ({
-            id: randomUUID(),
+        const levelRows = budget.levels.map((level) => {
+          const id = randomUUID();
+          persistedLevelIds.set(level.id, id);
+          return {
+            id,
             budgetId: persistedBudget.id,
-            parentId: null,
+            parentId: level.parentId ? persistedLevelIds.get(level.parentId) ?? null : null,
             type: level.type,
             code: level.code,
             name: level.name,
             sortOrder: level.sortOrder,
-          })),
+          };
+        });
+        await tx.budgetLevel.createMany({
+          data: levelRows,
         });
       }
 
@@ -115,7 +121,7 @@ export async function importPdfAiDraftToMyc(
         return {
           id,
           budgetId: persistedBudget.id,
-          levelId: null,
+          levelId: item.levelId ? persistedLevelIds.get(item.levelId) ?? null : null,
           code: item.code,
           description: item.description,
           unit: item.unit,

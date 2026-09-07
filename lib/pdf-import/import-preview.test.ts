@@ -123,6 +123,20 @@ describe("pdf import preview", () => {
     expect(unknownUnitDraft.budgets[0]?.items[0]).toMatchObject({ code: "8.2.2", unit: "ZZ¤" });
   });
 
+  it("uses project and subbudget names from the PDF header", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-budget-header",
+        fileName: "Presupuesto.pdf",
+        role: "BUDGET",
+        text: "PRESUPUESTO PROYECTO: CARRETERA SUBPRESUPUESTO: SUB PRESUPUESTO 1 CLIENTE: MUNICIPALIDAD ITEM PARTIDA UNIDAD METRADO CU PARCIAL TRABAJOS PRELIMINARES 1 100.00 TRAZO Y REPLANTEO 1.1 M2 10.00 2.00 20.00",
+      }],
+    });
+
+    expect(draft.project.name).toBe("CARRETERA");
+    expect(draft.budgets[0]?.name).toBe("SUB PRESUPUESTO 1");
+  });
+
   it("creates a draft from simple extracted budget and APU lines", () => {
     const draft = createPdfAiImportDraftFromText({
       companyId: "company-1",

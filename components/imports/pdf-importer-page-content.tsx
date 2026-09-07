@@ -243,8 +243,6 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
         {companies.length === 0 ? <InlineMessage message="Crea una empresa antes de importar proyectos desde PDF." /> : null}
       </section>
 
-      {draft ? <DraftPreview draft={draft} criticalValidationCount={criticalValidationCount} onDraftChange={setDraft} /> : null}
-
       {importResult ? (
         <section className="theme-status-success rounded-2xl border p-5">
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -266,6 +264,8 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
           </div>
         </section>
       ) : null}
+
+      {draft ? <DraftPreview draft={draft} criticalValidationCount={criticalValidationCount} onDraftChange={setDraft} /> : null}
     </div>
   );
 }
