@@ -151,7 +151,9 @@ export function matchBudgetItemToEvidence(
       .plus(new Decimal(signals.confirmedMatch).times(weights.confirmedMatch));
     const score = activeWeight.isZero() ? new Decimal(0) : weightedScore.dividedBy(activeWeight);
     const codeConflict = item.code !== undefined && entry.code !== undefined && normalizedCode(item.code) !== normalizedCode(entry.code);
-    const effectiveScore = codeConflict ? new Decimal(0) : score;
+    const exactCodeMatch = signals.code === 1;
+    const exactCodeWithContradiction = exactCodeMatch && (signals.description < 1 || signals.unit === 0);
+    const effectiveScore = codeConflict ? new Decimal(0) : exactCodeWithContradiction ? Decimal.max(score, new Decimal(DEFAULTS.mediumThreshold)) : score;
     const confidence = confidenceFor(effectiveScore.toNumber(), thresholds);
     const explanation = Object.entries(signals).filter(([, value]) => value > 0).map(([signal, value]) => `${signal}=${value.toFixed(3)}`);
     if (codeConflict) explanation.push("codeConflict=1.000");

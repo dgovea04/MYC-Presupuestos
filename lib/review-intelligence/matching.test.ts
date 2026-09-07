@@ -49,6 +49,17 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.explanation).toContain("codeConflict=1.000");
   });
 
+  it("keeps an exact code match eligible when description and unit are the mismatched signals", () => {
+    const [candidate] = matchBudgetItemToEvidence(
+      { ...item, code: "2.7", description: "EXCAVACION EN ROCA", unit: "m3" },
+      [evidence({ code: "2.7", description: "RELLENO COMPACTADO", unit: "m2", discipline: undefined, attributes: undefined, location: undefined })],
+    );
+
+    expect(candidate.signals.code).toBe(1);
+    expect(candidate.eligibleForFindings).toBe(true);
+    expect(candidate.confidence).not.toBe("LOW");
+  });
+
   it("treats 2.1 and 2.10 as different textual codes", () => {
     const [candidate] = matchBudgetItemToEvidence({ ...item, code: "2.1" }, [evidence({ code: "2.10", description: "MEJORAMIENTO DE SUBRASANTE" })]);
 

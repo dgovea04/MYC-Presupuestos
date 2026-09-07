@@ -85,6 +85,18 @@ describe("evaluateFindingRules", () => {
     expect(findings.some((finding) => finding.type === "QUANTITY_MISMATCH")).toBe(false);
   });
 
+  it("reports unit and description mismatches independently for a linked item", () => {
+    const findings = evaluateFindingRules({
+      ...baseInput(),
+      evidence: { ...baseInput().evidence, description: "RELLENO COMPACTADO", unit: "m2", apuComponents: ["cemento", "arena"] },
+    });
+
+    expect(findings.map((finding) => finding.type)).toEqual([
+      "UNIT_INCONSISTENCY",
+      "TECHNICAL_SPEC_MISMATCH",
+    ]);
+  });
+
   it("normalizes diacritics when comparing technical specifications", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({ ...input, evidence: { ...input.evidence, unit: "m3", technicalSpecification: "Concréto f'c 210" } });
