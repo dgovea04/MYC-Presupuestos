@@ -143,6 +143,16 @@ describe("DocumentManager", () => {
     expect(screen.getByLabelText("Categoría del documento" )).toBeTruthy();
   });
 
+  it("keeps document information and actions in a shared row", () => {
+    const { container } = render(<DocumentManager projectId="project-1" documents={[documentView]} onChanged={vi.fn()} />);
+    const card = container.querySelector('[data-testid="review-document-manager"]');
+    const layoutStyles = card?.querySelector("style")?.textContent ?? "";
+
+    expect(layoutStyles).toContain(".flex.flex-col.gap-3.rounded-xl.border");
+    expect(layoutStyles).toContain("flex-direction: column");
+    expect(layoutStyles).toContain("grid-template-columns: minmax(0, 1fr) auto");
+  });
+
   it("uses the system confirmation dialog before clearing source documents", () => {
     render(<DocumentManager projectId="project-1" documents={[documentView]} onChanged={vi.fn()} />);
 

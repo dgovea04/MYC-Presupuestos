@@ -84,6 +84,94 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
     <CardContent className="space-y-3">{error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}{documents.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">Todavía no hay documentos asociados a este proyecto.</p> : null}{documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} selectedSheetNames={selectedSheetNames} onToggle={() => toggleDocument(document.id)} onToggleSheet={toggleSheet} onClassified={onChanged} onReprocess={() => void reprocessDocument(document)} onReplace={() => { targetDocumentId.current = document.id; inputRef.current?.click(); }} onDelete={() => setDocumentToDelete(document)} />)}</CardContent>
     <AlertDialog open={clearDialogOpen} title="Limpiar documentos fuente" description="Esta acción eliminará todos los documentos fuente, sus versiones, evidencias y revisiones del proyecto. El presupuesto y sus APU se conservarán." confirmLabel="Sí, limpiar fuentes" onConfirm={() => void clearDocuments()} onCancel={() => setClearDialogOpen(false)} />
     <AlertDialog open={documentToDelete !== null} title="Eliminar documento fuente" description={documentToDelete ? `Se eliminará “${documentToDelete.name}”, todas sus versiones y la evidencia asociada. Las revisiones relacionadas quedarán obsoletas.` : ""} confirmLabel={deletingDocument ? "Eliminando…" : "Sí, eliminar documento"} onConfirm={() => void deleteDocument()} onCancel={() => { if (!deletingDocument) setDocumentToDelete(null); }} />
+    <style>{`
+      #review-document-manager > div:first-child {
+        gap: 1rem;
+      }
+
+      #review-document-manager > div:first-child > div:last-child {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      #review-document-manager .flex.items-center.justify-end.gap-2 {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      #review-document-manager .flex.flex-col.gap-3.rounded-xl.border {
+        display: grid;
+        gap: 1rem;
+        flex-direction: column;
+        align-items: stretch;
+        overflow: hidden;
+        padding: 1rem;
+      }
+
+      #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > div:first-child {
+        min-width: 0;
+      }
+
+      #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > div:nth-child(2) {
+        justify-content: flex-start;
+        border-top: 1px solid var(--app-border);
+        padding-top: 0.75rem;
+      }
+
+      #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > fieldset {
+        width: 100%;
+      }
+
+      #review-document-manager .flex.max-w-md.items-start {
+        max-width: none;
+      }
+
+      #review-document-manager select {
+        width: 100%;
+      }
+
+      @media (min-width: 640px) {
+        #review-document-manager .flex.items-center.justify-end.gap-2 {
+          width: auto;
+        }
+
+        #review-document-manager .flex.flex-col.gap-3.rounded-xl.border {
+          grid-template-columns: minmax(0, 1fr) auto;
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > div:first-child {
+          grid-column: 1;
+        }
+
+        #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > div:nth-child(2) {
+          grid-column: 2;
+          align-self: start;
+          border-top: 0;
+          padding-top: 0;
+        }
+
+        #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > :nth-child(n + 3) {
+          grid-column: 1 / -1;
+        }
+
+        #review-document-manager .flex.flex-col.gap-3.rounded-xl.border > div:nth-child(2) {
+          justify-content: flex-end;
+        }
+
+        #review-document-manager > div:first-child > div:last-child {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+        }
+
+        #review-document-manager select {
+          width: 13rem;
+        }
+      }
+    `}</style>
   </Card>;
 }
 
