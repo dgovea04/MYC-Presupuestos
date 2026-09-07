@@ -28,6 +28,6 @@ export async function applyIntegrationSession(input: { sessionId: string; userId
     }
     await tx.integrationSession.update({ where: { id: session.id }, data: { status: "APPLIED", snapshotId: snapshot.id, appliedAt: new Date(), result: { appliedCount, requestId: input.requestId } } });
   });
-  for (const update of updates) await appendBudgetChangeEvent({ budgetId: session.budgetId, userId: input.userId, entityType: "BUDGET_ITEM", entityId: update.id, action: "INTEGRATION_APPLIED", field: "budgetItem", oldValue: null, newValue: null, source: "SYSTEM", requestId: `${input.requestId}:${update.id}` });
+  for (const update of updates) await appendBudgetChangeEvent({ budgetId: session.budgetId, userId: input.userId, entityType: "BUDGET_ITEM", entityId: update.id, action: "INTEGRATION_APPLIED", field: "budgetItem", oldValue: null, newValue: null, source: "INTEGRATION", requestId: `${input.requestId}:${update.id}` });
   return { sessionId: session.id, status: "APPLIED", snapshotId: snapshot.id, appliedCount };
 }
