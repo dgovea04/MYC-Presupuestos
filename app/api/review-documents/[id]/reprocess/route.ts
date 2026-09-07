@@ -6,6 +6,9 @@ import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { getReviewDocumentStorage } from "@/lib/review-intelligence/documents";
 import { reprocessDocumentCoverage } from "@/lib/review-intelligence/extraction-persistence";
 import { markStaleForChange } from "@/lib/review-intelligence/stale";
+import { getPdfImportAiConfiguration } from "@/lib/pdf-import/provider";
+import { createPdfImportOcrProvider } from "@/lib/pdf-import/ocr";
+import { createPdfImportOcrAdapter } from "@/lib/review-intelligence/ocr";
 
 const bodySchema = z.object({
   pages: z.array(z.coerce.number().int().min(1)).max(300).optional(),
@@ -36,6 +39,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const fileBuffer = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(fileBuffer).set(bytes);
     const file = new File([fileBuffer], document.currentVersion.originalFileName, { type: document.currentVersion.mimeType });
+    const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
+    const ocrProvider = aiConfiguration.apiKey ? createPdfImportOcrProvider(aiConfiguration) : undefined;
     const result = await reprocessDocumentCoverage({
       file,
       documentVersionId: document.currentVersion.id,
@@ -43,6 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       projectId: document.projectId,
       pages: body.pages,
       worksheets: body.worksheets,
+      ocrAdapter: createPdfImportOcrAdapter(ocrProvider),
     }, prisma as never);
     await markStaleForChange({ companyId, projectId: document.projectId, kind: "document-reprocessing", id: document.currentVersion.id, payload: { pages: body.pages ?? [], worksheets: body.worksheets ?? [] }, actorUserId: session.user.id }, prisma);
     return NextResponse.json({ documentVersionId: document.currentVersion.id, coverage: result.coverage, warnings: result.warnings });
