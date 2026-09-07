@@ -74,7 +74,8 @@ export async function POST(request: Request) {
 
     console.error("PDF import draft POST failed", error);
     await safelyTrackPdfImportFailed({ userId: session.user.id, companyId: companyIdForTracking, stage: "draft" });
-    return NextResponse.json({ error: "No se pudo preparar el draft de importacion PDF." }, { status: 500 });
+    const detail = error instanceof Error && error.message.trim().length > 0 ? ` ${error.message}` : "";
+    return NextResponse.json({ error: `No se pudo preparar el draft de importacion PDF.${detail}` }, { status: 500 });
   }
 }
 
@@ -113,7 +114,8 @@ function shouldUseAiStructureFallback(
   files: Awaited<ReturnType<typeof extractPdfImportFile>>[],
 ) {
   const itemCount = draft.budgets.reduce((sum, budget) => sum + budget.items.length, 0);
-  return itemCount === 0 || draft.apus.length === 0 || files.some((file) => file.requiresOcr);
+  const hasApuSource = files.some((file) => file.role === "APU");
+  return itemCount === 0 || hasApuSource && draft.apus.length === 0 || files.some((file) => file.requiresOcr);
 }
 
 async function createAiStructuredDraftOrFallback(input: {

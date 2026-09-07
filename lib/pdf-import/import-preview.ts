@@ -6,7 +6,9 @@ import type {
   PdfImportDocumentRole,
   PdfImportedApu,
   PdfImportedApuRow,
+  PdfImportedBudgetLevel,
   PdfImportedBudgetItem,
+  PdfImportedBudgetFooterRow,
   PdfImportedResource,
 } from "./types";
 
@@ -27,7 +29,14 @@ export type CreatePdfAiImportDraftFromTextInput = {
 
 export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFromTextInput): PdfAiImportDraft {
   const currency = input.currency ?? "PEN";
-  const budgetItems = input.files.flatMap((file) => (file.role === "BUDGET" ? parseBudgetItems(file.fileName, file.text, file.confidence) : []));
+  const budgetFiles = input.files.filter((file) => file.role === "BUDGET");
+  const budgetItems = budgetFiles.flatMap((file) => parseBudgetItems(file.fileName, file.text, file.confidence));
+  const budgetLevels = budgetFiles.flatMap((file) => parseBudgetLevels(file.fileName, file.text));
+  const budgetFooterRows = budgetFiles.flatMap((file) => parseBudgetFooterRows(file.text));
+  const linkedBudgetItems = budgetItems.map((item) => ({
+    ...item,
+    levelId: findBudgetLevelId(item.code, budgetLevels),
+  }));
   const apus = input.files.flatMap((file) => (file.role === "APU" ? parseApus(file.fileName, file.text, file.confidence) : []));
   const resources = apus.flatMap((apu) => apu.rows.map((row): PdfImportedResource => createResourceFromApuRow(row, currency)));
   const warnings: string[] = [];
@@ -43,7 +52,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
       warnings.push(`${file.fileName} fue procesado con OCR/vision; revisa las filas de baja confianza.`);
     }
   }
-  if (budgetItems.length === 0) {
+  if (linkedBudgetItems.length === 0) {
     warnings.push("No se encontraron partidas de presupuesto en los PDFs.");
   }
   if (apus.length === 0) {
@@ -69,8 +78,9 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
         name: "Presupuesto importado",
         kind: "SUB_BUDGET",
         currency,
-        levels: [],
-        items: budgetItems,
+        levels: budgetLevels,
+        items: linkedBudgetItems,
+        footerRows: budgetFooterRows,
       },
     ],
     apus,
@@ -86,15 +96,183 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
   return createPdfImportWarnings(linkedDraft, { priceTolerance });
 }
 
+function parseBudgetFooterRows(text: string): PdfImportedBudgetFooterRow[] {
+  const rows: PdfImportedBudgetFooterRow[] = [];
+  const footerPattern = /(?:^|\s)(COSTO DIRECTO|GASTOS GENERALES|UTILIDAD|SUB TOTAL|IGV|TOTAL PRESUPUESTO)(?:\s+(\d+(?:\.\d+)?%))?\s+(-?\d[\d,]*(?:\.\d+)?)(?=\s|$)/gi;
+  const variableByDescription: Record<string, string> = {
+    "COSTO DIRECTO": "CD",
+    "GASTOS GENERALES": "PGG",
+    UTILIDAD: "UTI",
+    "SUB TOTAL": "ST",
+    IGV: "IGV",
+    "TOTAL PRESUPUESTO": "TOTAL",
+  };
+
+  for (const match of text.matchAll(footerPattern)) {
+    const description = match[1]!.toUpperCase();
+    if (rows.some((row) => row.description === description)) continue;
+    rows.push({
+      id: `footer-${variableByDescription[description]!.toLowerCase()}`,
+      variable: variableByDescription[description]!,
+      description,
+      rate: match[2] ?? null,
+      value: normalizePdfNumber(match[3]!),
+      highlight: description === "COSTO DIRECTO" || description === "SUB TOTAL" || description === "TOTAL PRESUPUESTO",
+      sortOrder: rows.length,
+    });
+  }
+
+  return rows;
+}
+
+function parseBudgetLevels(fileName: string, text: string): PdfImportedBudgetLevel[] {
+  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+):\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+:)|$)/gi)];
+  const blocks = pageBlocks.length > 0
+    ? pageBlocks.map((match) => ({ page: Number(match[1]), text: match[2] ?? "" }))
+    : [{ page: 1, text }];
+  const levels: PdfImportedBudgetLevel[] = [];
+  const levelPattern = /([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9 ,.'-]+?)\s+(\d+(?:\.\d+)*)\s+(-?\d[\d,]*(?:\.\d+)?)(?=\s|$)/g;
+
+  for (const block of blocks) {
+    for (const match of block.text.matchAll(levelPattern)) {
+      const name = cleanBudgetLevelName(match[1]!);
+      const code = match[2]!;
+      if (code.includes(".") && code.split(".").length > 2) continue;
+      if (code.includes(".") && (code.split(".").at(-1)?.length ?? 0) > 1) continue;
+      if (name.length < 3 || levels.some((level) => level.code === code)) continue;
+
+      const parentCode = code.includes(".") ? code.slice(0, code.lastIndexOf(".")) : null;
+      const parent = parentCode ? levels.find((level) => level.code === parentCode) : undefined;
+      levels.push({
+        id: `level-${code.replace(/[^a-zA-Z0-9]+/g, "-")}`,
+        code,
+        name,
+        type: code.includes(".") ? "SUBTITLE" : "TITLE",
+        parentId: parent?.id ?? null,
+        sortOrder: levels.length + 1,
+      });
+    }
+  }
+
+  return levels;
+}
+
+function cleanBudgetLevelName(value: string) {
+  let name = value.trim();
+  const numbers = [...name.matchAll(/-?\d[\d,]*(?:\.\d+)?/g)];
+  const lastNumber = numbers.at(-1);
+  if (lastNumber?.index != null) {
+    name = name.slice(lastNumber.index + lastNumber[0].length).trim();
+  }
+
+  const headerEnd = name.toUpperCase().lastIndexOf("PARCIAL");
+  if (headerEnd >= 0) {
+    name = name.slice(headerEnd + "PARCIAL".length).trim();
+  }
+
+  return name;
+}
+
+function findBudgetLevelId(code: string, levels: PdfImportedBudgetLevel[]) {
+  const parent = [...levels]
+    .sort((left, right) => right.code.length - left.code.length)
+    .find((level) => code.startsWith(`${level.code}.`));
+  return parent?.id ?? null;
+}
+
 function parseBudgetItems(fileName: string, text: string, confidence = 0.75): PdfImportedBudgetItem[] {
-  return text
+  const lineItems = text
     .split(/\r?\n/)
     .map((line, index) => parseBudgetLine(fileName, line, index + 1, confidence))
     .filter((item): item is PdfImportedBudgetItem => item != null);
+
+  return lineItems.length > 0 ? lineItems : parseFlattenedBudgetItems(fileName, text, confidence);
+}
+
+function parseFlattenedBudgetItems(fileName: string, text: string, confidence: number): PdfImportedBudgetItem[] {
+  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+):\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+:)|$)/gi)];
+  const blocks = pageBlocks.length > 0
+    ? pageBlocks.map((match) => ({ page: Number(match[1]), text: match[2] ?? "" }))
+    : [{ page: 1, text }];
+  const items: PdfImportedBudgetItem[] = [];
+  const rowPattern = /(\d+(?:\.\d+)+)\s+([^\s\d][^\s]*)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)(?=\s|$)/g;
+
+  for (const block of blocks) {
+    let previousRowEnd = 0;
+    for (const match of block.text.matchAll(rowPattern)) {
+      const [, code, unit, quantity, unitPrice, partial] = match;
+      const description = cleanFlattenedDescription(
+        block.text.slice(previousRowEnd, match.index ?? 0),
+        previousRowEnd === 0,
+      );
+      previousRowEnd = (match.index ?? 0) + match[0].length;
+      if (!description) {
+        continue;
+      }
+      const sortOrder = items.length + 1;
+      items.push({
+        id: `item-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}-${block.page}-${sortOrder}`,
+        code: code!,
+        description,
+        unit: normalizePdfUnit(unit!),
+        quantity: normalizePdfNumber(quantity!),
+        unitPrice: normalizePdfNumber(unitPrice!),
+        partial: normalizePdfNumber(partial!),
+        sortOrder,
+        evidence: {
+          sourceFileName: fileName,
+          sourcePage: block.page,
+          rawText: match[0].trim(),
+          confidence,
+        },
+      });
+    }
+  }
+
+  return items;
+}
+
+function cleanFlattenedDescription(value: string, removePageHeader = false) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const removeSectionSummary = (text: string) => {
+    const sectionSummaryPattern = /(?:^|\s)([A-ZÁÉÍÓÚÑ][\s\S]*?)\s+\d+(?:\.\d+)*\s+-?\d[\d,]*(?:\.\d+)?\s+/g;
+    const summaries = [...text.matchAll(sectionSummaryPattern)];
+    const lastSummary = summaries.at(-1);
+    return lastSummary?.index != null ? text.slice(lastSummary.index + lastSummary[0].length).trim() : text;
+  };
+
+  if (!removePageHeader) return removeSectionSummary(trimmed);
+
+  const partialIndex = trimmed.toUpperCase().lastIndexOf("PARCIAL");
+  if (partialIndex >= 0) {
+    const afterHeader = trimmed.slice(partialIndex + "PARCIAL".length).trim();
+    return removeSectionSummary(afterHeader);
+  }
+
+  const numbers = [...trimmed.matchAll(/-?\d[\d,]*(?:\.\d+)?/g)];
+  if (numbers.length === 0) return trimmed;
+
+  return trimmed.slice((numbers.at(-1)?.index ?? -1) + (numbers.at(-1)?.[0].length ?? 0)).trim();
+}
+
+function normalizePdfNumber(value: string) {
+  return value.replace(/,/g, "");
+}
+
+function normalizePdfUnit(value: string) {
+  const replacements: Record<string, string> = {
+    "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú",
+    "Ã±": "ñ", "Ã‘": "Ñ", "Ã’": "Ò", "Ã“": "Ó", "Ã”": "Ô",
+    "Ãš": "Ú", "Ã™": "Ù", "Ã˜": "Ø", "Ã†": "Æ", "Ã‡": "Ç", "Ã§": "ç",
+  };
+  const repaired = Object.entries(replacements).reduce((result, [broken, normalized]) => result.replaceAll(broken, normalized), value);
+  return repaired.replace(/Â([°²³])/g, "$1");
 }
 
 function parseBudgetLine(fileName: string, line: string, sortOrder: number, confidence: number): PdfImportedBudgetItem | null {
-  const match = line.trim().match(/^(\d+(?:\.\d+)*)\s+(.+?)\s+([a-zA-Z0-9.³²]+)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)$/);
+  const match = line.trim().match(/^(\d+(?:\.\d+)*)\s+(.+?)\s+([^\s\d][^\s]*)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)$/);
   if (!match) {
     return null;
   }
@@ -104,10 +282,10 @@ function parseBudgetLine(fileName: string, line: string, sortOrder: number, conf
     id: `item-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}`,
     code: code!,
     description: description!.trim(),
-    unit: unit!,
-    quantity: quantity!,
-    unitPrice: unitPrice!,
-    partial: partial!,
+    unit: normalizePdfUnit(unit!),
+    quantity: normalizePdfNumber(quantity!),
+    unitPrice: normalizePdfNumber(unitPrice!),
+    partial: normalizePdfNumber(partial!),
     sortOrder,
     evidence: {
       sourceFileName: fileName,
@@ -131,7 +309,7 @@ function parseApus(fileName: string, text: string, confidence = 0.75): PdfImport
         id: `apu-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}`,
         budgetItemCode: code!,
         name: name!.trim(),
-        unit: unit!,
+        unit: normalizePdfUnit(unit!),
         performance: "1",
         totalUnitCost: totalUnitCost!,
         rows: [],
@@ -152,7 +330,7 @@ function parseApus(fileName: string, text: string, confidence = 0.75): PdfImport
       current.rows.push({
         id: `row-${current.id}-${current.rows.length + 1}`,
         description: description!.trim(),
-        unit: unit!,
+        unit: normalizePdfUnit(unit!),
         resourceType: inferResourceType(description!),
         quantity: quantity!,
         unitPrice: unitPrice!,

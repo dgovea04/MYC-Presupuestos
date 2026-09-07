@@ -52,6 +52,87 @@ describe("PdfImporterPageContent", () => {
     expect(screen.getByText("Preparacion de concreto fc 210")).toBeTruthy();
   });
 
+  it("renders every detected budget item instead of truncating the preview", () => {
+    const items = Array.from({ length: 13 }, (_, index) => ({
+      id: `item-${index + 1}`,
+      code: `01.${String(index + 1).padStart(2, "0")}`,
+      description: `Partida ${index + 1}`,
+      unit: "m2",
+      quantity: "1",
+      unitPrice: "10",
+      partial: "10",
+      sortOrder: index + 1,
+      evidence: { sourceFileName: "presupuesto.pdf", sourcePage: 1, rawText: "", confidence: 0.9 },
+    }));
+
+    render(
+      <PdfImporterPageContent
+        companies={[{ id: "company-1", name: "Constructora Demo" }]}
+        initialDraft={{
+          source: "PDF_AI",
+          project: { name: "Proyecto", currency: "PEN" },
+          sourceFiles: [{ id: "file-1", fileName: "presupuesto.pdf", role: "BUDGET", pageCount: 1, confidence: 0.9 }],
+          budgets: [{ id: "budget-1", name: "Presupuesto", kind: "GENERAL", currency: "PEN", levels: [], items }],
+          apus: [],
+          subpartidas: [],
+          resources: [],
+          links: [],
+          validations: [],
+          warnings: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Descripcion 01.13")).toBeTruthy();
+  });
+
+  it("renders recognized budget titles and subtitles", () => {
+    render(
+      <PdfImporterPageContent
+        companies={[{ id: "company-1", name: "Constructora Demo" }]}
+        initialDraft={{
+          source: "PDF_AI",
+          project: { name: "Proyecto", currency: "PEN" },
+          sourceFiles: [{ id: "file-1", fileName: "presupuesto.pdf", role: "BUDGET", pageCount: 1, confidence: 0.9 }],
+          budgets: [{
+            id: "budget-1",
+            name: "Presupuesto",
+            kind: "GENERAL",
+            currency: "PEN",
+            levels: [
+              { id: "level-8", code: "8", name: "PROTECCION AMBIENTAL", type: "TITLE", parentId: null, sortOrder: 1 },
+              { id: "level-8-1", code: "8.1", name: "PROGRAMA DE CIERRE DE OBRA", type: "SUBTITLE", parentId: "level-8", sortOrder: 2 },
+            ],
+            items: [{
+              id: "item-8-1-1",
+              code: "8.1.1",
+              description: "RETIRO Y ALMACENAMIENTO DE TOP SOIL",
+              unit: "M2",
+              quantity: "10",
+              unitPrice: "20",
+              partial: "200",
+              sortOrder: 1,
+              levelId: "level-8-1",
+              evidence: { sourceFileName: "presupuesto.pdf", sourcePage: 1, rawText: "", confidence: 0.9 },
+            }],
+            footerRows: [{ id: "footer-total", variable: "TOTAL", description: "TOTAL PRESUPUESTO", rate: null, value: "200", highlight: true, sortOrder: 1 }],
+          }],
+          apus: [],
+          subpartidas: [],
+          resources: [],
+          links: [],
+          validations: [],
+          warnings: [],
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("PROTECCION AMBIENTAL")).toHaveLength(2);
+    expect(screen.getAllByText("PROGRAMA DE CIERRE DE OBRA")).toHaveLength(2);
+    expect(screen.getByText("Resumen / pie de presupuesto")).toBeTruthy();
+    expect(screen.getByText("TOTAL PRESUPUESTO")).toBeTruthy();
+  });
+
   it("renders review groups for PDF import conflicts", () => {
     render(
       <PdfImporterPageContent
@@ -199,6 +280,51 @@ describe("PdfImporterPageContent", () => {
 
     expect(screen.getByDisplayValue("Trazo corregido")).toBeTruthy();
     expect(screen.getByDisplayValue("12")).toBeTruthy();
+  });
+
+  it("paginates review groups while keeping six issues visible", () => {
+    const items = Array.from({ length: 7 }, (_, index) => ({
+      id: `missing-item-${index + 1}`,
+      code: `01.0${index + 1}`,
+      description: `Partida sin APU ${index + 1}`,
+      unit: "m2",
+      quantity: "1",
+      unitPrice: "10",
+      partial: "10",
+      sortOrder: index + 1,
+      evidence: { sourceFileName: "presupuesto.pdf", sourcePage: 1, rawText: "", confidence: 0.9 },
+    }));
+    const links = items.map((item, index) => ({
+      id: `missing-link-${index + 1}`,
+      fromId: item.id,
+      kind: "BUDGET_ITEM_APU" as const,
+      status: "MISSING_APU" as const,
+      confidence: 0,
+      reason: "No se encontro un APU compatible.",
+    }));
+
+    render(
+      <PdfImporterPageContent
+        companies={[{ id: "company-1", name: "Constructora Demo" }]}
+        initialDraft={{
+          source: "PDF_AI",
+          project: { name: "Proyecto", currency: "PEN" },
+          sourceFiles: [{ id: "file-1", fileName: "presupuesto.pdf", role: "BUDGET", pageCount: 1, confidence: 0.9 }],
+          budgets: [{ id: "budget-1", name: "Presupuesto", kind: "GENERAL", currency: "PEN", levels: [], items }],
+          apus: [], subpartidas: [], resources: [], links, validations: [], warnings: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Pagina 1 de 2")).toBeTruthy();
+    expect(screen.getByText("Partida sin APU 1")).toBeTruthy();
+    expect(screen.getByText("Partida sin APU 6")).toBeTruthy();
+    expect(screen.queryByText("Partida sin APU 7")).toBeNull();
+
+    fireEvent.click(screen.getByText("Siguiente"));
+
+    expect(screen.getByText("Pagina 2 de 2")).toBeTruthy();
+    expect(screen.getByText("Partida sin APU 7")).toBeTruthy();
   });
 
   it("allows approving a linked price difference for import review", () => {

@@ -55,6 +55,16 @@ export type PdfImportedBudgetItem = {
   reviewReason?: string | null;
 };
 
+export type PdfImportedBudgetFooterRow = {
+  id: string;
+  variable: string;
+  description: string;
+  rate?: string | null;
+  value: string;
+  highlight: boolean;
+  sortOrder: number;
+};
+
 export type PdfImportedBudget = {
   id: string;
   name: string;
@@ -62,6 +72,7 @@ export type PdfImportedBudget = {
   currency: string;
   levels: PdfImportedBudgetLevel[];
   items: PdfImportedBudgetItem[];
+  footerRows?: PdfImportedBudgetFooterRow[];
 };
 
 export type PdfImportedApuRow = {

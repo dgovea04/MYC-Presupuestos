@@ -7,8 +7,9 @@ import { ImportWarningSummary } from "@/components/imports/import-warning-summar
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SectionPagination } from "@/components/ui/section-pagination";
 import { calculatePdfImportDraftTotals } from "@/lib/pdf-import/calculations";
-import type { PdfAiImportDraft, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence } from "@/lib/pdf-import/types";
+import type { PdfAiImportDraft, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence, PdfImportedBudgetFooterRow, PdfImportedBudgetItem, PdfImportedBudgetLevel } from "@/lib/pdf-import/types";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 
@@ -299,6 +300,23 @@ function DraftPreview({
 
       <ImportWarningSummary warnings={[...draft.warnings, ...draft.validations.map((validation) => validation.message)]} />
 
+      {draft.budgets.some((budget) => budget.levels.length > 0) ? (
+        <div className="mt-5 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">Estructura detectada</p>
+          <div className="mt-2 space-y-1">
+            {draft.budgets.flatMap((budget) => budget.levels).map((level) => (
+              <div
+                className={level.type === "TITLE" ? "text-sm font-semibold text-[var(--app-text-strong)]" : "pl-4 text-sm text-[var(--app-text-muted)]"}
+                key={level.id}
+              >
+                <span className="mr-2 font-mono text-xs">{level.code}</span>
+                {level.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-5 overflow-hidden rounded-xl border border-[var(--app-border-soft)]">
         <div className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px] bg-[var(--app-surface-elevated)] px-3 py-2 text-xs font-semibold text-[var(--app-text-muted)]">
           <span>Codigo</span>
@@ -308,40 +326,51 @@ function DraftPreview({
           <span>P.U.</span>
           <span>Parcial</span>
         </div>
-        {draft.budgets.flatMap((budget) => budget.items).slice(0, 12).map((item) => (
-          <div
-            className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px] items-center gap-2 border-t border-[var(--app-border-soft)] px-3 py-2 text-sm"
-            key={item.id}
-          >
-            <span className="font-mono text-xs text-[var(--app-text-muted)]">{item.code}</span>
-            <Input
-              aria-label={`Descripcion ${item.code}`}
-              className="h-8"
-              value={item.description}
-              onChange={(event) => onDraftChange(updateBudgetItemField(draft, item.id, "description", event.target.value))}
-            />
-            <Input
-              aria-label={`Unidad ${item.code}`}
-              className="h-8"
-              value={item.unit}
-              onChange={(event) => onDraftChange(updateBudgetItemField(draft, item.id, "unit", event.target.value))}
-            />
-            <Input
-              aria-label={`Cantidad ${item.code}`}
-              className="h-8"
-              value={item.quantity}
-              onChange={(event) => onDraftChange(updateBudgetItemField(draft, item.id, "quantity", event.target.value))}
-            />
-            <Input
-              aria-label={`Precio unitario ${item.code}`}
-              className="h-8"
-              value={item.unitPrice}
-              onChange={(event) => onDraftChange(updateBudgetItemField(draft, item.id, "unitPrice", event.target.value))}
-            />
-            <span>{item.partial}</span>
-          </div>
+        {draft.budgets.flatMap((budget) => buildBudgetTableRows(budget.items, budget.levels)).map((row) => (
+          row.kind === "LEVEL" ? (
+            <div className={row.level.type === "TITLE" ? "border-t border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-3 py-2 text-sm font-semibold text-[var(--app-text-strong)]" : "border-t border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] px-3 py-2 pl-7 text-sm font-medium text-[var(--app-text-muted)]"} key={row.level.id}>
+              <span className="mr-2 font-mono text-xs">{row.level.code}</span>
+              {row.level.name}
+            </div>
+          ) : (
+            <div
+              className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px] items-center gap-2 border-t border-[var(--app-border-soft)] px-3 py-2 text-sm"
+              key={row.item.id}
+            >
+              <span className="font-mono text-xs text-[var(--app-text-muted)]">{row.item.code}</span>
+              <Input
+                aria-label={`Descripcion ${row.item.code}`}
+                className="h-8"
+                value={row.item.description}
+                onChange={(event) => onDraftChange(updateBudgetItemField(draft, row.item.id, "description", event.target.value))}
+              />
+              <Input
+                aria-label={`Unidad ${row.item.code}`}
+                className="h-8"
+                value={row.item.unit}
+                onChange={(event) => onDraftChange(updateBudgetItemField(draft, row.item.id, "unit", event.target.value))}
+              />
+              <Input
+                aria-label={`Cantidad ${row.item.code}`}
+                className="h-8"
+                value={row.item.quantity}
+                onChange={(event) => onDraftChange(updateBudgetItemField(draft, row.item.id, "quantity", event.target.value))}
+              />
+              <Input
+                aria-label={`Precio unitario ${row.item.code}`}
+                className="h-8"
+                value={row.item.unitPrice}
+                onChange={(event) => onDraftChange(updateBudgetItemField(draft, row.item.id, "unitPrice", event.target.value))}
+              />
+              <span>{row.item.partial}</span>
+            </div>
+          )
         ))}
       </div>
+
+      {draft.budgets.some((budget) => (budget.footerRows?.length ?? 0) > 0) ? (
+        <PdfBudgetFooterPreview budgets={draft.budgets} />
+      ) : null}
 
       {draft.subpartidas.length > 0 ? (
         <div className="mt-5 overflow-hidden rounded-xl border border-[var(--app-border-soft)]">
@@ -372,6 +401,66 @@ function DraftPreview({
   );
 }
 
+type PdfBudgetTableRow =
+  | { kind: "LEVEL"; level: PdfImportedBudgetLevel }
+  | { kind: "ITEM"; item: PdfImportedBudgetItem };
+
+function buildBudgetTableRows(items: PdfImportedBudgetItem[], levels: PdfImportedBudgetLevel[]): PdfBudgetTableRow[] {
+  const rows: PdfBudgetTableRow[] = [];
+  const renderedLevels = new Set<string>();
+  const orderedLevels = [...levels].sort((left, right) => left.sortOrder - right.sortOrder);
+
+  for (const item of items) {
+    for (const level of orderedLevels) {
+      if (!renderedLevels.has(level.id) && item.code.startsWith(`${level.code}.`)) {
+        rows.push({ kind: "LEVEL", level });
+        renderedLevels.add(level.id);
+      }
+    }
+    rows.push({ kind: "ITEM", item });
+  }
+
+  return rows;
+}
+
+function PdfBudgetFooterPreview({ budgets }: { budgets: PdfAiImportDraft["budgets"] }) {
+  const footerRows = budgets.flatMap((budget) => budget.footerRows ?? []);
+  return (
+    <section className="mt-5 overflow-hidden rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)]">
+      <div className="border-b border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)] p-4">
+        <h3 className="text-sm font-semibold text-[var(--app-text-strong)]">Resumen / pie de presupuesto</h3>
+        <p className="mt-1 text-sm text-[var(--app-text-muted)]">Valores detectados en el PDF para revisión antes de importar.</p>
+      </div>
+      <div className="overflow-auto">
+        <table className="w-full min-w-[620px] text-left text-sm">
+          <thead className="bg-[var(--app-surface)] text-xs uppercase text-[var(--app-text-muted)]">
+            <tr><th className="px-4 py-2">Variable</th><th className="px-3 py-2">Descripción</th><th className="px-3 py-2">Tasa</th><th className="px-3 py-2 text-right">Valor</th></tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--app-border-soft)]">
+            {footerRows.map((row) => <PdfFooterRow key={row.id} row={row} />)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function PdfFooterRow({ row }: { row: PdfImportedBudgetFooterRow }) {
+  return (
+    <tr className={row.highlight ? "bg-[var(--app-surface-elevated)] text-[var(--app-text-strong)]" : "text-[var(--app-text-muted)]"}>
+      <td className="whitespace-nowrap px-4 py-2 font-medium">{row.variable}</td>
+      <td className="px-3 py-2">{row.description}</td>
+      <td className="px-3 py-2">{row.rate ?? "-"}</td>
+      <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatPdfMoney(row.value)}</td>
+    </tr>
+  );
+}
+
+function formatPdfMoney(value: string) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value;
+}
+
 type ReviewIssue = {
   id: string;
   title: string;
@@ -386,6 +475,7 @@ function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraf
   const [selectedApuByLinkId, setSelectedApuByLinkId] = useState<Record<string, string>>({});
   const [selectedBudgetItemByLinkId, setSelectedBudgetItemByLinkId] = useState<Record<string, string>>({});
   const [selectedSubpartidaByLinkId, setSelectedSubpartidaByLinkId] = useState<Record<string, string>>({});
+  const [reviewPageByGroup, setReviewPageByGroup] = useState<Record<string, number>>({});
   const budgetItems = draft.budgets.flatMap((budget) => budget.items);
 
   if (totalIssues === 0) {
@@ -405,14 +495,19 @@ function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraf
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        {groups.filter((group) => group.items.length > 0).map((group) => (
+        {groups.filter((group) => group.items.length > 0).map((group) => {
+          const currentPage = reviewPageByGroup[group.title] ?? 1;
+          const totalPages = Math.ceil(group.items.length / 6);
+          const visibleItems = group.items.slice((currentPage - 1) * 6, currentPage * 6);
+
+          return (
           <section className="overflow-hidden rounded-xl border border-[var(--app-border-soft)]" key={group.title}>
             <div className="flex items-center justify-between bg-[var(--app-surface-elevated)] px-3 py-2">
               <h4 className="text-xs font-semibold uppercase text-[var(--app-text-muted)]">{group.title}</h4>
               <Badge>{group.items.length}</Badge>
             </div>
             <div className="divide-y divide-[var(--app-border-soft)]">
-              {group.items.slice(0, 6).map((issue) => (
+              {visibleItems.map((issue) => (
                 <div className="px-3 py-2" key={issue.id}>
                   <div className="text-sm font-medium text-[var(--app-text-strong)]">{issue.title}</div>
                   <div className="mt-1 text-xs text-[var(--app-text-muted)]">{issue.detail}</div>
@@ -510,8 +605,17 @@ function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraf
                 </div>
               ))}
             </div>
+            <div className="px-3 py-3">
+              <SectionPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPrevious={() => setReviewPageByGroup((current) => ({ ...current, [group.title]: Math.max(1, currentPage - 1) }))}
+                onNext={() => setReviewPageByGroup((current) => ({ ...current, [group.title]: Math.min(totalPages, currentPage + 1) }))}
+              />
+            </div>
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

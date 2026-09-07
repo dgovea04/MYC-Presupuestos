@@ -133,6 +133,20 @@ describe("POST /api/imports/pdf/draft", () => {
     });
   });
 
+  it("does not call AI for a complete generated budget without APU source files", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
+    const formData = new FormData();
+    formData.set("companyId", "company-1");
+    formData.set("fileRoles", JSON.stringify({ "presupuesto.pdf": "BUDGET" }));
+    formData.append("files", new File(["01.01 Trazo y replanteo m2 10 2.50 25.00"], "presupuesto.pdf", { type: "application/pdf" }));
+
+    const response = await POST(new Request("http://localhost/api/imports/pdf/draft", { method: "POST", body: formData }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.structurePdfImportWithAi).not.toHaveBeenCalled();
+  });
+
   it("uses AI structure fallback when deterministic extraction finds no budget items", async () => {
     mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
     mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
@@ -221,8 +235,10 @@ describe("POST /api/imports/pdf/draft", () => {
     formData.append("files", new File(["contenido"], "presupuesto.pdf", { type: "application/pdf" }));
 
     const response = await POST(new Request("http://localhost/api/imports/pdf/draft", { method: "POST", body: formData }));
+    const body = await response.json();
 
     expect(response.status).toBe(500);
+    expect(body.error).toContain("pdf parser down");
     expect(mocks.trackServerEvent).toHaveBeenCalledWith("pdf_import_failed", {
       userId: "user-1",
       companyId: "company-1",
