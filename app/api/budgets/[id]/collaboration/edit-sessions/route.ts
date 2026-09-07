@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     console.error("POST edit session failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "No se pudo iniciar la sesion de edicion" },
-      { status: getWorkspaceFeatureAccessStatus(error) },
+      { status: error instanceof Error && error.message === "EDIT_SESSION_CONFLICT" ? 409 : getWorkspaceFeatureAccessStatus(error) },
     );
   }
 }

@@ -34,7 +34,12 @@ export async function startEditSession(
   const { companyId, projectId } = await resolveBudgetOwnership(budgetId, userId);
   const parsed = editSessionStartSchema.parse(input);
 
-  const expiresAt = new Date(Date.now() + EDIT_SESSION_HEARTBEAT_INTERVAL_MS + EDIT_SESSION_EXPIRY_BUFFER_MS);
+  const now = new Date();
+  await prisma.collaborationEditSession.deleteMany({ where: { budgetId, entityType: parsed.entityType, entityId: parsed.entityId, field: parsed.field, expiresAt: { lte: now } } });
+  const active = await prisma.collaborationEditSession.findFirst({ where: { budgetId, entityType: parsed.entityType, entityId: parsed.entityId, field: parsed.field, expiresAt: { gt: now } }, select: { id: true, userId: true } });
+  if (active && active.userId !== userId) throw new Error("EDIT_SESSION_CONFLICT");
+  if (active) return heartbeatEditSession(active.id, budgetId, userId);
+  const expiresAt = new Date(now.getTime() + EDIT_SESSION_HEARTBEAT_INTERVAL_MS + EDIT_SESSION_EXPIRY_BUFFER_MS);
 
   const session = await prisma.collaborationEditSession.create({
     data: {
@@ -45,8 +50,8 @@ export async function startEditSession(
       entityType: parsed.entityType,
       entityId: parsed.entityId,
       field: parsed.field,
-      startedAt: new Date(),
-      lastHeartbeatAt: new Date(),
+      startedAt: now,
+      lastHeartbeatAt: now,
       expiresAt,
     },
     include: {
@@ -68,8 +73,13 @@ export async function heartbeatEditSession(
 
   const expiresAt = new Date(Date.now() + EDIT_SESSION_HEARTBEAT_INTERVAL_MS + EDIT_SESSION_EXPIRY_BUFFER_MS);
 
-  const session = await prisma.collaborationEditSession.update({
-    where: { id: sessionId, budgetId },
+  const session = await prisma.collaborationEditSession.findFirst({
+    where: { id: sessionId, budgetId, userId, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  if (!session) throw new Error("EDIT_SESSION_NOT_FOUND_OR_EXPIRED");
+  const updated = await prisma.collaborationEditSession.update({
+    where: { id: session.id },
     data: {
       lastHeartbeatAt: new Date(),
       expiresAt,
@@ -79,7 +89,7 @@ export async function heartbeatEditSession(
     },
   });
 
-  const record = serializeEditSession(session as unknown as RawSession);
+  const record = serializeEditSession(updated as unknown as RawSession);
   publishBudgetEvent(budgetId, "edit-session.heartbeat", record);
   return record;
 }

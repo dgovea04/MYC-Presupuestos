@@ -19,7 +19,7 @@ const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
 export function ReviewDashboard({ run, companyId, canManagePrivateLearning = false }: { run?: ReviewRunView; findingCount: number; documentCount: number; companyId?: string; canManagePrivateLearning?: boolean }) {
   if (!run) {
     return (
-      <Card id="review-how-it-works" className="theme-surface-card">
+      <div className="space-y-5">{companyId ? <PrivateLearningReviewControls companyId={companyId} canManage={canManagePrivateLearning} /> : null}<Card id="review-how-it-works" className="theme-surface-card">
         <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 p-6 text-center">
           <FileSearch className="h-8 w-8 text-[var(--app-primary-soft)]" aria-hidden="true" />
           <div>
@@ -28,7 +28,7 @@ export function ReviewDashboard({ run, companyId, canManagePrivateLearning = fal
           </div>
           <div className="flex gap-2"><Link href="#review-document-manager" className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white">Agregar documentos</Link><Link href="#review-how-it-works" className="rounded-xl border px-3 py-2 text-sm">Cómo funciona</Link></div>
         </CardContent>
-      </Card>
+      </Card></div>
     );
   }
 

@@ -24,11 +24,12 @@ export async function createBudgetVersionSnapshot(
   userId: string,
   label?: string,
   reason?: string,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<BudgetVersionDetailRecord> {
   const { companyId, projectId } = await resolveBudgetOwnership(budgetId, userId);
 
   // Capture current budget state as the snapshot
-  const budget = await prisma.budget.findUnique({
+  const budget = await client.budget.findUnique({
     where: { id: budgetId },
     include: {
       levels: { orderBy: { sortOrder: "asc" } },
@@ -50,7 +51,7 @@ export async function createBudgetVersionSnapshot(
   }
 
   // Get next version number
-  const latestVersion = await prisma.budgetVersionSnapshot.findFirst({
+  const latestVersion = await client.budgetVersionSnapshot.findFirst({
     where: { budgetId },
     orderBy: { versionNumber: "desc" },
     select: { versionNumber: true },
@@ -59,7 +60,7 @@ export async function createBudgetVersionSnapshot(
   const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;    // Serialize budget to plain JSON (convert Decimal types to numbers)
     const plainSnapshot = serializeBudgetToPlainObject(budget);
 
-    const version = await prisma.budgetVersionSnapshot.create({
+    const version = await client.budgetVersionSnapshot.create({
     data: {
       budgetId,
       projectId,

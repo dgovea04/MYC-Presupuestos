@@ -15,10 +15,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ editSession });
   } catch (error) {
     console.error("PATCH edit session failed", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No se pudo actualizar la sesion" },
-      { status: getWorkspaceFeatureAccessStatus(error) },
-    );
+    const message = error instanceof Error ? error.message : "No se pudo actualizar la sesion";
+    return NextResponse.json({ error: message }, { status: message === "EDIT_SESSION_NOT_FOUND_OR_EXPIRED" ? 404 : getWorkspaceFeatureAccessStatus(error) });
   }
 }
 

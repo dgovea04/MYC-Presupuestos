@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
 import type { IntegrationAdapter, StagedIntegrationData } from "../types";
 
-export type McpIntegrationInput = { buffer: Buffer | Uint8Array; sourceName?: string };
+export type McpIntegrationInput = { buffer?: Buffer | Uint8Array; sourceName?: string };
 
 export async function stageMcp(input: McpIntegrationInput): Promise<StagedIntegrationData> {
+  if (!input.buffer) return { rows: [], conflicts: [{ externalKey: "MCP", kind: "MISSING_PAYLOAD", message: "Se requiere el contenido binario del paquete MCP para staging." }], counts: { total: 0, valid: 0, conflicts: 1 }, payloadHash: createHash("sha256").update("missing-mcp-payload").digest("hex") };
   const analysis = analyzeProjectPackageBuffer(input.buffer);
   const rows: StagedIntegrationData["rows"] = [];
   const itemModule = analysis.fileContents.get("budgets/budget-items.json");

@@ -15,21 +15,21 @@ export async function applyIntegrationSession(input: { sessionId: string; userId
   if (session.conflicts.length > 0) throw new Error("La sesión tiene conflictos sin resolver");
   const budget = await prisma.budget.findUnique({ where: { id: session.budgetId }, select: { id: true, updatedAt: true } });
   if (!budget || Math.floor(budget.updatedAt.getTime() / 1000) !== input.expectedVersion) throw new Error("La versión del presupuesto cambió; actualiza la preview");
-  const snapshot = await createBudgetVersionSnapshot(session.budgetId, input.userId, `Antes de integración ${session.id}`, "Snapshot automático de integración");
   const payload = (session.stagedPayload ?? {}) as IntegrationPayload;
   const updates = payload.updates ?? [];
   let appliedCount = 0;
-  const previousValues = new Map<string, { quantity: string; unitPrice: string }>();
+  let snapshotId: string | null = null;
   await prisma.$transaction(async (tx) => {
+    const snapshot = await createBudgetVersionSnapshot(session.budgetId, input.userId, `Antes de integración ${session.id}`, "Snapshot automático de integración", tx);
+    snapshotId = snapshot.id;
     for (const update of updates) {
       const existing = await tx.budgetItem.findFirst({ where: { id: update.id, budgetId: session.budgetId }, select: { id: true, description: true, unit: true, quantity: true, unitPrice: true } });
       if (!existing) throw new Error(`La partida ${update.id} no pertenece al presupuesto`);
-      previousValues.set(update.id, { quantity: existing.quantity.toString(), unitPrice: existing.unitPrice.toString() });
       await tx.budgetItem.update({ where: { id: existing.id }, data: { ...(update.description !== undefined ? { description: update.description } : {}), ...(update.unit !== undefined ? { unit: update.unit } : {}), ...(update.quantity !== undefined ? { quantity: update.quantity } : {}), ...(update.unitPrice !== undefined ? { unitPrice: update.unitPrice } : {}) } });
       appliedCount += 1;
+      await appendBudgetChangeEvent({ budgetId: session.budgetId, userId: input.userId, entityType: "BUDGET_ITEM", entityId: update.id, action: "INTEGRATION_APPLIED", field: "budgetItem", oldValue: JSON.stringify({ quantity: existing.quantity.toString(), unitPrice: existing.unitPrice.toString(), description: existing.description, unit: existing.unit }), newValue: JSON.stringify(update), source: "INTEGRATION", requestId: `${input.requestId}:${update.id}`, client: tx });
     }
     await tx.integrationSession.update({ where: { id: session.id }, data: { status: "APPLIED", snapshotId: snapshot.id, appliedAt: new Date(), result: { appliedCount, requestId: input.requestId } } });
   });
-  for (const update of updates) await appendBudgetChangeEvent({ budgetId: session.budgetId, userId: input.userId, entityType: "BUDGET_ITEM", entityId: update.id, action: "INTEGRATION_APPLIED", field: "budgetItem", oldValue: JSON.stringify(previousValues.get(update.id) ?? null), newValue: JSON.stringify({ quantity: update.quantity, unitPrice: update.unitPrice, description: update.description, unit: update.unit }), source: "INTEGRATION", requestId: `${input.requestId}:${update.id}` });
-  return { sessionId: session.id, status: "APPLIED", snapshotId: snapshot.id, appliedCount };
+  return { sessionId: session.id, status: "APPLIED", snapshotId, appliedCount };
 }
