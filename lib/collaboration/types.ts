@@ -9,3 +9,13 @@ export const SSE_PING_INTERVAL_MS = 25_000;
 export const COMMENTS_PAGE_SIZE = 50;
 export const HISTORY_PAGE_SIZE = 50;
 export const VERSIONS_PAGE_SIZE = 20;
+
+export type CollaborationAction = "READ" | "COMMENT" | "EDIT" | "RESOLVE";
+export interface AuthorizedBudgetContext {
+  userId: string;
+  budgetId: string;
+  companyId: string;
+  projectId: string;
+  role: "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
+  action: CollaborationAction;
+}

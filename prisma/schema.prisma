@@ -498,6 +498,8 @@ enum CollaborationEntityType {
   METRADO_SHEET
   METRADO_ROW
   WORK_SCHEDULE_ITEM
+  METRADO
+  REVIEW_FINDING
 }
 
 enum CollaborationPresenceStatus {
@@ -509,6 +511,24 @@ enum CollaborationChangeSource {
   USER
   SYSTEM
   KHIPU
+  INTEGRATION
+}
+
+enum IntegrationSessionStatus {
+  DRAFT
+  STAGED
+  VALIDATED
+  PREVIEW_READY
+  CONFIRMED
+  APPLIED
+  ROLLED_BACK
+  FAILED
+}
+
+enum PrivateLearningExampleStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
 }
 
 enum BudgetItemGenerationSourceType {
@@ -621,6 +641,8 @@ model User {
   collaborationCommentsResolved CollaborationComment[]        @relation("CommentResolvedBy")
   changeEvents                  BudgetChangeEvent[]
   versionSnapshots              BudgetVersionSnapshot[]
+  integrationSessionsCreated    IntegrationSession[] @relation("IntegrationSessionCreator")
+  privateLearningExamplesCreated PrivateLearningExample[] @relation("PrivateLearningExampleCreator")
   invitedMemberships            CompanyMembership[]           @relation("MembershipInviter")
   agentExecutions               AgentExecution[]
   delegationsGiven              AgentDelegation[]             @relation("AgentDelegationDelegator")
@@ -1441,6 +1463,9 @@ model Company {
   reviewRuns                  ReviewRun[]
   reviewFindings              ReviewFinding[]
   reviewAuditEvents           ReviewAuditEvent[]
+  integrationSessions         IntegrationSession[]
+  privateLearningExamples     PrivateLearningExample[]
+  privateLearningUsages       PrivateLearningUsage[]
 
   @@index([userId])
 }
@@ -1548,6 +1573,7 @@ model Project {
   reviewAuditEvents          ReviewAuditEvent[]
   reviewLinks                EntityLink[]
   reviewFindings             ReviewFinding[]
+  integrationSessions        IntegrationSession[]
 
   @@unique([companyId, demoKey])
   @@unique([id, companyId])
@@ -1639,6 +1665,8 @@ model Budget {
   reviewRuns                      ReviewRun[]
   reviewLinks                     EntityLink[]
   reviewFindings                  ReviewFinding[]
+  integrationSessions              IntegrationSession[]
+  privateLearningUsages           PrivateLearningUsage[]
 
   @@unique([id, projectId])
   @@index([projectId])
@@ -1797,6 +1825,112 @@ model BudgetVersionSnapshot {
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([companyId])
   @@map("budget_version_snapshots")
+}
+
+model IntegrationSession {
+  id                 String                  @id @default(cuid())
+  companyId          String
+  projectId          String
+  budgetId           String
+  createdById        String
+  adapter            String
+  contractVersion    String
+  status             IntegrationSessionStatus @default(DRAFT)
+  payloadHash        String
+  stagedPayload      Json?
+  confirmationToken  String?
+  expectedVersion    Int?
+  counts             Json?
+  preview            Json?
+  result             Json?
+  requestId          String
+  snapshotId         String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  appliedAt          DateTime?
+  rolledBackAt       DateTime?
+  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget             Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdBy          User                    @relation("IntegrationSessionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  conflicts          IntegrationConflict[]
+  mappings           IntegrationMapping[]
+
+  @@unique([companyId, requestId])
+  @@index([budgetId, status, updatedAt])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("integration_sessions")
+}
+
+model IntegrationConflict {
+  id          String             @id @default(cuid())
+  sessionId   String
+  externalKey String
+  kind        String
+  message     String
+  details     Json?
+  resolved    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  session     IntegrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, resolved])
+  @@map("integration_conflicts")
+}
+
+model IntegrationMapping {
+  id          String             @id @default(cuid())
+  sessionId   String
+  externalKey String
+  internalId  String?
+  mappingType String
+  metadata    Json?
+  createdAt   DateTime           @default(now())
+  session     IntegrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, externalKey])
+  @@map("integration_mappings")
+}
+
+model PrivateLearningExample {
+  id          String                       @id @default(cuid())
+  companyId   String
+  sourceType  String
+  sourceId    String
+  signalType  String
+  inputJson   Json
+  resultJson  Json
+  contentHash String
+  schemaVersion String
+  status      PrivateLearningExampleStatus @default(ACTIVE)
+  expiresAt   DateTime
+  createdById String
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @updatedAt
+  revokedAt   DateTime?
+  company     Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                         @relation("PrivateLearningExampleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  usages      PrivateLearningUsage[]
+
+  @@unique([companyId, contentHash, schemaVersion])
+  @@index([companyId, status, expiresAt])
+  @@index([companyId, signalType, createdAt(sort: Desc)])
+  @@map("private_learning_examples")
+}
+
+model PrivateLearningUsage {
+  id        String                  @id @default(cuid())
+  companyId String
+  exampleId String
+  budgetId  String?
+  requestId String
+  createdAt DateTime                @default(now())
+  company  Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  example  PrivateLearningExample  @relation(fields: [exampleId], references: [id], onDelete: Cascade)
+  budget   Budget?                 @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+
+  @@unique([exampleId, requestId])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("private_learning_usages")
 }
 
 model BudgetLevel {

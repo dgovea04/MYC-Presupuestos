@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { resolveBudgetOwnership } from "./authorization";
+import { assertBudgetCollaborationAccess } from "./authorization";
 import { serializeComment } from "./serializers";
 import { publishBudgetEvent } from "./events";
 import {
@@ -26,6 +27,7 @@ export async function listCommentsForEntity(
 
   if (query.entityType) where.entityType = query.entityType;
   if (query.entityId) where.entityId = query.entityId;
+  if (query.entityType && query.entityId) await assertBudgetCollaborationAccess({ userId, budgetId, action: "READ", entity: { entityType: query.entityType, entityId: query.entityId } });
   if (query.cursor) {
     where.createdAt = { lt: new Date(query.cursor) };
   }
@@ -51,6 +53,16 @@ export async function createComment(
 ): Promise<CollaborationCommentRecord> {
   const { companyId, projectId } = await resolveBudgetOwnership(budgetId, userId);
   const parsed = commentCreateSchema.parse(input);
+  await assertBudgetCollaborationAccess({ userId, budgetId, action: "COMMENT", entity: parsed });
+  const mentions = [...new Set(parsed.mentions)];
+  if (mentions.length > 0) {
+    const count = await prisma.companyMembership.count({ where: { companyId, userId: { in: mentions }, status: "ACTIVE" } });
+    if (count !== mentions.length) throw new Error("Una o más menciones no pertenecen al proyecto");
+  }
+  if (parsed.parentCommentId) {
+    const parent = await prisma.collaborationComment.findFirst({ where: { id: parsed.parentCommentId, budgetId, companyId, entityType: parsed.entityType, entityId: parsed.entityId }, select: { id: true } });
+    if (!parent) throw new Error("El comentario padre no existe o no pertenece a la entidad");
+  }
 
   const comment = await prisma.collaborationComment.create({
     data: {
@@ -61,7 +73,7 @@ export async function createComment(
       entityId: parsed.entityId,
       parentCommentId: parsed.parentCommentId ?? null,
       body: parsed.body,
-      mentions: parsed.mentions,
+      mentions,
       createdById: userId,
     },
     include: {

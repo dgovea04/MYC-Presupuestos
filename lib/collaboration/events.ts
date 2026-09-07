@@ -1,4 +1,8 @@
 import type { CollaborationStreamEvent, CollaborationStreamEventType } from "@/types/collaboration";
+import { prisma } from "@/lib/db/prisma";
+import { resolveBudgetOwnership } from "./authorization";
+import { serializeChangeEvent } from "./serializers";
+import type { BudgetChangeRecord } from "@/types/collaboration";
 
 /**
  * Simple in-memory event broker for SSE subscribers.
@@ -65,4 +69,15 @@ export function getSubscriberCount(budgetId: string): number {
  */
 export function clearAllSubscribers(): void {
   subscribers.clear();
+}
+
+export async function appendBudgetChangeEvent(input: { budgetId: string; userId: string; entityType: "BUDGET" | "BUDGET_ITEM" | "APU" | "METRADO" | "REVIEW_FINDING"; entityId: string; action: string; field: string; oldValue: string | null; newValue: string | null; source: "USER" | "SYSTEM" | "KHIPU" | "INTEGRATION"; requestId?: string }): Promise<BudgetChangeRecord> {
+  const ownership = await resolveBudgetOwnership(input.budgetId, input.userId);
+  if (input.requestId) {
+    const existing = await prisma.budgetChangeEvent.findFirst({ where: { budgetId: input.budgetId, requestId: input.requestId } });
+    if (existing) return serializeChangeEvent(existing as never);
+  }
+  const event = await prisma.budgetChangeEvent.create({ data: { companyId: ownership.companyId, projectId: ownership.projectId, budgetId: input.budgetId, entityType: input.entityType, entityId: input.entityId, action: input.action, field: input.field, oldValue: input.oldValue, newValue: input.newValue, source: input.source, userId: input.userId, requestId: input.requestId }, });
+  publishBudgetEvent(input.budgetId, "change.created", event);
+  return serializeChangeEvent(event as never);
 }

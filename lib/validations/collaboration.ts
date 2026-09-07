@@ -10,11 +10,17 @@ export const collaborationEntityTypeSchema = z.enum([
   "METRADO_SHEET",
   "METRADO_ROW",
   "WORK_SCHEDULE_ITEM",
+  "METRADO",
+  "REVIEW_FINDING",
 ]);
+
+export type CollaborationEntityType = z.infer<typeof collaborationEntityTypeSchema>;
+export const collaborationActionSchema = z.enum(["READ", "COMMENT", "EDIT", "RESOLVE"]);
+export type CollaborationAction = z.infer<typeof collaborationActionSchema>;
 
 export const collaborationPresenceStatusSchema = z.enum(["ACTIVE", "IDLE"]);
 
-export const collaborationChangeSourceSchema = z.enum(["USER", "SYSTEM", "KHIPU"]);
+export const collaborationChangeSourceSchema = z.enum(["USER", "SYSTEM", "KHIPU", "INTEGRATION"]);
 
 export const collaborationEntityRefSchema = z.object({
   entityType: collaborationEntityTypeSchema,
@@ -70,6 +76,11 @@ export const commentsQuerySchema = z.object({
   entityId: cuidSchema.optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export const commentResolveSchema = z.object({
+  resolved: z.boolean(),
+  expectedUpdatedAt: z.coerce.date(),
 });
 
 export type CommentCreateInput = z.infer<typeof commentCreateSchema>;
