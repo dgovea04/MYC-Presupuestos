@@ -5,6 +5,13 @@ vi.mock("./extractors", () => ({ extractDocument: vi.fn() }));
 import { extractDocument } from "./extractors";
 
 describe("review extraction persistence", () => {
+  it("passes a version-scoped XLSX selection to extraction before persisting evidence", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({ kind: "XLSX", sha256: "hash", mimeType: "xlsx", fileSizeBytes: 3, items: [{ content: "Metrados", location: { sheet: "Metrados", range: "A2:B2" } }], warnings: [], sheetCount: 2 });
+    const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+    await extractAndPersistDocumentVersion({ file: new File(["x"], "file.xlsx"), version: { id: "version-1", sha256: "hash" }, companyId: "company-1", projectId: "project-1", xlsxSheetNames: ["Metrados"] }, client);
+    expect(extractDocument).toHaveBeenCalledWith(expect.objectContaining({ xlsxSheetNames: ["Metrados"] }));
+    expect(client.reviewEvidence.upsert).toHaveBeenCalledOnce();
+  });
   it("persists extracted evidence, warnings and completed status", async () => {
     vi.mocked(extractDocument).mockResolvedValue({ kind: "XLSX", sha256: "hash", mimeType: "xlsx", fileSizeBytes: 3, items: [{ content: "12.00", location: { sheet: "Hoja 1", range: "B4:B4" } }], warnings: ["macro no ejecutada"], sheetCount: 1 });
     const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
