@@ -113,13 +113,18 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const runs = await prisma.reviewRun.findMany({ where: { companyId: scope.project.companyId, projectId }, select: { id: true } });
     const runIds = runs.map((run) => run.id);
     const storage = getReviewDocumentStorage();
-    const backups = await Promise.all(versions.map(async (version) => ({ ...version, bytes: await storage.read({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey }) })));
-    const removed: typeof backups = [];
-    try {
-      for (const backup of backups) {
-        await storage.delete({ companyId: scope.project.companyId, projectId, storageKey: backup.storageKey });
-        removed.push(backup);
+    const warnings: string[] = [];
+    const backups: Array<(typeof versions)[number] & { bytes: Uint8Array }> = [];
+    for (const version of versions) {
+      try {
+        const bytes = await storage.read({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey });
+        await storage.delete({ companyId: scope.project.companyId, projectId, storageKey: version.storageKey });
+        backups.push({ ...version, bytes });
+      } catch {
+        warnings.push(`No se pudo eliminar el binario de la version ${version.versionNumber} de ${version.originalFileName}. El registro fue eliminado, pero el archivo requiere limpieza manual.`);
       }
+    }
+    try {
       await prisma.$transaction(async (transaction) => {
       if (runIds.length > 0) {
         await transaction.findingDecision.deleteMany({ where: { finding: { reviewRunId: { in: runIds }, companyId: scope.project.companyId, projectId } } });
@@ -134,10 +139,10 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       if (documentIds.length > 0) await transaction.reviewAuditEvent.create({ data: { companyId: scope.project.companyId, projectId, actorUserId: session.user.id, eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: documentIds.length, versionCount: allVersionIds.length } } });
       });
     } catch (error) {
-      await Promise.all(removed.map((backup) => storage.put({ companyId: scope.project.companyId, projectId, documentId: backup.projectDocumentId, versionNumber: backup.versionNumber, originalFileName: backup.originalFileName, bytes: backup.bytes })));
+      await Promise.all(backups.map((backup) => storage.put({ companyId: scope.project.companyId, projectId, documentId: backup.projectDocumentId, versionNumber: backup.versionNumber, originalFileName: backup.originalFileName, bytes: backup.bytes })));
       throw error;
     }
-    return NextResponse.json({ deletedDocuments: documentIds.length });
+    return NextResponse.json({ deletedDocuments: documentIds.length, ...(warnings.length > 0 ? { warnings } : {}) });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Escribe exactamente ELIMINAR DOCUMENTOS FUENTE para confirmar." }, { status: 400 });
     return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudieron eliminar los documentos fuente." }, { status: 400 });

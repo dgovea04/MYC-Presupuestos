@@ -207,6 +207,19 @@ describe("review documents API", () => {
     expect(mocks.reviewAuditEventCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ eventType: "REVIEW_DOCUMENTS_DELETED", payloadJson: { documentCount: 1, versionCount: 1 } }) }));
   });
 
+  it("clears source records when an old storage key cannot be read and reports a warning", async () => {
+    mocks.projectDocumentFindMany.mockResolvedValue([{ id: "document-1", currentVersionId: "version-1" }]);
+    mocks.documentVersionFindMany.mockResolvedValue([{ id: "version-1", storageKey: "review-documents/company-1/project-1/document-1/file", projectDocumentId: "document-1", versionNumber: 1, originalFileName: "spec.pdf" }]);
+    mocks.storageRead.mockRejectedValue(new Error("Storage key has an invalid format."));
+
+    const response = await DELETE(new Request("http://localhost/api/projects/project-1/review-documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "ELIMINAR DOCUMENTOS FUENTE" }) }), { params: Promise.resolve({ id: "project-1" }) });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ deletedDocuments: 1, warnings: ["No se pudo eliminar el binario de la version 1 de spec.pdf. El registro fue eliminado, pero el archivo requiere limpieza manual."] });
+    expect(mocks.documentVersionDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ["version-1"] }, companyId: "company-1", projectId: "project-1" } });
+    expect(mocks.storageDelete).not.toHaveBeenCalled();
+  });
+
   it("rejects a new-document idempotency replay whose file identity changes", async () => {
     mocks.documentVersionFindMany.mockResolvedValue([{ sha256: "hash", projectDocumentId: "document-old", projectDocument: { originalFileName: "other.pdf", name: "Other source" } }]);
     const form = new FormData(); form.set("file", new File(["%PDF-1.7"], "spec.pdf", { type: "application/pdf" })); form.set("name", "Specification");
