@@ -19,6 +19,17 @@
 - Consultas limitadas por `companyId` y `projectId`.
 - No se crea almacenamiento paralelo de evidencia.
 
+## Estado de ejecución — 2026-09-06
+
+- Integración de `codex/review-intelligence-v1-coverage` en `main`: completada en `e5ad264`.
+- Implementación de Tasks 1–7: integrada; incluye normalización, extracción estructurada, matching, reglas de rendimiento/APU, cobertura por categoría, dashboard, documentación y regresión E2E.
+- Verificación enfocada V1: completada, 27 archivos y 228 pruebas aprobadas.
+- Prisma Client y schema: `prisma:generate` y `prisma validate` aprobados; typecheck estricto sin incremental aprobado después de regenerar el cliente.
+- Lint: aprobado, con 3 warnings preexistentes fuera de esta implementación.
+- Verificación completa: 5.383 aprobadas y 3 fallidas; las fallas corresponden a `MetradoSheetDrawer`, Delphin y RW7, no a las pruebas V1.
+- Migración de staging: pendiente. El `.env` local apunta a `localhost`, por lo que no se ejecutó `migrate deploy` contra una base no identificada.
+- Los checkboxes históricos de cada paso TDD se conservan como trazabilidad del plan original; este estado registra la evidencia posterior a la integración.
+
 ---
 
 ### Task 1: Normalización de señales V1
