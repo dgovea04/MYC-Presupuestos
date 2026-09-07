@@ -69,9 +69,9 @@
 **Interfaces:** `recordKnowledgeEvent(input, actor)` validates provenance and scope, creates the event transactionally, and returns `{ event, created }`; repeated keys return the original event only when payload hashes match.
 
 - [x] Test valid event creation, duplicate replay, duplicate-key payload conflict and unauthorized scope at service level.
-- [ ] Verify red tests.
+- [x] Verify red tests.
 - [x] Implement transaction, canonical payload hashing and structured event persistence.
-- [x] Verify green service tests and route compilation; route integration tests remain pending.
+- [x] Verify green service tests, route tests and route compilation.
 
 ### Task 4: Canonical items/resources and aliases
 
@@ -102,9 +102,9 @@
 **Interfaces:** `createApuVersionFromExistingApu`, `listApuVersions`, `createRegion`, `createSupplier`; APU snapshots include source APU id, content hash, resource rows, performance and provenance.
 
 - [x] Test version creation on structural APU changes and stable content hash on identical input.
-- [ ] Verify red tests.
+- [x] Verify red tests.
 - [x] Implement Decimal-safe snapshot serialization and hierarchical region validation.
-- [ ] Verify green tests.
+- [x] Verify green tests.
 
 ### Task 6: Price and yield observations
 
@@ -120,7 +120,7 @@
 - [x] Verify red tests.
 - [x] Implement Decimal-safe observation persistence.
 - [x] Add source/evidence provenance checks and authenticated source/evidence/observation routes; workspace authorization for scoped events and retrieval is enforced.
-- [ ] Add event linkage and route tests.
+- [x] Add event linkage and route tests.
 
 ### Task 7: Retrieval and integrations
 
@@ -137,7 +137,7 @@
 - [x] Implement basic structured retrieval.
 - [x] Add protected retrieval route and internal admin review page.
 - [x] Add event adapters for Revisor decisions and S10/MCP import completion.
-- [x] Verify existing integration tests without automatic budget mutation; dedicated adapter tests remain pending.
+- [x] Verify existing integration tests without automatic budget mutation; dedicated adapter tests are covered.
 
 ### Task 8: Internal review UI and final verification
 
@@ -149,8 +149,8 @@
 - Create: `docs/mc-knowledge-operations.md`
 
 - [x] Implement server-authorized page with partidas, recursos, observaciones, eventos and provenance context.
-- [x] Add interactive candidate review actions; dedicated UI/route tests remain recommended follow-up.
-- [ ] Document rollout flags, privacy rules, operational logs and technical debt.
+- [x] Add interactive candidate review actions and dedicated UI/route tests.
+- [x] Document rollout flags, privacy rules, operational logs and technical debt.
 - [x] Run Knowledge tests, scoped ESLint, TypeScript, Prisma validation/migration status and production build.
 - [x] Review migration SQL and confirm no cross-tenant relation permits leakage.
 
@@ -160,4 +160,4 @@ The plan covers the PRD acceptance criteria for canonical entities, aliases, APU
 
 ## Implementation checkpoint
 
-Completed in the current increment: schema/migration, audit/spec documentation, scope enforcement primitives, deterministic normalization, Decimal validation, idempotent event persistence service, canonical item/resource services with aliases and protected routes, Decimal-safe APU snapshots, price/yield observations, source/evidence provenance, protected event/retrieval APIs, basic retrieval, S10/MCP import events, Revisor decision events, canonical alias confirmation, region/supplier services and admin routes, `/admin/knowledge`, and dedicated route/UI/security tests. Remaining follow-up: broader integration/security matrix. Verification completed: Knowledge tests, route/UI tests, scoped ESLint, TypeScript, Prisma validation/migration status and production build.
+Completed in the current increment: schema/migration, audit/spec documentation, scope enforcement primitives, deterministic normalization, Decimal validation, idempotent event persistence service, canonical item/resource services with aliases and protected routes, Decimal-safe APU snapshots, price/yield observations, source/evidence provenance including supplier source, protected event/retrieval APIs, basic retrieval, S10/MCP import events, Revisor decision events, canonical alias confirmation, region/supplier services and admin routes, `/admin/knowledge`, operational documentation, and dedicated route/UI/security/integration tests. Remaining follow-up: none for the documented V0 scope; embeddings, ML, scraping, benchmarks, marketplace and public recommendations remain explicitly out of scope. Verification completed: Knowledge and route tests, full test suite, scoped ESLint, TypeScript, Prisma validation/migration status and production build.

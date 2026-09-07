@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/session";
 import { createKnowledgeSupplier, listKnowledgeSuppliers } from "@/lib/knowledge/suppliers";
 
-const schema = z.object({ name: z.string().min(1), legalName: z.string().optional(), ruc: z.string().optional(), regionId: z.string().optional(), website: z.string().url().optional(), phone: z.string().optional(), email: z.string().email().optional(), status: z.string().optional() }).strict();
+const schema = z.object({ name: z.string().min(1), legalName: z.string().optional(), ruc: z.string().optional(), regionId: z.string().optional(), sourceId: z.string().optional(), website: z.string().url().optional(), phone: z.string().optional(), email: z.string().email().optional(), status: z.string().optional() }).strict();
 
 export async function GET(request: Request) {
   if (!(await requireAdminSession("audit.read", request))) return NextResponse.json({ error: "No autorizado" }, { status: 403 });

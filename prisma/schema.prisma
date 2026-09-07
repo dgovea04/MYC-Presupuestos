@@ -2804,6 +2804,7 @@ model KnowledgeSource {
   events      KnowledgeEvent[]
   priceObservations PriceObservation[]
   yieldObservations YieldObservation[]
+  suppliers   KnowledgeSupplier[]
 
   @@index([sourceType, createdAt(sort: Desc)])
   @@map("knowledge_sources")
@@ -2982,15 +2983,18 @@ model KnowledgeSupplier {
   legalName   String?
   ruc         String?
   regionId    String?
+  sourceId    String?
   website     String?
   phone       String?
   email       String?
   status      String   @default("ACTIVE")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  source      KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
 
   @@index([ruc])
   @@index([regionId])
+  @@index([sourceId])
   @@map("knowledge_suppliers")
 }
 

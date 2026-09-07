@@ -5,6 +5,7 @@ export interface KnowledgeSupplierInput {
   legalName?: string;
   ruc?: string;
   regionId?: string;
+  sourceId?: string;
   website?: string;
   phone?: string;
   email?: string;
@@ -25,6 +26,7 @@ export async function createKnowledgeSupplier(input: KnowledgeSupplierInput) {
     legalName: input.legalName?.trim() || undefined,
     ruc: input.ruc ? normalizeRuc(input.ruc) : undefined,
     regionId: input.regionId,
+    sourceId: input.sourceId,
     website: input.website?.trim() || undefined,
     phone: input.phone?.trim() || undefined,
     email: input.email?.trim().toLocaleLowerCase("es-PE") || undefined,
