@@ -21,6 +21,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<ReviewDocumentView | null>(null);
   const [deletingDocument, setDeletingDocument] = useState(false);
+  const [reprocessing, setReprocessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function upload(file: File) {
@@ -57,18 +58,30 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
     finally { setDeletingDocument(false); }
   }
 
-  async function reprocessDocument(document: ReviewDocumentView) {
+  async function reprocess(document: ReviewDocumentView, selection: { pages?: number[]; worksheets?: string[] }) {
+    const version = document.currentVersion;
+    if (!version) return;
+    const target = selection.pages?.[0] ?? selection.worksheets?.[0] ?? "";
+    setReprocessing(`${document.id}:${target}`); setError(null);
+    try {
+      const response = await fetch(`/api/review-documents/${encodeURIComponent(document.id)}/reprocess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(selection) });
+      const payload = await response.json().catch(() => null) as { error?: unknown; warnings?: unknown } | null;
+      if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : "No se pudo reprocesar la cobertura.");
+      const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter((warning): warning is string => typeof warning === "string") : [];
+      if (warnings.length > 0) setError(warnings.join(" "));
+      onChanged();
+    } catch (reprocessError) { setError(reprocessError instanceof Error ? reprocessError.message : "No se pudo reprocesar la cobertura."); }
+    finally { setReprocessing(null); }
+  }
+
+  function reprocessPending(document: ReviewDocumentView) {
     const version = document.currentVersion;
     if (!version) return;
     const isPdf = version.mimeType.includes("pdf") || document.originalFileName.toLowerCase().endsWith(".pdf");
     const pages = version.extractionCoverage?.flatMap((entry) => entry.page !== undefined && entry.coverage !== "PROCESSED" ? [entry.page] : []) ?? [];
     const worksheets = version.extractionCoverage?.flatMap((entry) => entry.worksheet && entry.coverage !== "PROCESSED" ? [entry.worksheet] : []) ?? [];
-    const payload = isPdf ? { pages } : { worksheets: worksheets.length > 0 ? worksheets : (version.sheetNames ?? []) };
-    if (Object.values(payload)[0]?.length === 0) return;
-    setError(null);
-    const response = await fetch(`/api/review-documents/${encodeURIComponent(document.id)}/reprocess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    if (!response.ok) { setError((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "No se pudo reprocesar la cobertura."); return; }
-    onChanged();
+    if (isPdf ? pages.length === 0 : worksheets.length === 0) return;
+    void reprocess(document, isPdf ? { pages } : { worksheets });
   }
 
   function toggleDocument(id: string) {
@@ -81,7 +94,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
 
   return <Card id="review-document-manager" className="theme-surface-card" data-testid="review-document-manager">
     <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>Documentos fuente</CardTitle><p className="mt-1 text-sm text-[var(--app-text-muted)]">PDF/XLSX versionados, sin ejecutar macros, scripts ni enlaces embebidos.</p></div><div className="flex flex-wrap items-center justify-end gap-2"><label htmlFor="review-document-category" className="sr-only">Categoría del documento</label><Select id="review-document-category" aria-label="Categoría del documento" value={category} className="w-52 shrink-0" onChange={(event) => setCategory(event.target.value as (typeof categories)[number])}>{categories.map((value) => <option key={value} value={value}>{categoryLabels[value]}</option>)}</Select><input ref={inputRef} type="file" accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" aria-label="Archivo PDF o XLSX" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} /><Button type="button" onClick={() => inputRef.current?.click()} loading={uploading} aria-label="Cargar documento PDF o XLSX"><Upload className="h-4 w-4" aria-hidden="true" />Cargar documento</Button><Button type="button" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50 sm:ml-auto" onClick={() => setClearDialogOpen(true)} loading={clearing} disabled={documents.length === 0} aria-label="Eliminar documentos fuente"><Trash2 className="h-4 w-4" aria-hidden="true" />Limpiar fuentes</Button></div></CardHeader>
-    <CardContent className="space-y-3">{error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}{documents.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">Todavía no hay documentos asociados a este proyecto.</p> : null}{documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} selectedSheetNames={selectedSheetNames} onToggle={() => toggleDocument(document.id)} onToggleSheet={toggleSheet} onClassified={onChanged} onReprocess={() => void reprocessDocument(document)} onReplace={() => { targetDocumentId.current = document.id; inputRef.current?.click(); }} onDelete={() => setDocumentToDelete(document)} />)}</CardContent>
+    <CardContent className="space-y-3">{error ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p> : null}{documents.length === 0 ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">Todavía no hay documentos asociados a este proyecto.</p> : null}{documents.map((document) => <DocumentRow key={document.id} document={document} selected={selectedDocumentIds.includes(document.id)} selectedSheetNames={selectedSheetNames} onToggle={() => toggleDocument(document.id)} onToggleSheet={toggleSheet} onClassified={onChanged} onReprocess={(selection) => void reprocess(document, selection)} onReprocessPending={() => reprocessPending(document)} reprocessing={reprocessing} onReplace={() => { targetDocumentId.current = document.id; inputRef.current?.click(); }} onDelete={() => setDocumentToDelete(document)} />)}</CardContent>
     <AlertDialog open={clearDialogOpen} title="Limpiar documentos fuente" description="Esta acción eliminará todos los documentos fuente, sus versiones, evidencias y revisiones del proyecto. El presupuesto y sus APU se conservarán." confirmLabel="Sí, limpiar fuentes" onConfirm={() => void clearDocuments()} onCancel={() => setClearDialogOpen(false)} />
     <AlertDialog open={documentToDelete !== null} title="Eliminar documento fuente" description={documentToDelete ? `Se eliminará “${documentToDelete.name}”, todas sus versiones y la evidencia asociada. Las revisiones relacionadas quedarán obsoletas.` : ""} confirmLabel={deletingDocument ? "Eliminando…" : "Sí, eliminar documento"} onConfirm={() => void deleteDocument()} onCancel={() => { if (!deletingDocument) setDocumentToDelete(null); }} />
     <style>{`
@@ -175,7 +188,7 @@ export function DocumentManager({ projectId, documents, selectedDocumentIds = []
   </Card>;
 }
 
-function DocumentRow({ document, selected, selectedSheetNames, onToggle, onToggleSheet, onClassified, onReprocess, onReplace, onDelete }: { document: ReviewDocumentView; selected: boolean; selectedSheetNames: string[]; onToggle: () => void; onToggleSheet: (sheetName: string) => void; onClassified: () => void; onReprocess: () => void; onReplace: () => void; onDelete: () => void }) {
+function DocumentRow({ document, selected, selectedSheetNames, onToggle, onToggleSheet, onClassified, onReprocess, onReprocessPending, reprocessing, onReplace, onDelete }: { document: ReviewDocumentView; selected: boolean; selectedSheetNames: string[]; onToggle: () => void; onToggleSheet: (sheetName: string) => void; onClassified: () => void; onReprocess: (selection: { pages?: number[]; worksheets?: string[] }) => void; onReprocessPending: () => void; reprocessing: string | null; onReplace: () => void; onDelete: () => void }) {
   const version = document.currentVersion;
   const isPdf = version?.mimeType.includes("pdf") || document.originalFileName.toLowerCase().endsWith(".pdf");
   const detail = version ? `${isPdf ? "PDF" : "XLSX"} · versión ${version.versionNumber} · ${isPdf ? `${version.pageCount ?? "—"} páginas` : `${version.sheetCount ?? "—"} hojas`}` : "Sin versión procesable";
@@ -185,6 +198,7 @@ function DocumentRow({ document, selected, selectedSheetNames, onToggle, onToggl
     {!isPdf && version?.sheetNames?.length ? <fieldset className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3"><legend className="px-1 text-xs font-medium text-[var(--app-text-strong)]">Hojas XLSX para la revisión (sin selección: todas)</legend><div className="mt-2 flex flex-wrap gap-3">{version.sheetNames.map((sheetName) => <label key={sheetName} className="flex items-center gap-2 text-xs text-[var(--app-text-strong)]"><input type="checkbox" checked={selectedSheetNames.includes(sheetName)} onChange={() => onToggleSheet(sheetName)} aria-label={`Incluir hoja ${sheetName} de ${document.name}`} className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />{sheetName}</label>)}</div></fieldset> : null}
     {document.classificationSuggestion ? <p aria-label={`Señales de clasificación de ${document.name}`} className="text-xs text-[var(--app-text-muted)]">Señales que sustentan la sugerencia: {document.classificationSuggestion.signals.join(" · ")}</p> : null}
     {document.warnings.length > 0 ? <div className="flex max-w-md items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><ul className="list-disc pl-3">{document.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
-    {document.currentVersion?.extractionCoverage?.some((entry) => entry.coverage !== "PROCESSED") ? <button type="button" onClick={onReprocess} aria-label={`Reprocesar cobertura de ${document.name}`} className="self-start rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/70">Reprocesar cobertura pendiente</button> : null}
+    {document.currentVersion?.extractionCoverage?.some((entry) => entry.coverage !== "PROCESSED") ? <button type="button" onClick={onReprocessPending} aria-label={`Reprocesar cobertura de ${document.name}`} className="self-start rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/70">Reprocesar cobertura pendiente</button> : null}
+    {version?.extractionCoverage?.length ? <fieldset className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3"><legend className="px-1 text-xs font-medium text-[var(--app-text-strong)]">Cobertura y reprocesamiento</legend><div className="mt-2 flex flex-wrap gap-2">{version.extractionCoverage.map((entry) => { const label = typeof entry.page === "number" ? `página ${entry.page}` : `hoja ${entry.worksheet ?? ""}`; const target = `${entry.page ?? entry.worksheet ?? ""}`; return <button key={target} type="button" disabled={reprocessing === `${document.id}:${target}`} onClick={() => onReprocess(typeof entry.page === "number" ? { pages: [entry.page] } : { worksheets: [entry.worksheet ?? ""] })} aria-label={`Reprocesar ${label} de ${document.name}`} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 disabled:opacity-60">Reprocesar {label}</button>; })}</div></fieldset> : null}
   </div>;
 }

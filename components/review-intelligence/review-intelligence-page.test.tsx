@@ -167,6 +167,20 @@ describe("ReviewDashboard", () => {
 });
 
 describe("DocumentManager", () => {
+  it("reprocesses an affected PDF page through an accessible action and refreshes warnings", async () => {
+    const onChanged = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ partial: true, warnings: ["Página 8: OCR no disponible."] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const reprocessable = { ...documentView, currentVersion: { ...documentView.currentVersion!, extractionCoverage: [{ page: 8, coverage: "OCR_REQUIRED", warnings: ["OCR pendiente"] }] } };
+
+    render(<DocumentManager projectId="project-1" documents={[reprocessable]} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reprocesar página 8 de Planos.pdf" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/review-documents/document-1/reprocess", expect.objectContaining({ method: "POST", body: JSON.stringify({ pages: [8] }) })));
+    expect(await screen.findByText("Página 8: OCR no disponible.")).toBeTruthy();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
   it("renders persisted classification signals with accessible explanatory copy", () => {
     const suggestedDocument: ReviewDocumentView = { ...documentView, classificationSuggestion: { category: "QUANTITY_TAKEOFF", score: 0.8, signals: ["filename:metrado", "header:metrado"] } };
     render(<DocumentManager projectId="project-1" documents={[suggestedDocument]} onChanged={vi.fn()} />);
