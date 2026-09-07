@@ -18,6 +18,9 @@ export interface IntegrationAdapter<TExternal, TStaged> {
   readonly capabilities: IntegrationAdapterCapabilities;
   stage(input: TExternal): Promise<TStaged>;
   validate(input: TStaged): Promise<StagedIntegrationData>;
+  preview(input: TStaged): Promise<StagedIntegrationData>;
+  apply(input: TStaged): Promise<{ appliedCount: number }>;
+  rollback(input: TStaged): Promise<{ rolledBackCount: number }>;
 }
 
 export function isValidIntegrationTransition(from: IntegrationSessionStatus, to: IntegrationSessionStatus): boolean {
