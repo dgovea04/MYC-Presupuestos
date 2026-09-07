@@ -113,17 +113,22 @@ export async function resolveComment(
   commentId: string,
   budgetId: string,
   userId: string,
+  expectedUpdatedAt?: Date,
 ): Promise<CollaborationCommentRecord> {
   await resolveBudgetOwnership(budgetId, userId);
 
   await ensureCommentAccess(commentId, budgetId);
 
-  const updated = await prisma.collaborationComment.update({
-    where: { id: commentId },
+  const updated = await prisma.collaborationComment.updateMany({
+    where: { id: commentId, budgetId, ...(expectedUpdatedAt ? { updatedAt: expectedUpdatedAt } : {}) },
     data: {
       resolvedAt: new Date(),
       resolvedById: userId,
     },
+  });
+  if (updated.count === 0) throw new Error("El comentario cambió; actualiza e inténtalo de nuevo");
+  const result = await prisma.collaborationComment.findUniqueOrThrow({
+    where: { id: commentId },
     include: {
       createdBy: { select: { name: true, avatarUrl: true } },
       resolvedBy: { select: { name: true } },
@@ -131,7 +136,7 @@ export async function resolveComment(
     },
   });
 
-  const record = serializeComment(updated as unknown as RawComment);
+  const record = serializeComment(result as unknown as RawComment);
   publishBudgetEvent(budgetId, "comment.updated", record);
   return record;
 }
@@ -140,16 +145,21 @@ export async function reopenComment(
   commentId: string,
   budgetId: string,
   userId: string,
+  expectedUpdatedAt?: Date,
 ): Promise<CollaborationCommentRecord> {
   await resolveBudgetOwnership(budgetId, userId);
   await ensureCommentAccess(commentId, budgetId);
 
-  const updated = await prisma.collaborationComment.update({
-    where: { id: commentId },
+  const updated = await prisma.collaborationComment.updateMany({
+    where: { id: commentId, budgetId, ...(expectedUpdatedAt ? { updatedAt: expectedUpdatedAt } : {}) },
     data: {
       resolvedAt: null,
       resolvedById: null,
     },
+  });
+  if (updated.count === 0) throw new Error("El comentario cambió; actualiza e inténtalo de nuevo");
+  const result = await prisma.collaborationComment.findUniqueOrThrow({
+    where: { id: commentId },
     include: {
       createdBy: { select: { name: true, avatarUrl: true } },
       resolvedBy: { select: { name: true } },
@@ -157,7 +167,7 @@ export async function reopenComment(
     },
   });
 
-  const record = serializeComment(updated as unknown as RawComment);
+  const record = serializeComment(result as unknown as RawComment);
   publishBudgetEvent(budgetId, "comment.updated", record);
   return record;
 }

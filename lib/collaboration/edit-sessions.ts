@@ -10,6 +10,21 @@ import {
 import type { CollaborationEditSessionRecord } from "@/types/collaboration";
 
 type RawSession = Parameters<typeof serializeEditSession>[0];
+export type EditSessionResult = { status: "CLAIMED" | "CONFLICT" | "EXPIRED_REPLACED"; session: CollaborationEditSessionRecord | null };
+
+export async function claimEditSession(input: { budgetId: string; userId: string; entityType: EditSessionStartInput["entityType"]; entityId: string; field: string }): Promise<EditSessionResult> {
+  const { companyId, projectId } = await resolveBudgetOwnership(input.budgetId, input.userId);
+  const parsed = editSessionStartSchema.parse({ entityType: input.entityType, entityId: input.entityId, field: input.field });
+  const now = new Date();
+  const existing = await prisma.collaborationEditSession.findFirst({ where: { budgetId: input.budgetId, entityType: parsed.entityType, entityId: parsed.entityId, field: parsed.field }, include: { user: { select: { name: true } } } });
+  if (existing && existing.expiresAt > now && existing.userId !== input.userId) return { status: "CONFLICT", session: serializeEditSession(existing as unknown as RawSession) };
+  const expiresAt = new Date(now.getTime() + EDIT_SESSION_HEARTBEAT_INTERVAL_MS + EDIT_SESSION_EXPIRY_BUFFER_MS);
+  if (existing) await prisma.collaborationEditSession.delete({ where: { id: existing.id } });
+  const created = await prisma.collaborationEditSession.create({ data: { companyId, projectId, budgetId: input.budgetId, userId: input.userId, entityType: parsed.entityType, entityId: parsed.entityId, field: parsed.field, startedAt: now, lastHeartbeatAt: now, expiresAt }, include: { user: { select: { name: true } } } });
+  const result = serializeEditSession(created as unknown as RawSession);
+  publishBudgetEvent(input.budgetId, "edit-session.started", result);
+  return { status: existing ? "EXPIRED_REPLACED" : "CLAIMED", session: result };
+}
 
 export async function startEditSession(
   budgetId: string,

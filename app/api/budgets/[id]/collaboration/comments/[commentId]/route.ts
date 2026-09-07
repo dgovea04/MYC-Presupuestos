@@ -12,14 +12,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id: budgetId, commentId } = await params;
     const body = await request.json();
+    const expectedUpdatedAt = typeof body.expectedUpdatedAt === "string" ? new Date(body.expectedUpdatedAt) : undefined;
 
     if (body.resolved === true) {
-      const comment = await resolveComment(commentId, budgetId, session.user.id);
+      const comment = await resolveComment(commentId, budgetId, session.user.id, expectedUpdatedAt);
       return NextResponse.json({ comment });
     }
 
     if (body.resolved === false) {
-      const comment = await reopenComment(commentId, budgetId, session.user.id);
+      const comment = await reopenComment(commentId, budgetId, session.user.id, expectedUpdatedAt);
       return NextResponse.json({ comment });
     }
 
