@@ -122,6 +122,48 @@ describe("ReviewDashboard", () => {
     expect(screen.getByText("1 advertencia de procesamiento")).toBeTruthy();
     expect(screen.getByText(/No se generan cambios automáticos/i)).toBeTruthy();
   });
+
+  it("renders validated coverage categories and partial-source warnings from a persisted run", async () => {
+    const persistedRun = {
+      id: "run-coverage",
+      status: "COMPLETED",
+      progressJson: {
+        stage: "completed",
+        completed: 8,
+        total: 8,
+        percent: 100,
+        metrics: {
+          coverageByCategory: { quantity: 12, unit: 9, specification: 7, apuComponent: 4, yield: 3, ignored: "invalid" },
+          partiallyCoveredSources: 2,
+        },
+      },
+      warningsJson: [],
+      createdAt: "2026-09-06T12:00:00.000Z",
+      updatedAt: "2026-09-06T12:05:00.000Z",
+    };
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("review-documents")) return jsonResponse({ documents: [] });
+      if (url.includes("review-runs?") || url.endsWith("/run-coverage")) return jsonResponse({ runs: [persistedRun], ...persistedRun });
+      if (url.includes("findings")) return jsonResponse({ findings: [], page: 1, pageSize: 25, hasNextPage: false });
+      return jsonResponse({});
+    }));
+
+    render(<ReviewIntelligencePage budgetId="budget-coverage" projectId="project-coverage" />);
+
+    const coverage = await screen.findByRole("region", { name: "Cobertura por categoría" });
+    expect(coverage.textContent).toContain("Metrados");
+    expect(coverage.textContent).toContain("12");
+    expect(coverage.textContent).toContain("Unidades");
+    expect(coverage.textContent).toContain("9");
+    expect(coverage.textContent).toContain("Especificaciones");
+    expect(coverage.textContent).toContain("7");
+    expect(coverage.textContent).toContain("APU");
+    expect(coverage.textContent).toContain("4");
+    expect(coverage.textContent).toContain("Rendimientos");
+    expect(coverage.textContent).toContain("3");
+    expect(screen.getByRole("status", { name: "Advertencia de cobertura parcial" }).textContent).toContain("2 fuentes con cobertura parcial");
+  });
 });
 
 describe("DocumentManager", () => {
@@ -243,6 +285,21 @@ describe("FindingDetail", () => {
     render(<FindingDetail finding={finding} canResolve={false} onChanged={vi.fn()} />);
     expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /V.*lido sin cambios/ })).toBeNull();
+  });
+  it("renders comparison details for yield, specification, and missing APU components", () => {
+    const { rerender } = render(<FindingDetail finding={{ ...finding, findingType: "YIELD_MISMATCH", comparison: { documentValue: "8.000", budgetValue: "4.000", difference: "4.000", unit: "m3" } }} canResolve={false} onChanged={vi.fn()} />);
+    expect(screen.getByText("Rendimiento documentado")).toBeTruthy();
+    expect(screen.getByText("8.000")).toBeTruthy();
+    expect(screen.getByText("Rendimiento presupuestado")).toBeTruthy();
+
+    rerender(<FindingDetail finding={{ ...finding, findingType: "TECHNICAL_SPEC_MISMATCH", comparison: { details: { documentSpecification: "Concreto f'c 210", budgetSpecification: "Concreto f'c 280" } } }} canResolve={false} onChanged={vi.fn()} />);
+    expect(screen.getByText("Especificación documentada")).toBeTruthy();
+    expect(screen.getByText("Concreto f'c 210")).toBeTruthy();
+    expect(screen.getByText("Especificación del presupuesto")).toBeTruthy();
+
+    rerender(<FindingDetail finding={{ ...finding, findingType: "INCOMPLETE_APU", comparison: { details: { missingComponents: "arena, aditivo" } } }} canResolve={false} onChanged={vi.fn()} />);
+    expect(screen.getByText("Componentes APU faltantes")).toBeTruthy();
+    expect(screen.getByText("arena, aditivo")).toBeTruthy();
   });
 });
 

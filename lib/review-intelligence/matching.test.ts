@@ -100,4 +100,77 @@ describe("matchBudgetItemToEvidence", () => {
     expect(candidate.score.lessThanOrEqualTo(1)).toBe(true);
     expect(candidate.score.toFixed(9)).toBe("0.838709677");
   });
+
+  it("adds normalized specification, yield, and APU component signals when technical data is compatible", () => {
+    const [candidate] = matchBudgetItemToEvidence({
+      ...item,
+      technicalSpecification: "Concreto f'c 210 kg/cm²",
+      yield: new Decimal("0.125"),
+      apuComponents: ["Material | 1 | Cemento Portland", "Agregado | 2 | Arena gruesa"],
+    }, [evidence({
+      technicalSpecification: "CONCRETO FC 210 KG/CM2",
+      yield: new Decimal("0.125"),
+      apuComponents: ["agregado 2 arena gruesa", "Material 1 cemento portland", "Agua"],
+    })]);
+
+    expect(candidate.signals).toMatchObject({ yield: 1, apuComponents: 1, unitAlias: 1 });
+    expect(candidate.signals.specification).toBeGreaterThan(0);
+    expect(candidate.explanation).toEqual(expect.arrayContaining([
+      expect.stringContaining("specification="),
+      "yield=1.000",
+      "apuComponents=1.000",
+      "unitAlias=1.000",
+    ]));
+  });
+
+  it("recognizes equivalent units through the unit alias signal", () => {
+    const [candidate] = matchBudgetItemToEvidence({ ...item, unit: "m3" }, [evidence({ unit: "M3" })]);
+
+    expect(candidate.signals.unit).toBe(1);
+    expect(candidate.signals.unitAlias).toBe(1);
+  });
+
+  it("keeps optional technical signals out of score normalization when they are missing", () => {
+    const [baseline] = matchBudgetItemToEvidence({ id: "item-3", description: "Concreto", unit: "m3" }, [{ id: "evidence-3", primary: true, description: "Concreto", unit: "m3" }]);
+    const [withMissingTechnicalFields] = matchBudgetItemToEvidence({ id: "item-3", description: "Concreto", unit: "m3", technicalSpecification: undefined, yield: undefined, apuComponents: undefined }, [{ id: "evidence-3", primary: true, description: "Concreto", unit: "m3", technicalSpecification: undefined, yield: undefined, apuComponents: undefined }]);
+
+    expect(withMissingTechnicalFields.score.equals(baseline.score)).toBe(true);
+  });
+
+  it("does not normalize a match against evidence-only code and unit fields", () => {
+    const [candidate] = matchBudgetItemToEvidence(
+      { id: "item-one-sided", description: "Concreto" },
+      [{ id: "evidence-one-sided", primary: true, code: "A-1", description: "Concreto", unit: "m3" }],
+    );
+
+    expect(candidate.score.equals(1)).toBe(true);
+    expect(candidate.confidence).toBe("HIGH");
+  });
+
+  it("keeps empty APU component arrays out of score normalization", () => {
+    const [baseline] = matchBudgetItemToEvidence({ id: "item-empty-components", description: "Concreto" }, [{ id: "evidence-empty-components", primary: true, description: "Concreto" }]);
+    const [withEmptyComponents] = matchBudgetItemToEvidence({ id: "item-empty-components", description: "Concreto", apuComponents: [] }, [{ id: "evidence-empty-components", primary: true, description: "Concreto", apuComponents: [] }]);
+
+    expect(withEmptyComponents.score.equals(baseline.score)).toBe(true);
+  });
+
+  it("matches resource names against TIPO | CANTIDAD | DESCRIPCION APU representations", () => {
+    const [candidate] = matchBudgetItemToEvidence({
+      id: "item-resource-row",
+      description: "Concreto ciclÃ³peo",
+      apuComponents: [
+        "MATERIAL | 0.250 | Cemento Portland Tipo I",
+        "MANO DE OBRA | 0.100 | Operario",
+      ],
+    }, [{
+      id: "evidence-resource-row",
+      primary: true,
+      description: "Cemento Portland Tipo I",
+      apuComponents: ["Cemento Portland Tipo I"],
+    }]);
+
+    expect(candidate.signals.apuComponents).toBe(1);
+    expect(candidate.confidence).not.toBe("LOW");
+    expect(candidate.eligibleForFindings).toBe(true);
+  });
 });

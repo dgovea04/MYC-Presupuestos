@@ -3,6 +3,7 @@ import { ExtractionStatus } from "@prisma/client";
 import { extractDocument, type ExtractionCoverageRecord, type ExtractionOutput } from "./extractors";
 import type { ReviewDocumentFile } from "./documents";
 import type { OcrAdapter } from "./ocr";
+import { classifyEvidenceType, normalizeEvidenceMetadata } from "./normalization";
 
 type PersistedVersion = { id: string; sha256: string };
 type ExtractionClient = {
@@ -41,10 +42,19 @@ async function persistExtraction(input: { version: PersistedVersion; companyId: 
       const sourceHash = createHash("sha256").update(`${input.version.sha256}:${item.content}:${JSON.stringify(item.location ?? {})}`).digest("hex");
       const extractionMethod = item.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE");
       const confidence = item.confidence ?? "MEDIUM";
+      const normalizedMetadata = normalizeEvidenceMetadata(metadataForNormalization(item.metadata ?? {}));
+      const metadataJson = Object.fromEntries(Object.entries({
+        ...normalizedMetadata,
+        quantity: normalizedMetadata.quantity?.toString(),
+        yield: normalizedMetadata.yield?.toString(),
+        primary: item.primary !== false,
+        extractionMethod,
+      }).filter(([, value]) => value !== undefined));
+      const value = normalizedMetadata.quantity?.toString();
       await client.reviewEvidence.upsert({
         where: { documentVersionId_sourceHash: { documentVersionId: input.version.id, sourceHash } },
-        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: item.metadata?.evidenceType ?? "OTHER", originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence, sourceHash },
-        update: { normalizedText: item.content, locationJson: item.location ?? {}, metadataJson: { ...(item.metadata ?? {}), primary: item.primary !== false, extractionMethod }, extractionMethod, confidence },
+        create: { companyId: input.companyId, projectId: input.projectId, documentVersionId: input.version.id, evidenceType: classifyEvidenceType(normalizedMetadata), originalText: item.content, normalizedText: item.content, locationJson: item.location ?? {}, metadataJson, value, unit: normalizedMetadata.unit, extractionMethod, confidence, sourceHash },
+        update: { normalizedText: item.content, locationJson: item.location ?? {}, metadataJson, value, unit: normalizedMetadata.unit, evidenceType: classifyEvidenceType(normalizedMetadata), extractionMethod, confidence },
       });
     }
     const extractionMethod = extracted.extractionMethod ?? extracted.items.find((item) => item.extractionMethod)?.extractionMethod ?? (extracted.kind === "PDF" ? "PDF_TEXT" : "XLSX_CELL_RANGE");
@@ -60,6 +70,13 @@ async function persistExtraction(input: { version: PersistedVersion; companyId: 
       ? Array.from(extractedPdfPages).map((page) => ({ page, coverage: "PROCESSED" as const }))
       : Array.from(new Set(extracted.items.map((item) => item.location?.sheet).filter((sheet): sheet is string => Boolean(sheet)))).map((worksheet) => ({ worksheet, coverage: "PROCESSED" as const })));
     await client.documentVersion.update({ where: { id: input.version.id, companyId: input.companyId, projectId: input.projectId }, data: { extractionStatus: extracted.warnings.length > 0 ? ExtractionStatus.COMPLETED_WITH_WARNINGS : ExtractionStatus.COMPLETED, extractionWarnings: extracted.warnings, pageCount: extracted.pageCount, sheetCount: extracted.sheetCount, extractionMethod, extractionConfidence, extractionCoverage } });
+}
+
+function metadataForNormalization(metadata: NonNullable<ExtractionOutput["items"][number]["metadata"]>): Record<string, unknown> {
+  return {
+    ...metadata,
+    ...(metadata.apuComponents ? { apuComponents: metadata.apuComponents.join("; ") } : {}),
+  };
 }
 
 function parseCoverage(value: unknown): ExtractionCoverageRecord[] {

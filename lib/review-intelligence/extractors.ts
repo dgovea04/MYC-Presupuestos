@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { extractDigitalPdf } from "@/lib/pdf-import/digital-extraction";
 import { validateDocumentFile, type ReviewDocumentFile } from "./documents";
 import { createOcrAdapter, type OcrAdapter } from "./ocr";
+import { classifyEvidenceType, normalizeEvidenceMetadata, parseDecimalText } from "./normalization";
 import type { ConfidenceLevel, ExtractionCoverage, ExtractionMethod } from "./types";
 import { parseReviewCsv } from "./csv";
 
@@ -26,7 +27,7 @@ export type ExtractionItem = {
   content: string;
   primary?: boolean;
   location?: ExtractionLocation;
-  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; spec?: string; technicalSpec?: string; technicalSpecification?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
+  metadata?: { code?: string; description?: string; quantity?: string; unit?: string; yield?: string; spec?: string; technicalSpec?: string; technicalSpecification?: string; discipline?: string; attributes?: Record<string, string>; apuComponents?: string[]; evidenceType?: "QUANTITY" | "UNIT" | "TECHNICAL_SPECIFICATION" | "APU_COMPONENT" | "OTHER" };
   extractionMethod?: ExtractionMethod;
   confidence?: ConfidenceLevel;
 };
@@ -59,7 +60,7 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
 
 function extractCsv(validated: Awaited<ReturnType<typeof validateDocumentFile>>): ExtractionOutput {
   const parsed = parseReviewCsv(validated.bytes);
-  return { kind: "CSV", sha256: validated.sha256, mimeType: validated.mimeType, fileSizeBytes: validated.fileSizeBytes, items: parsed.rows.map((row) => ({ content: row.values.join("\t"), primary: true, location: { row: row.location.row, range: `A${row.location.row}:${columnToLetters(Math.max(1, row.values.length))}${row.location.row}` }, metadata: { attributes: Object.fromEntries(parsed.headers.map((header, index) => [header, row.values[index] ?? ""])), evidenceType: "OTHER" as const }, extractionMethod: "CSV_CELL_RANGE", confidence: "MEDIUM" })), warnings: parsed.warnings, sheetCount: 1, coverage: [{ worksheet: validated.extension, coverage: "PROCESSED", method: "CSV_CELL_RANGE", confidence: "MEDIUM", warnings: parsed.warnings }] };
+  return { kind: "CSV", sha256: validated.sha256, mimeType: validated.mimeType, fileSizeBytes: validated.fileSizeBytes, items: parsed.rows.map((row) => ({ content: row.values.join("\t"), primary: true, location: { row: row.location.row, range: `A${row.location.row}:${columnToLetters(Math.max(1, row.values.length))}${row.location.row}` }, metadata: metadataFromHeaders(parsed.headers, row.values), extractionMethod: "CSV_CELL_RANGE", confidence: "MEDIUM" })), warnings: parsed.warnings, sheetCount: 1, coverage: [{ worksheet: validated.extension, coverage: "PROCESSED", method: "CSV_CELL_RANGE", confidence: "MEDIUM", warnings: parsed.warnings }] };
 }
 
 async function extractPdf(input: ExtractionInput, validated: Awaited<ReturnType<typeof validateDocumentFile>>): Promise<ExtractionOutput> {
@@ -159,7 +160,10 @@ async function extractXlsx(validated: Awaited<ReturnType<typeof validateDocument
         for (let rowNumber = headerRow + 1; rowNumber <= maxRow; rowNumber += 1) {
           const row = rows[rowNumber - 1] ?? [];
           const rowContent = row.slice(minColumn - 1, maxColumn).map((value) => value ?? "").join("\t").trim();
-          if (rowContent) items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, headerRow, rowNumber, minColumn, maxColumn) });
+          if (rowContent) {
+            warnings.push(...invalidNumericWarnings(headers, row.slice(minColumn - 1, maxColumn), worksheet.name, rowNumber));
+            items.push({ content: rowContent, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${rowNumber}:${columnToLetters(maxColumn)}${rowNumber}` }, metadata: metadataFromRows(rows, headerRow, rowNumber, minColumn, maxColumn) });
+          }
         }
       } else items.push({ content, primary: true, location: { sheet: worksheet.name, range: `${columnToLetters(minColumn)}${minRow}:${columnToLetters(maxColumn)}${maxRow}` }, metadata: metadataFromRows(rows, minRow, maxRow, minColumn, maxColumn) });
     }
@@ -182,7 +186,8 @@ function findHeaderRow(rows: string[][], minRow: number, maxRow: number, minColu
     const headers = rows[rowNumber - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
     const hasDescription = headers.some((header) => /desc|partida/i.test(header));
     const hasQuantity = headers.some((header) => /cant|metr|qty/i.test(header));
-    if (hasDescription && hasQuantity) return rowNumber;
+    const hasResource = headers.some((header) => /recurso|componente/i.test(header));
+    if ((hasDescription || hasResource) && hasQuantity) return rowNumber;
   }
   return minRow;
 }
@@ -190,16 +195,39 @@ function findHeaderRow(rows: string[][], minRow: number, maxRow: number, minColu
 function metadataFromRows(rows: string[][], minRow: number, maxRow: number, minColumn: number, maxColumn: number): ExtractionItem["metadata"] {
   const headers = rows[minRow - 1]?.slice(minColumn - 1, maxColumn).map((value) => normalizeText(value ?? "")) ?? [];
   const values = rows[maxRow - 1]?.slice(minColumn - 1, maxColumn) ?? [];
-  const find = (patterns: RegExp[]): string | undefined => { const index = headers.findIndex((header) => patterns.some((pattern) => pattern.test(header))); const value = index >= 0 ? values[index] : undefined; return value?.trim() || undefined; };
-  const spec = find([/spec/i, /tecn/i]);
-  const apuComponents = find([/apu/i, /componente/i])?.split(/[;,|]/).map((value) => value.trim()).filter(Boolean);
-  const explicitCode = find([/c.{0,2}dig/i, /^id$/i, /^item$/i, /^cod$/i, /^code$/i, /codigo.*partida/i, /item.*partida/i]);
-  const code = explicitCode ?? values.find(isCodeLike);
-  const description = find([/^desc/i, /^descripcion/i, /^descripci/i, /^partida$/i, /^nombre/i, /^concepto/i, /^actividad/i])
+  return metadataFromHeaders(headers, values);
+}
+
+function invalidNumericWarnings(headers: string[], values: string[], worksheet: string, row: number): string[] {
+  const warnings: string[] = [];
+  headers.forEach((header, index) => {
+    if (!/^(quantity|cantidad|metrado|qty|yield|rendimiento|performance)$/i.test(headerKey(header))) return;
+    const value = values[index]?.trim() ?? "";
+    if (value && parseDecimalText(value) === undefined) warnings.push(`Hoja ${worksheet}, fila ${row}: valor numérico inválido en ${header}.`);
+  });
+  return warnings;
+}
+
+function metadataFromHeaders(headers: string[], values: string[]): ExtractionItem["metadata"] {
+  const entries = headers.map((header, index) => [header, values[index]?.trim() ?? ""] as const);
+  const find = (matches: (header: string) => boolean): string | undefined => entries.find(([header]) => matches(header))?.[1] || undefined;
+  const code = find((header) => /^(codigo|code|cod|id|item)( de)?( partida)?$/.test(headerKey(header))) ?? values.find(isCodeLike);
+  const description = find((header) => /^(descripcion|nombre|concepto|actividad|partida)$/.test(headerKey(header)))
     ?? values.find((value) => value !== code && isDescriptionLike(value));
-  const metadata = { code, description, quantity: find([/cant/i, /metr/i, /qty/i]), unit: find([/^uni/i, /^unit/i]), spec, technicalSpec: spec, discipline: find([/disc/i, /especial/i]), attributes: {}, apuComponents };
-  const evidenceType = metadata.quantity ? "QUANTITY" : metadata.unit ? "UNIT" : metadata.spec ? "TECHNICAL_SPECIFICATION" : "OTHER";
-  return Object.values(metadata).some((value) => typeof value === "string" && value.length > 0 || Array.isArray(value) && value.length > 0) ? { ...metadata, evidenceType } : undefined;
+  return normalizedExtractionMetadata({
+    code,
+    description,
+    quantity: find((header) => /^(quantity|cantidad|metrado|qty)$/.test(headerKey(header))),
+    unit: find((header) => /^(unit|unidad)$/.test(headerKey(header))),
+    yield: find((header) => /^(yield|rendimiento|performance)$/.test(headerKey(header))),
+    technicalSpecification: find((header) => {
+      const key = headerKey(header);
+      return key.includes("spec") || key.includes("tecn") || key.includes("especific");
+    }),
+    discipline: find((header) => /^(discipline|disciplina|especialidad)$/.test(headerKey(header))),
+    apuComponents: find((header) => /apu|componente|recurso/.test(headerKey(header)) && !/tipo recurso|cantidad recurso/.test(headerKey(header))),
+    attributes: Object.fromEntries(entries),
+  });
 }
 
 function isCodeLike(value: string): boolean { return /^[A-Za-z]?\d+(?:[.\-][A-Za-z0-9]+)+$/.test(value.trim()); }
@@ -229,15 +257,41 @@ function splitPdfEvidenceLines(line: string): string[] {
 function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
   const codeMatch = line.match(/^([A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+)\s+/);
   const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
-  if (!codeMatch && !number) return undefined;
   const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
   const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
   const explicitUnit = line.match(/\b(?:unidad|und)\s*:\s*([A-Za-z0-9²]+)/i)?.[1];
-  const specification = line.match(/(?:especificacion|especificaci\u00f3n|especificaciÃ³n|spec)\s*:\s*([^|]+)/i)?.[1]?.trim();
-  const apuComponents = line.match(/(?:apu|componentes?)\s*:\s*([^|]+)/i)?.[1]?.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
+  const specification = line.match(/(?:especificacion(?: tecnica)?|especificaci\u00f3n(?: t\u00e9cnica)?|especificaciÃ³n(?: tÃ©cnica)?|technical specification|spec)\s*:\s*([^|]+)/i)?.[1]?.trim();
+  const yieldValue = line.match(/(?:yield|rendimiento|performance)\s*:\s*([^|]+)/i)?.[1]?.trim();
+  const apuComponents = line.match(/(?:apu(?: componentes?)?|componentes?|recurso(?:s)?)\s*:\s*([^|]+)/i)?.[1]?.trim();
+  if (!codeMatch && !number && !explicitUnit && !specification && !yieldValue && !apuComponents) return undefined;
   const unitIndex = line.search(/\b(?:unidad|und)\s*:/i);
   const descriptionEnd = number?.index ?? (unitIndex >= 0 ? unitIndex : line.length);
-  return { code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, descriptionEnd).replace(/\s*\|.*$/, "").trim() || undefined, quantity: quantity?.replace(",", "."), unit: unit ?? explicitUnit, spec: specification, technicalSpec: specification, technicalSpecification: specification, apuComponents, evidenceType: number ? "QUANTITY" : explicitUnit ? "UNIT" : specification ? "TECHNICAL_SPECIFICATION" : apuComponents ? "APU_COMPONENT" : "OTHER" };
+  return normalizedExtractionMetadata({ code: codeMatch?.[1], description: line.slice(codeMatch?.[0].length ?? 0, descriptionEnd).replace(/\s*\|.*$/, "").trim() || undefined, quantity, unit: unit ?? explicitUnit, technicalSpecification: specification, yield: yieldValue, apuComponents });
+}
+
+function normalizedExtractionMetadata(metadata: Record<string, unknown>): ExtractionItem["metadata"] {
+  const normalized = normalizeEvidenceMetadata(metadata);
+  const technicalSpecification = normalized.technicalSpecification;
+  const rawUnit = typeof metadata.unit === "string" && metadata.unit.trim() !== "" ? metadata.unit.trim() : undefined;
+  const result = {
+    code: normalized.code,
+    description: normalized.description,
+    quantity: normalized.quantity?.toString(),
+    unit: rawUnit ?? normalized.unit,
+    yield: normalized.yield?.toString(),
+    spec: technicalSpecification,
+    technicalSpec: technicalSpecification,
+    technicalSpecification,
+    discipline: normalized.discipline,
+    attributes: normalized.attributes,
+    apuComponents: normalized.apuComponents,
+    evidenceType: classifyEvidenceType(normalized),
+  };
+  return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined)) as ExtractionItem["metadata"];
+}
+
+function headerKey(value: string): string {
+  return value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ");
 }
 
 function normalizeCell(value: ExcelJS.CellValue): { text: string; hasHyperlink: boolean } {

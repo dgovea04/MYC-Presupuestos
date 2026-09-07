@@ -13,6 +13,57 @@ describe("review extraction persistence", () => {
     expect(client.documentVersion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ extractionStatus: "COMPLETED_WITH_WARNINGS", extractionWarnings: ["macro no ejecutada"] }) }));
   });
 
+  it("persists normalized structured metadata with only a valid decimal quantity", async () => {
+    vi.mocked(extractDocument).mockResolvedValue({
+      kind: "XLSX",
+      sha256: "hash",
+      mimeType: "xlsx",
+      fileSizeBytes: 3,
+      items: [{
+        content: "03.04\tConcreto ciclópeo",
+        location: { sheet: "Metrados APU", range: "A2:J2" },
+        metadata: {
+          code: "03.04",
+          description: "Concreto ciclópeo",
+          quantity: "12,50",
+          unit: "M2",
+          yield: "0.75",
+          technicalSpec: "f'c 140",
+          discipline: "Estructuras",
+          apuComponents: ["cemento", "arena"],
+          attributes: { "Tipo recurso": "Material", "Cantidad recurso": "3.25" },
+        },
+      }, {
+        content: "sin cantidad",
+        location: { sheet: "Metrados APU", range: "A3:J3" },
+        metadata: { quantity: "=SUM(A1:A2)", unit: "m3" },
+      }],
+      warnings: [],
+    });
+    const client = { reviewEvidence: { upsert: vi.fn().mockResolvedValue({}) }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };
+
+    await extractAndPersistDocumentVersion({ file: new File(["x"], "file.xlsx"), version: { id: "version-1", sha256: "hash" }, companyId: "company-1", projectId: "project-1" }, client);
+
+    expect(client.reviewEvidence.upsert).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      create: expect.objectContaining({
+        value: "12.5",
+        unit: "m²",
+        locationJson: { sheet: "Metrados APU", range: "A2:J2" },
+        metadataJson: expect.objectContaining({
+          code: "03.04",
+          yield: "0.75",
+          technicalSpecification: "f'c 140",
+          apuComponents: ["cemento", "arena"],
+          attributes: { "Tipo recurso": "Material", "Cantidad recurso": "3.25" },
+          extractionMethod: "XLSX_CELL_RANGE",
+        }),
+      }),
+    }));
+    expect(client.reviewEvidence.upsert).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      create: expect.objectContaining({ value: undefined, unit: "m³", metadataJson: expect.not.objectContaining({ quantity: expect.anything() }) }),
+    }));
+  });
+
   it("persists failed extraction warning", async () => {
     vi.mocked(extractDocument).mockRejectedValue(new Error("extract failed"));
     const client = { reviewEvidence: { upsert: vi.fn() }, documentVersion: { update: vi.fn().mockResolvedValue({}) } };

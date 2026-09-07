@@ -34,6 +34,8 @@ export function ReviewDashboard({ run, companyId, canManagePrivateLearning = fal
 
   const warningLabel = run.warnings.length === 1 ? "1 advertencia de procesamiento" : `${run.warnings.length} advertencias de procesamiento`;
   const runFindingCount = run.metrics?.findingsByStatus ? Object.values(run.metrics.findingsByStatus).reduce((total, count) => total + count, 0) : undefined;
+  const coverageByCategory = run.metrics?.coverageByCategory;
+  const partiallyCoveredSources = run.metrics?.partiallyCoveredSources;
 
   return (
     <Card className="theme-surface-card" data-testid="review-dashboard">
@@ -57,6 +59,8 @@ export function ReviewDashboard({ run, companyId, canManagePrivateLearning = fal
           <Metric label="Fallos / incompletitud" value={run.metrics ? `${run.metrics.failedChecks ?? run.metrics.failures ?? 0} / ${run.metrics.incompleteItems ?? run.metrics.incompleteness ?? 0}` : "—"} />
         </div>
         <p className="text-sm text-[var(--app-text-muted)]">Delta vs ejecución anterior: {run.metrics?.deltaVsPrevious === undefined || run.metrics.deltaVsPrevious === null ? "—" : `${run.metrics.deltaVsPrevious > 0 ? "+" : ""}${run.metrics.deltaVsPrevious}`}</p>
+        {coverageByCategory ? <section aria-label="Cobertura por categoría" className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3"><h4 className="text-sm font-semibold text-[var(--app-text-strong)]">Cobertura por categoría</h4><dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2"><Coverage label="Metrados" value={coverageByCategory.quantity} /><Coverage label="Unidades" value={coverageByCategory.unit} /><Coverage label="Especificaciones" value={coverageByCategory.specification} /><Coverage label="APU" value={coverageByCategory.apuComponent} /><Coverage label="Rendimientos" value={coverageByCategory.yield} /></dl></section> : null}
+        {partiallyCoveredSources !== undefined && partiallyCoveredSources > 0 ? <div role="status" aria-label="Advertencia de cobertura parcial" className="theme-status-warning rounded-xl border px-3 py-2 text-sm">{partiallyCoveredSources === 1 ? "1 fuente con cobertura parcial" : `${partiallyCoveredSources} fuentes con cobertura parcial`}</div> : null}
         <div aria-label="Progreso por etapas" className="space-y-2">
           <div className="flex justify-between text-xs text-[var(--app-text-muted)]"><span>{stageLabels[run.progress.stage]}</span><span>{run.progress.completed}/{run.progress.total}</span></div>
           <div className="h-2 overflow-hidden rounded-full bg-[var(--app-surface-muted)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={run.progress.percent} aria-label={`Progreso de revisión: ${run.progress.percent}%`}>
@@ -77,6 +81,10 @@ export function ReviewDashboard({ run, companyId, canManagePrivateLearning = fal
       </CardContent>
     </Card>
   );
+}
+
+function Coverage({ label, value }: { label: string; value?: number }) {
+  return <div className="flex items-center justify-between gap-2"><dt className="text-[var(--app-text-muted)]">{label}</dt><dd className="font-medium tabular-nums text-[var(--app-text-strong)]">{value ?? "—"}</dd></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
