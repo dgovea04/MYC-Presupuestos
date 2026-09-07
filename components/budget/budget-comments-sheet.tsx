@@ -11,6 +11,7 @@ interface BudgetCommentsSheetProps {
   budgetId: string;
   entityType?: string;
   entityId?: string;
+  canComment?: boolean;
   onClose: () => void;
 }
 
@@ -19,6 +20,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
   budgetId,
   entityType,
   entityId,
+  canComment = true,
   onClose,
 }: BudgetCommentsSheetProps) {
   const [comments, setComments] = useState<CollaborationCommentRecord[]>([]);
@@ -187,7 +189,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
             </button>
           </div>
         ) : null}
-        <div className="flex gap-2">
+        {canComment ? <div className="flex gap-2">
           <input
             type="text"
             value={body}
@@ -212,7 +214,7 @@ export const BudgetCommentsSheet = memo(function BudgetCommentsSheet({
           >
             <Send className="h-3.5 w-3.5" />
           </button>
-        </div>
+        </div> : <p className="text-xs text-[var(--app-text-muted)]">Solo lectura para este usuario.</p>}
       </div>
     </div>
   );

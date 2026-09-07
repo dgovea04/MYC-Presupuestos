@@ -31,4 +31,37 @@ test.describe("collaboration, controlled integrations and private learning", () 
     const response = await page.request.get(`/api/budgets/${process.env.E2E_FOREIGN_BUDGET_ID ?? "foreign-budget"}/private-learning/suggestions`);
     expect([403, 404]).toContain(response.status());
   });
+
+  test("runs comment reply and optimistic-conflict API flow with the fixture budget", async ({ page }) => {
+    test.skip(!process.env.E2E_COLLABORATION_BUDGET_ID, "Requires a synthetic authenticated budget fixture");
+    await signIn(page);
+    const budgetId = process.env.E2E_COLLABORATION_BUDGET_ID as string;
+    const created = await page.request.post(`/api/budgets/${budgetId}/collaboration/comments`, { data: { entityType: "BUDGET", entityId: budgetId, body: `E2E root ${Date.now()}` } });
+    expect(created.status()).toBe(201);
+    const root = await created.json() as { comment?: { id: string; updatedAt: string } };
+    expect(root.comment?.id).toBeTruthy();
+    const reply = await page.request.post(`/api/budgets/${budgetId}/collaboration/comments`, { data: { entityType: "BUDGET", entityId: budgetId, parentCommentId: root.comment?.id, body: "E2E reply" } });
+    expect(reply.status()).toBe(201);
+    const stale = await page.request.patch(`/api/budgets/${budgetId}/collaboration/comments/${root.comment?.id}`, { data: { resolved: true, expectedUpdatedAt: "2000-01-01T00:00:00.000Z" } });
+    expect(stale.status()).toBe(409);
+  });
+
+  test("runs staged preview, explicit confirmation and rollback for an empty synthetic integration", async ({ page }) => {
+    test.skip(!process.env.E2E_COLLABORATION_BUDGET_ID, "Requires a synthetic authenticated budget fixture");
+    await signIn(page);
+    const budgetId = process.env.E2E_COLLABORATION_BUDGET_ID as string;
+    const requestId = `e2e-session-${Date.now()}`;
+    const created = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions`, { data: { adapter: "xlsx-csv", contractVersion: "1", payload: JSON.stringify({ updates: [] }), requestId } });
+    expect(created.status()).toBe(201);
+    const createdBody = await created.json() as { session: { id: string } };
+    const sessionId = createdBody.session.id;
+    expect((await page.request.post(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/validate`)).status()).toBe(200);
+    const previewResponse = await page.request.get(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/preview`);
+    expect(previewResponse.status()).toBe(200);
+    const preview = await previewResponse.json() as { status: string; confirmationToken: string; expectedVersion: number };
+    expect(preview.status).toBe("PREVIEW_READY");
+    const applied = await page.request.post(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/confirm`, { data: { confirmationToken: preview.confirmationToken, expectedVersion: preview.expectedVersion, requestId: `${requestId}:apply` } });
+    expect(applied.status()).toBe(200);
+    expect((await page.request.post(`/api/budgets/${budgetId}/integrations/sessions/${sessionId}/rollback`, { data: { requestId: `${requestId}:rollback` } })).status()).toBe(200);
+  });
 });

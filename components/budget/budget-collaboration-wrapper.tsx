@@ -19,6 +19,7 @@ interface BudgetCollaborationWrapperProps {
   budgetName: string;
   userId: string;
   canUseCollaboration?: boolean;
+  canComment?: boolean;
   children: React.ReactNode;
 }
 
@@ -28,6 +29,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
   budgetName,
   userId,
   canUseCollaboration = true,
+  canComment = true,
   children,
 }: BudgetCollaborationWrapperProps) {
   const [activeSheet, setActiveSheet] = useState<SheetKind>(null);
@@ -168,6 +170,7 @@ export const BudgetCollaborationWrapper = memo(function BudgetCollaborationWrapp
               <BudgetCommentsSheet
                 open
                 budgetId={budgetId}
+                canComment={canComment}
                 onClose={() => setActiveSheet(null)}
               />
             ) : activeSheet === "history" ? (

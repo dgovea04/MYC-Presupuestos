@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ReviewRunView } from "./types";
 import { reviewLabel, reviewStatusLabels } from "./labels";
+import { PrivateLearningReviewControls } from "@/components/private-learning/private-learning-review-controls";
 
 const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
   validating: "Validando fuentes",
@@ -15,7 +16,7 @@ const stageLabels: Record<ReviewRunView["progress"]["stage"], string> = {
   completed: "Revisión completada",
 };
 
-export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: number; documentCount: number }) {
+export function ReviewDashboard({ run, companyId, canManagePrivateLearning = false }: { run?: ReviewRunView; findingCount: number; documentCount: number; companyId?: string; canManagePrivateLearning?: boolean }) {
   if (!run) {
     return (
       <Card id="review-how-it-works" className="theme-surface-card">
@@ -68,6 +69,7 @@ export function ReviewDashboard({ run }: { run?: ReviewRunView; findingCount: nu
             <div><p className="font-medium">{warningLabel}</p><ul className="mt-1 list-disc pl-4">{run.warnings.map((warning) => <li key={`${warning.code}-${warning.message}`}>{warning.message}</li>)}</ul></div>
           </div>
         ) : null}
+        {companyId ? <PrivateLearningReviewControls companyId={companyId} canManage={canManagePrivateLearning} /> : null}
         <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span><strong>Revisión humana requerida.</strong> No se generan cambios automáticos en el presupuesto.</span>

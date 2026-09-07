@@ -1648,7 +1648,7 @@ function CustomFormulaSheet({
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm" />
-        <Dialog.Content asChild>
+        <Dialog.Content>
           <div className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-2xl outline-none">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>

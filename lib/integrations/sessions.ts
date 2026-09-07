@@ -19,6 +19,7 @@ export async function createIntegrationSession(input: { companyId: string; proje
 
 export async function transitionIntegrationSession(input: { sessionId: string; companyId: string; to: IntegrationSessionStatus }): Promise<IntegrationSessionView> {
   const current = await prisma.integrationSession.findFirst({ where: { id: input.sessionId, companyId: input.companyId } });
+  if (current?.status === input.to) return serializeSession(current);
   if (!current) throw new Error("Sesión de integración no encontrada");
   assertValidIntegrationTransition(current.status as IntegrationSessionStatus, input.to);
   return serializeSession(await prisma.integrationSession.update({ where: { id: current.id }, data: { status: input.to } }));

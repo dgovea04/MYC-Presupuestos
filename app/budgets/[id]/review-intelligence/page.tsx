@@ -21,5 +21,5 @@ export default async function BudgetReviewIntelligencePage({ params }: { params:
   if (!session) notFound();
   const [budget, settings, membership] = await Promise.all([getBudgetHeaderById(id, session.user.id), getUserSettings(session.user.id), assertWorkspaceMembership({ userId: session.user.id, companyId: session.user.activeCompanyId ?? session.user.companyId ?? "", minimumRole: "VIEWER" })]);
   if (!budget) notFound();
-  return <AppShell currentUser={session.user} settings={settings}><ReviewIntelligencePage budgetId={budget.id} projectId={budget.projectId} budgetName={budget.name} canResolve={membership.role !== "VIEWER"} /></AppShell>;
+  return <AppShell currentUser={session.user} settings={settings}><ReviewIntelligencePage budgetId={budget.id} projectId={budget.projectId} companyId={session.user.activeCompanyId ?? session.user.companyId ?? undefined} budgetName={budget.name} canResolve={membership.role !== "VIEWER"} /></AppShell>;
 }
