@@ -157,6 +157,12 @@ function parseBudgetFooterRows(text: string): PdfImportedBudgetFooterRow[] {
 }
 
 function parseBudgetLevels(fileName: string, text: string): PdfImportedBudgetLevel[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lineOrientedCodes = lines.filter((line) => /^\d+(?:\.\d+)*\s+/.test(line)).length;
+  if (lineOrientedCodes >= 2) {
+    return parseLineOrientedBudgetLevels(fileName, lines);
+  }
+
   const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+):\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+:)|$)/gi)];
   const blocks = pageBlocks.length > 0
     ? pageBlocks.map((match) => ({ page: Number(match[1]), text: match[2] ?? "" }))
@@ -186,6 +192,66 @@ function parseBudgetLevels(fileName: string, text: string): PdfImportedBudgetLev
   }
 
   return levels;
+}
+
+function parseLineOrientedBudgetLevels(fileName: string, lines: string[]): PdfImportedBudgetLevel[] {
+  const levels: PdfImportedBudgetLevel[] = [];
+  const levelLines: Array<{ code: string; text: string; sourcePage: number; rawText: string }> = [];
+  let sourcePage = 1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const pageMatch = line.match(/^Pagina\s+(\d+):$/i);
+    if (pageMatch) {
+      sourcePage = Number(pageMatch[1]);
+      continue;
+    }
+
+    const codeMatch = line.match(/^(\d+(?:\.\d+)*)\s+(.+)$/);
+    if (!codeMatch || parseBudgetLine(fileName, line, index + 1, 0.75, sourcePage)) continue;
+
+    const code = codeMatch[1]!;
+    let description = codeMatch[2]!.trim();
+    let rawText = line;
+    let nextIndex = index + 1;
+    while (nextIndex < lines.length && !/^\d+(?:\.\d+)*\s+/.test(lines[nextIndex]!) && !/^Pagina\s+\d+:$/i.test(lines[nextIndex]!)) {
+      description += ` ${lines[nextIndex]!.trim()}`;
+      rawText += ` ${lines[nextIndex]!.trim()}`;
+      nextIndex += 1;
+    }
+    index = nextIndex - 1;
+
+    description = description
+      .replace(/\s+-?\d[\d,]*(?:\.\d+)?\s*$/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (description.length < 3) continue;
+
+    levelLines.push({ code, text: description, sourcePage, rawText });
+  }
+
+  for (const [index, level] of levelLines.entries()) {
+    const parent = [...levelLines.slice(0, index)]
+      .reverse()
+      .find((candidate) => isDirectHierarchyParent(candidate.code, level.code));
+    levels.push({
+      id: `level-${level.code.replace(/[^a-zA-Z0-9]+/g, "-")}`,
+      code: level.code,
+      name: cleanBudgetLevelName(level.text).toUpperCase(),
+      type: level.code.split(".").length === 1 ? "TITLE" : "SUBTITLE",
+      parentId: parent ? `level-${parent.code.replace(/[^a-zA-Z0-9]+/g, "-")}` : null,
+      sortOrder: index + 1,
+    });
+  }
+
+  return levels;
+}
+
+function isDirectHierarchyParent(parentCode: string, childCode: string) {
+  const parentSegments = parentCode.split(".");
+  const childSegments = childCode.split(".");
+  if (childSegments.length !== parentSegments.length + 1) return false;
+  return parentSegments.every((segment, index) => Number(segment) === Number(childSegments[index]));
 }
 
 function cleanBudgetLevelName(value: string) {

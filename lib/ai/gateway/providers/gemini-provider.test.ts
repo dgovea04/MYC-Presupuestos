@@ -330,6 +330,22 @@ describe("Gemini gateway provider", () => {
     });
   });
 
+  it("retries transient 503 responses before failing", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "high demand" } }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "{ }" }] } }] }), { status: 200 }));
+
+    const result = await executeGeminiProvider({
+      task: "pdf_import_structure",
+      messages: [{ role: "user", content: "Devuelve JSON" }],
+      fetchImpl: fetchMock,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.answer).toBe("{ }");
+  });
+
   it("does not expose API keys when Gemini returns an error", async () => {
     vi.stubEnv("GEMINI_API_KEY", "secret-key");
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: "Bad request" } }), { status: 400 }));

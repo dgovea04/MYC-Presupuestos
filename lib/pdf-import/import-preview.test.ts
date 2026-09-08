@@ -100,6 +100,41 @@ describe("pdf import preview", () => {
     ]));
   });
 
+  it("extracts multiline budget levels at any hierarchy depth from OCR text", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-scanned-budget-levels",
+        fileName: "solo-dos-hojas.pdf",
+        role: "BUDGET",
+        requiresOcr: true,
+        ocrApplied: true,
+        text: [
+          "Pagina 1:",
+          "1.01 TRABAJOS PRELIMINARES, OBRAS",
+          "PROVISIONALES 346,438.12",
+          "01.01.01 Obras Provisionales 43,319.02",
+          "01.01.01.01 Alquiler de Oficina, vestuario y almacén mes 4.00 2,500.00 10,000.00",
+          "01.01.02 Trabajos Preliminares 210,644.46",
+          "Pagina 2:",
+          "01.01.02.01 Trazo y replanteo 23,111.25",
+          "01.01.02.01.01 Trazo y replanteo inicial gbl 1.00 2,664.53 2,664.53",
+        ].join("\n"),
+      }],
+    });
+
+    expect(draft.budgets[0]?.levels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "1.01", name: "TRABAJOS PRELIMINARES, OBRAS PROVISIONALES" }),
+      expect.objectContaining({ code: "01.01.01", name: "OBRAS PROVISIONALES" }),
+      expect.objectContaining({ code: "01.01.02.01", name: "TRAZO Y REPLANTEO" }),
+    ]));
+    expect(draft.budgets[0]?.levels.find((level) => level.code === "01.01.02.01")?.parentId)
+      .toBe(draft.budgets[0]?.levels.find((level) => level.code === "01.01.02")?.id);
+    expect(draft.budgets[0]?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "01.01.01.01", levelId: expect.any(String) }),
+      expect.objectContaining({ code: "01.01.02.01.01", levelId: expect.any(String) }),
+    ]));
+  });
+
   it("normalizes known mojibake units and preserves unknown units", () => {
     const draft = createPdfAiImportDraftFromText({
       files: [{

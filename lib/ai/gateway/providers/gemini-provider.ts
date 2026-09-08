@@ -9,6 +9,7 @@ export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
  * and are not suitable for chat, APU generation, or review tasks.
  */
 const AUTOCOMPLETE_ONLY_MODELS = new Set(["gemma-4-31b-it"]);
+const GEMINI_RETRY_DELAYS_MS = [250, 750] as const;
 
 /**
  * Resolves the effective model to use for a given task.
@@ -253,16 +254,28 @@ export async function executeGeminiProvider({
       : {}),
   };
 
-  const response = await fetchImpl(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(resolvedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(resolvedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  let response: Response | undefined;
+
+  for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt += 1) {
+    response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
-    },
-  );
+    });
+
+    if (response.ok || !isTransientGeminiStatus(response.status) || attempt === GEMINI_RETRY_DELAYS_MS.length) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, GEMINI_RETRY_DELAYS_MS[attempt]));
+  }
+
+  if (!response) {
+    throw new Error("Gemini no devolvio una respuesta.");
+  }
 
   if (!response.ok) {
     let detail = "";
@@ -288,6 +301,10 @@ export async function executeGeminiProvider({
     warnings,
     requestBody,
   };
+}
+
+function isTransientGeminiStatus(status: number) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 export function parseGeminiResponseText(payload: unknown): string {
