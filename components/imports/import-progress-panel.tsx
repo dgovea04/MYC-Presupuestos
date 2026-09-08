@@ -15,6 +15,7 @@ type ImportProgressPanelProps = {
   progress: number;
   steps: ImportProgressPanelStep[];
   activeStepIndex: number;
+  progressDetail?: string;
   fileName?: string;
   fileSize?: number;
 };
@@ -26,6 +27,7 @@ export function ImportProgressPanel({
   progress,
   steps,
   activeStepIndex,
+  progressDetail,
   fileName,
   fileSize,
 }: ImportProgressPanelProps) {
@@ -68,6 +70,8 @@ export function ImportProgressPanel({
             style={{ width: `${normalizedProgress}%` }}
           />
         </div>
+
+        {progressDetail ? <p className="mt-2 text-xs font-medium text-[var(--app-text-muted)]">{progressDetail}</p> : null}
 
         <div className="mt-4 grid gap-2 md:grid-cols-4">
           {steps.map((step, index) => {

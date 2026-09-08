@@ -53,6 +53,40 @@ describe("resolveAiCredential", () => {
     delete process.env.OPENAI_API_KEY;
   });
 
+  it("uses a Gemini key saved in user Settings when the scoped credential has not been migrated", async () => {
+    mocks.policy.mockResolvedValue({
+      mode: "PLATFORM",
+      allowUserKeys: false,
+      allowWorkspaceKey: false,
+      fallbackEnabled: true,
+      allowedProviders: ["GEMINI"],
+      allowedModels: [],
+      workspaceId: "w1",
+      planSlug: "pro",
+      canUseChat: true,
+      canUseAgent: true,
+      canUseByok: false,
+      canUseWorkspaceCredential: false,
+      userTokenLimit: null,
+      workspaceTokenLimit: null,
+      hardLimit: true,
+      alertThresholds: [],
+      allowAgentWrites: false,
+      monthlyTokenLimit: null,
+      monthlyBudgetMinor: null,
+      defaultProvider: "GEMINI",
+    });
+    mocks.findMany.mockResolvedValue([]);
+    const getGeminiKey = vi.mocked(await import("@/lib/data/settings")).getDecryptedGeminiApiKey;
+    getGeminiKey.mockResolvedValue("settings-gemini-key");
+
+    const credential = await resolveAiCredential({ userId: "u1", workspaceId: "w1", provider: "gemini", task: "chat" });
+
+    expect(credential.apiKey).toBe("settings-gemini-key");
+    expect(credential.credentialSource).toBe("USER");
+    expect(credential.billingScope).toBe("USER");
+  });
+
   it("validates and resolves a project context before reading its credential", async () => {
     mocks.project.mockResolvedValue({ companyId: "w1" });
     mocks.findMany.mockResolvedValue([{ id: "project-key", provider: "OPENAI", encryptedSecret: "cipher", status: "ACTIVE" }]);

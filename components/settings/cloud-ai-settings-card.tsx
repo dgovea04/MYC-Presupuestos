@@ -38,6 +38,7 @@ const PROVIDER_OPTIONS: Array<{ value: AiProviderPreference; label: string; desc
 ];
 
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
+const CUSTOM_GEMINI_MODEL = "__custom__";
 
 export function CloudAiSettingsCard() {
   const [settings, setSettings] = useState<AiProviderSettingsState | null>(null);
@@ -54,6 +55,7 @@ export function CloudAiSettingsCard() {
 
   const [openaiModel, setOpenaiModel] = useState("");
   const [geminiModel, setGeminiModel] = useState("");
+  const [isGeminiCustomModel, setIsGeminiCustomModel] = useState(false);
   const [openrouterModel, setOpenrouterModel] = useState("");
 
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
@@ -91,6 +93,7 @@ export function CloudAiSettingsCard() {
       setProviderPreference(data.aiProviderPreference);
       setOpenaiModel(data.openaiModel);
       setGeminiModel(data.geminiModel);
+      setIsGeminiCustomModel(data.geminiModel.length > 0 && !GEMINI_MODEL_OPTIONS.some((option) => option.value === data.geminiModel));
       setOpenrouterModel(data.openrouterModel);
       resetKeyEditors();
       resetTests();
@@ -362,17 +365,37 @@ export function CloudAiSettingsCard() {
                   void clearProviderKey("gemini");
                 }}
                 modelControl={
-                  <select
-                    className="flex-1 rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                    value={geminiModel || DEFAULT_GEMINI_MODEL}
-                    onChange={(event) => setGeminiModel(event.target.value)}
-                  >
-                    {GEMINI_MODEL_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      className="flex-1 rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 py-2.5 text-sm text-[var(--app-text)] focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                      value={isGeminiCustomModel ? CUSTOM_GEMINI_MODEL : geminiModel || DEFAULT_GEMINI_MODEL}
+                      onChange={(event) => {
+                        if (event.target.value === CUSTOM_GEMINI_MODEL) {
+                          setIsGeminiCustomModel(true);
+                        } else {
+                          setIsGeminiCustomModel(false);
+                          setGeminiModel(event.target.value);
+                        }
+                      }}
+                    >
+                      {GEMINI_MODEL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                      <option value={CUSTOM_GEMINI_MODEL}>Otro modelo (manual)</option>
+                    </select>
+                    {isGeminiCustomModel ? (
+                      <Input
+                        className="flex-1"
+                        value={geminiModel}
+                        onChange={(event) => setGeminiModel(event.target.value)}
+                        placeholder="Ej. gemini-3.5-pro"
+                        autoComplete="off"
+                        aria-label="Modelo Gemini personalizado"
+                      />
+                    ) : null}
+                  </>
                 }
               />
 

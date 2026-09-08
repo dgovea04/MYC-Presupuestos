@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Loader2, Upload } from "lucide-react";
 import { ImportProgressPanel, type ImportProgressPanelStep } from "@/components/imports/import-progress-panel";
 import { ImportWarningSummary } from "@/components/imports/import-warning-summary";
+import { PreviewDebugPanel } from "@/components/ai/debug-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionPagination } from "@/components/ui/section-pagination";
 import { calculatePdfImportDraftTotals } from "@/lib/pdf-import/calculations";
-import type { PdfAiImportDraft, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence, PdfImportedBudgetFooterRow, PdfImportedBudgetItem, PdfImportedBudgetLevel } from "@/lib/pdf-import/types";
+import type { PdfAiImportDraft, PdfImportAiDebug, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence, PdfImportedBudgetFooterRow, PdfImportedBudgetItem, PdfImportedBudgetLevel } from "@/lib/pdf-import/types";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 
@@ -34,6 +35,11 @@ type PdfImportResult = {
   apuCount: number;
 };
 
+type PdfDraftStreamEvent =
+  | { type: "progress"; phase: "preparing" | "ocr" | "structuring" | "completed"; status?: "started" | "completed"; pageNumber?: number; totalPages?: number; fileName?: string; detail: string }
+  | { type: "result"; draft: PdfAiImportDraft }
+  | { type: "error"; error: string; aiDebug?: PdfImportAiDebug[] };
+
 const progressSteps: ImportProgressPanelStep[] = [
   { label: "Subiendo" },
   { label: "Extrayendo" },
@@ -53,6 +59,20 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
   const [draft, setDraft] = useState<PdfAiImportDraft | null>(initialDraft ?? null);
   const [importResult, setImportResult] = useState<PdfImportResult | null>(null);
   const [error, setError] = useState("");
+  const [aiDebug, setAiDebug] = useState<PdfImportAiDebug[]>(initialDraft?.aiDebug ?? []);
+  const [progress, setProgress] = useState(2);
+  const [progressDetail, setProgressDetail] = useState("Preparando OCR y validando el paquete PDF.");
+  const [progressPage, setProgressPage] = useState<number | null>(null);
+  const [progressTotal, setProgressTotal] = useState<number | null>(null);
+  const [progressFile, setProgressFile] = useState<string | undefined>();
+  const [progressStartedAt, setProgressStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (draftState !== "loading" || progressStartedAt === null) return undefined;
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - progressStartedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [draftState, progressStartedAt]);
 
   const criticalValidationCount = useMemo(
     () => draft?.validations.filter((validation) => validation.severity === "error").length ?? 0,
@@ -65,6 +85,12 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
     const selectedFiles = Array.from(nextFiles ?? []);
     setFiles(selectedFiles);
     setDraft(null);
+    setAiDebug([]);
+    setProgress(2);
+    setProgressDetail("Preparando OCR y validando el paquete PDF.");
+    setProgressPage(null);
+    setProgressTotal(null);
+    setProgressFile(undefined);
     setImportResult(null);
     setFileRoles(Object.fromEntries(selectedFiles.map((file) => [file.name, inferInitialRole(file.name)])));
   }
@@ -80,21 +106,44 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
     setImportState("idle");
     setError("");
     setImportResult(null);
+    setProgress(2);
+    setProgressDetail("Preparando OCR y validando el paquete PDF.");
+    setProgressStartedAt(Date.now());
+    setElapsedSeconds(0);
 
     const formData = createFormData();
 
     try {
       const response = await fetch("/api/imports/pdf/draft", {
         method: "POST",
+        headers: { Accept: "application/x-ndjson" },
         body: formData,
       });
-      const body = (await response.json().catch(() => null)) as (PdfAiImportDraft & { error?: string }) | null;
 
       if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string; aiDebug?: PdfImportAiDebug[] } | null;
+        setAiDebug(body?.aiDebug ?? []);
         throw new Error(body?.error ?? "No se pudo generar el draft PDF.");
       }
 
-      setDraft(body);
+      const body = await readPdfDraftStream(response, (event) => {
+        if (event.type !== "progress") return;
+        setProgressDetail(event.detail);
+        if (event.pageNumber !== undefined) setProgressPage(event.pageNumber);
+        if (event.totalPages !== undefined) setProgressTotal(event.totalPages);
+        if (event.fileName) setProgressFile(event.fileName);
+        setProgress(event.phase === "ocr" && event.totalPages
+          ? Math.min(88, 5 + ((event.pageNumber ?? 0) / event.totalPages) * 83)
+          : event.phase === "structuring" ? 92 : event.phase === "completed" ? 100 : 2);
+      });
+
+      if (body.type === "error") {
+        setAiDebug(body.aiDebug ?? []);
+        throw new Error(body.error);
+      }
+      setDraft(body.draft);
+      setAiDebug(body.draft.aiDebug ?? []);
+      setProgress(100);
       setDraftState("success");
     } catch (nextError) {
       setDraftState("error");
@@ -231,8 +280,9 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
         {draftState === "loading" ? (
           <ImportProgressPanel
             activeStepIndex={2}
-            detail="Extrayendo texto, clasificando documentos y vinculando partidas con APUs."
-            progress={68}
+            detail={progressPage && progressTotal ? `Procesando ${progressFile ?? "PDF"}: página ${progressPage} de ${progressTotal}.` : "Extrayendo texto, clasificando documentos y vinculando partidas con APUs."}
+            progress={progress}
+            progressDetail={`${progressDetail} · ${elapsedSeconds}s transcurridos`}
             status="running"
             steps={progressSteps}
             title="Generando draft PDF"
@@ -240,6 +290,7 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
         ) : null}
 
         {error ? <InlineMessage message={error} /> : null}
+        {aiDebug.length > 0 ? <PreviewDebugPanel debug={createPdfImportDebugView(aiDebug)} title="Diagnóstico IA del importador PDF" /> : null}
         {companies.length === 0 ? <InlineMessage message="Crea una empresa antes de importar proyectos desde PDF." /> : null}
       </section>
 
@@ -268,6 +319,65 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
       {draft ? <DraftPreview draft={draft} criticalValidationCount={criticalValidationCount} onDraftChange={setDraft} /> : null}
     </div>
   );
+}
+
+function createPdfImportDebugView(debug: PdfImportAiDebug[]) {
+  return {
+    structuredParseStatus: "failed" as const,
+    context: {
+      stage: "pdf_import_ocr",
+      requests: debug.length,
+      calls: debug.map((entry) => ({
+        provider: entry.provider,
+        model: entry.model,
+        fileName: entry.fileName,
+        pageNumber: entry.pageNumber,
+        url: entry.request.url,
+        status: entry.response.status,
+        statusText: entry.response.statusText,
+        headers: entry.response.headers,
+      })),
+    },
+    requestBody: debug.length === 1 ? debug[0]?.request.body : { requests: debug.map((entry) => entry.request.body) },
+    ai: {
+      answer: "",
+      rawAnswer: debug.map((entry) => JSON.stringify(entry.response.body)).join("\n\n"),
+      structuredParseStatus: "failed" as const,
+    },
+    validationWarnings: debug.map((entry) => `${entry.provider} · pagina ${entry.pageNumber} · HTTP ${entry.response.status}${entry.error ? ` · ${entry.error}` : ""}`),
+  };
+}
+
+async function readPdfDraftStream(response: Response, onEvent: (event: PdfDraftStreamEvent) => void): Promise<Extract<PdfDraftStreamEvent, { type: "result" | "error" }>> {
+  if (!response.body) throw new Error("El servidor no devolvió un flujo de progreso.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalEvent: Extract<PdfDraftStreamEvent, { type: "result" | "error" }> | null = null;
+
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as PdfDraftStreamEvent;
+      onEvent(event);
+      if (event.type === "result" || event.type === "error") finalEvent = event;
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer) as PdfDraftStreamEvent;
+    onEvent(event);
+    if (event.type === "result" || event.type === "error") finalEvent = event;
+  }
+
+  if (!finalEvent) throw new Error("El servidor cerró el progreso sin devolver un resultado.");
+  return finalEvent;
 }
 
 function DraftPreview({

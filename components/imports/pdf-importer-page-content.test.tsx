@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PdfImporterPageContent } from "./pdf-importer-page-content";
 
@@ -16,6 +16,33 @@ describe("PdfImporterPageContent", () => {
     expect(screen.getByText("PDFs del proyecto")).toBeTruthy();
     expect(screen.getByText("Constructora Demo")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Generar draft/i })).toHaveProperty("disabled", true);
+  });
+
+  it("shows the sanitized AI debugger when OCR fails", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      error: "No se pudo preparar el draft de importacion PDF. Gemini OCR respondio con estado 503.",
+      aiDebug: [{
+        stage: "ocr",
+        provider: "gemini",
+        model: "gemini-2.5-flash-lite",
+        pageNumber: 1,
+        fileName: "scan.pdf",
+        request: { method: "POST", url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent", body: { pdf: { base64: "<redacted>" } } },
+        response: { status: 503, statusText: "Service Unavailable", headers: {}, body: { error: { message: "backend unavailable" } } },
+        error: "HTTP 503",
+      }],
+    }), { status: 500, headers: { "Content-Type": "application/json" } }));
+
+    const { container } = render(<PdfImporterPageContent companies={[{ id: "company-1", name: "Constructora Demo" }]} />);
+    const fileInput = container.querySelector('input[type="file"]');
+    fireEvent.change(fileInput!, { target: { files: [new File(["scan"], "scan.pdf", { type: "application/pdf" })] } });
+    fireEvent.click(screen.getByRole("button", { name: /Generar draft/i }));
+
+    await waitFor(() => expect(screen.getByText("Diagnóstico IA del importador PDF")).toBeTruthy());
+    expect(screen.getByText(/Gemini.*pagina 1.*HTTP 503/i)).toBeTruthy();
+    expect(screen.getByText(/<redacted>/i)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockRestore();
   });
 
   it("renders detected subpartidas in the draft preview", () => {

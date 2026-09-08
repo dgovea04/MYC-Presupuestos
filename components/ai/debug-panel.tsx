@@ -2,15 +2,17 @@ import type { AiApuCatalogGenerationResult, AiEndpointResult } from "@/lib/ai/ty
 
 export function PreviewDebugPanel({
   debug,
+  title = "Debug IA desarrollo",
 }: {
   debug: AiApuCatalogGenerationResult["debug"] | AiEndpointResult["debug"];
+  title?: string;
 }) {
   if (!debug) return null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-950 text-slate-100">
       <div className="border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
-        Debug IA desarrollo
+        {title}
       </div>
       <div className="grid gap-2 p-3">
         <DebugJsonBlock title="Contexto backend" value={"context" in debug ? debug.context : null} />

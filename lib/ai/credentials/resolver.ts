@@ -38,6 +38,12 @@ export async function resolveAiCredential({ userId, workspaceId: requestedWorksp
     const credential = await readScopedCredential({ provider: credentialProvider, scope: candidate.scope, userId, workspaceId, projectId, teamId, prisma });
     if (credential) return { provider: effectiveProvider, credentialSource: candidate.source, credentialId: credential.id, apiKey: credential.apiKey, model, billingScope: candidate.billingScope, tokenLimit: candidate.billingScope === "WORKSPACE" ? policy?.workspaceTokenLimit ?? null : candidate.billingScope === "USER" ? policy?.userTokenLimit ?? null : null, budgetLimitMinor: candidate.billingScope === "WORKSPACE" ? policy?.monthlyBudgetMinor ?? null : candidate.billingScope === "USER" ? policy?.monthlyBudgetMinor ?? null : null, hardLimit: policy?.hardLimit ?? true, alertThresholds: policy?.alertThresholds ?? [], allowAgentWrites: policy?.allowAgentWrites ?? true, fallbackAllowed: candidate.fallbackAllowed, workspaceId, task };
   }
+  // Keep user keys saved in Settings working while deployments migrate them to
+  // AiCredential. BYOK_ONLY remains strict and never falls through here.
+  if (isLegacyAiCredentialFallbackEnabled() && policy?.mode !== "BYOK_ONLY") {
+    const legacyUserCredential = await readLegacyCredential({ provider: credentialProvider, scope: "USER", userId });
+    if (legacyUserCredential) return { provider: effectiveProvider, credentialSource: "USER", credentialId: legacyUserCredential.id, apiKey: legacyUserCredential.apiKey, model, billingScope: "USER", tokenLimit: policy?.userTokenLimit ?? null, budgetLimitMinor: policy?.monthlyBudgetMinor ?? null, hardLimit: policy?.hardLimit ?? true, alertThresholds: policy?.alertThresholds ?? [], allowAgentWrites: policy?.allowAgentWrites ?? true, fallbackAllowed: policy?.fallbackEnabled ?? true, workspaceId, task };
+  }
   const environmentKey = getEnvironmentKey(effectiveProvider);
   if (environmentKey && candidates.some((candidate) => candidate.allowEnvironment)) return { provider: effectiveProvider, credentialSource: "ENVIRONMENT", credentialId: null, apiKey: environmentKey, model, billingScope: "PLATFORM", tokenLimit: policy?.workspaceTokenLimit ?? null, hardLimit: policy?.hardLimit ?? true, alertThresholds: policy?.alertThresholds ?? [], allowAgentWrites: policy?.allowAgentWrites ?? true, fallbackAllowed: policy?.fallbackEnabled ?? true, workspaceId, task };
   if (policy?.mode === "BYOK_ONLY") throw new AiCredentialResolutionError("Este workspace exige una API key propia del usuario para este proveedor.");

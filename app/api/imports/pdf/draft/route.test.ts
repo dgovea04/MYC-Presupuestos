@@ -39,7 +39,8 @@ vi.mock("@/lib/pdf-import/extraction", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/pdf-import/ocr", () => ({
+vi.mock("@/lib/pdf-import/ocr", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/pdf-import/ocr")>()),
   createPdfImportOcrProvider: mocks.createPdfImportOcrProvider,
 }));
 
@@ -244,5 +245,41 @@ describe("POST /api/imports/pdf/draft", () => {
       companyId: "company-1",
       stage: "draft",
     });
+  });
+
+  it("streams OCR progress by page before returning the draft", async () => {
+    mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.assertWorkspaceMembership.mockResolvedValue(undefined);
+    mocks.extractPdfImportFile.mockImplementation(async (file: File, role: string, options?: { onProgress?: (event: { phase: "ocr"; status: "started" | "completed"; pageNumber: number; totalPages: number; fileName: string }) => void }) => {
+      options?.onProgress?.({ phase: "ocr", status: "started", pageNumber: 1, totalPages: 1, fileName: file.name });
+      options?.onProgress?.({ phase: "ocr", status: "completed", pageNumber: 1, totalPages: 1, fileName: file.name });
+      return {
+        id: `file-${file.name}`,
+        fileName: file.name,
+        role,
+        text: "01.01 Trazo y replanteo m2 10 2.50 25.00",
+        pageCount: 1,
+        requiresOcr: true,
+        ocrApplied: true,
+        confidence: 0.75,
+      };
+    });
+    const formData = new FormData();
+    formData.set("companyId", "company-1");
+    formData.append("files", new File(["scan"], "scan.pdf", { type: "application/pdf" }));
+
+    const response = await POST(new Request("http://localhost/api/imports/pdf/draft", {
+      method: "POST",
+      headers: { Accept: "application/x-ndjson" },
+      body: formData,
+    }));
+    const events = (await response.text()).trim().split("\n").map((line) => JSON.parse(line) as { type: string; phase?: string; status?: string });
+
+    expect(response.headers.get("content-type")).toContain("application/x-ndjson");
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "progress", phase: "ocr", status: "started" }),
+      expect.objectContaining({ type: "progress", phase: "ocr", status: "completed" }),
+      expect.objectContaining({ type: "result" }),
+    ]));
   });
 });
