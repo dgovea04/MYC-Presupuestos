@@ -1,14 +1,16 @@
 import { DEFAULT_GEMINI_MODEL } from "@/lib/ai/gateway/providers/gemini-provider";
 import { DEFAULT_OPENROUTER_MODEL } from "@/lib/ai/gateway/providers/openrouter-provider";
 import type { PdfImportProvider } from "@/types/settings";
+import type { PdfImportAiDebug } from "./types";
 
 export type PdfImportOcrResult = {
   text: string;
   confidence: number;
+  debug?: PdfImportAiDebug;
 };
 
 export type PdfImportOcrProvider = {
-  extractText(input: { fileName: string; pageNumber: number; pdfBytes: Uint8Array }): Promise<PdfImportOcrResult>;
+  extractText(input: { fileName: string; pdfBytes: Uint8Array; pageNumber?: number }): Promise<PdfImportOcrResult>;
 };
 
 export const OPENAI_PDF_OCR_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -28,6 +30,13 @@ export type OpenAiPdfImportOcrProviderOptions = Omit<PdfImportOcrProviderOptions
 export class PdfImportOcrUnavailableError extends Error {
   constructor() {
     super("OCR/vision no esta configurado para procesar PDFs escaneados.");
+  }
+}
+
+export class PdfImportOcrProviderError extends Error {
+  constructor(message: string, readonly status: number, readonly debug: PdfImportAiDebug) {
+    super(message);
+    this.name = "PdfImportOcrProviderError";
   }
 }
 
@@ -85,12 +94,32 @@ export function createOpenAiPdfImportOcrProvider({
         body: JSON.stringify(requestBody),
       });
 
+      const responseBody = await readResponseBody(response);
+      const debug = createOcrDebug({
+        provider: "openai",
+        model,
+        input,
+        url: OPENAI_PDF_OCR_RESPONSES_URL,
+        requestBody: {
+          ...requestBody,
+          input: [{
+            role: "user",
+            content: [
+              { type: "input_text", text: buildOcrPrompt(input.pageNumber) },
+              { type: "input_file", filename: input.fileName, file_data: "<redacted>" },
+            ],
+          }],
+          _debug: { pdfBytes: input.pdfBytes.byteLength },
+        },
+        response,
+        responseBody,
+      });
+
       if (!response.ok) {
-        throw new Error(`OpenAI OCR respondio con estado ${response.status}.`);
+        throw new PdfImportOcrProviderError(`OpenAI OCR respondio con estado ${response.status}.`, response.status, { ...debug, error: `HTTP ${response.status}` });
       }
 
-      const payload: unknown = await response.json();
-      return createOcrResult(parseOpenAiOcrText(payload));
+      return createOcrResult(parseOpenAiOcrText(responseBody), debug);
     },
   };
 }
@@ -125,12 +154,32 @@ export function createGeminiPdfImportOcrProvider({
         body: JSON.stringify(requestBody),
       });
 
+      const responseBody = await readResponseBody(response);
+      const debug = createOcrDebug({
+        provider: "gemini",
+        model,
+        input,
+        url: `${GEMINI_PDF_OCR_URL}/${encodeURIComponent(model)}:generateContent`,
+        requestBody: {
+          ...requestBody,
+          contents: [{
+            role: "user",
+            parts: [
+              { text: buildOcrPrompt(input.pageNumber) },
+              { inline_data: { mime_type: "application/pdf", data: "<redacted>" } },
+            ],
+          }],
+          _debug: { model, pdfFileName: input.fileName, pdfBytes: input.pdfBytes.byteLength },
+        },
+        response,
+        responseBody,
+      });
+
       if (!response.ok) {
-        throw new Error(`Gemini OCR respondio con estado ${response.status}.`);
+        throw new PdfImportOcrProviderError(`Gemini OCR respondio con estado ${response.status}.`, response.status, { ...debug, error: `HTTP ${response.status}` });
       }
 
-      const payload: unknown = await response.json();
-      return createOcrResult(parseGeminiOcrText(payload));
+      return createOcrResult(parseGeminiOcrText(responseBody), debug);
     },
   };
 }
@@ -170,29 +219,98 @@ export function createOpenRouterPdfImportOcrProvider({
         body: JSON.stringify(requestBody),
       });
 
+      const responseBody = await readResponseBody(response);
+      const debug = createOcrDebug({
+        provider: "openrouter",
+        model,
+        input,
+        url: OPENROUTER_PDF_OCR_URL,
+        requestBody: {
+          ...requestBody,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: buildOcrPrompt(input.pageNumber) },
+              { type: "file", file: { filename: input.fileName, file_data: "data:application/pdf;base64,<redacted>" } },
+            ],
+          }],
+          _debug: { pdfBytes: input.pdfBytes.byteLength },
+        },
+        response,
+        responseBody,
+      });
+
       if (!response.ok) {
-        throw new Error(`OpenRouter OCR respondio con estado ${response.status}. Verifica que el modelo soporte PDFs/vision.`);
+        throw new PdfImportOcrProviderError(`OpenRouter OCR respondio con estado ${response.status}. Verifica que el modelo soporte PDFs/vision.`, response.status, { ...debug, error: `HTTP ${response.status}` });
       }
 
-      const payload: unknown = await response.json();
-      return createOcrResult(parseOpenRouterOcrText(payload));
+      return createOcrResult(parseOpenRouterOcrText(responseBody), debug);
     },
   };
 }
 
-function buildOcrPrompt(pageNumber: number) {
+function buildOcrPrompt(pageNumber?: number) {
+  const pageInstruction = pageNumber === undefined
+    ? "Procesa todas las paginas del PDF en una sola respuesta. Separa cada pagina con el marcador exacto 'Pagina N:' y conserva el orden original."
+    : `Pagina solicitada: ${pageNumber}.`;
+
   return [
     "Extrae texto y tablas del PDF para importacion de presupuesto de obra.",
     "Preserva codigos, descripciones, unidades, cantidades, precios unitarios y parciales.",
     "Devuelve solo texto plano. No inventes datos faltantes.",
-    `Pagina solicitada: ${pageNumber}.`,
+    pageInstruction,
   ].join("\n");
 }
 
-function createOcrResult(text: string): PdfImportOcrResult {
+function createOcrResult(text: string, debug?: PdfImportAiDebug): PdfImportOcrResult {
   return {
     text,
     confidence: text.trim().length > 0 ? 0.75 : 0.25,
+    debug,
+  };
+}
+
+async function readResponseBody(response: Response | { json: () => Promise<unknown>; text?: () => Promise<string> }) {
+  if (typeof response.text === "function") {
+    const rawBody = await response.text();
+    if (rawBody.trim().length === 0) return null;
+    try {
+      return JSON.parse(rawBody) as unknown;
+    } catch {
+      return rawBody;
+    }
+  }
+
+  return response.json();
+}
+
+function createOcrDebug(input: {
+  provider: PdfImportAiDebug["provider"];
+  model: string;
+  input: { fileName: string; pageNumber?: number };
+  url: string;
+  requestBody: Record<string, unknown>;
+  response: { status: number; statusText?: string; headers?: Headers };
+  responseBody: unknown;
+}): PdfImportAiDebug {
+  const headers: Record<string, string> = {};
+  input.response.headers?.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  return {
+    stage: "ocr",
+    provider: input.provider,
+    model: input.model,
+    pageNumber: input.input.pageNumber ?? 0,
+    fileName: input.input.fileName,
+    request: { method: "POST", url: input.url, body: input.requestBody },
+    response: {
+      status: input.response.status,
+      statusText: input.response.statusText ?? "",
+      headers,
+      body: input.responseBody,
+    },
   };
 }
 

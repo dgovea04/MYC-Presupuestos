@@ -13,10 +13,20 @@ export type PdfImportExtractedFile = {
   requiresOcr: boolean;
   ocrApplied: boolean;
   confidence: number;
+  aiDebug?: NonNullable<Awaited<ReturnType<PdfImportOcrProvider["extractText"]>>["debug"]>[];
 };
 
 export type PdfImportExtractionOptions = {
   ocrProvider?: PdfImportOcrProvider;
+  onProgress?: (event: PdfImportExtractionProgress) => void;
+};
+
+export type PdfImportExtractionProgress = {
+  phase: "ocr";
+  status: "started" | "completed";
+  pageNumber: number;
+  totalPages: number;
+  fileName: string;
 };
 
 export async function extractPdfImportFile(
@@ -31,7 +41,9 @@ export async function extractPdfImportFile(
     .map((page) => `Pagina ${page.page}:\n${page.text}`)
     .join("\n\n");
   const requiresOcr = isLikelyScannedPdfPage(embeddedText);
-  const ocrResult = requiresOcr && options.ocrProvider ? await extractWithOcr(options.ocrProvider, file.name, bytes, digitalExtraction.pageCount) : null;
+  const ocrResult = requiresOcr && options.ocrProvider
+    ? await extractWithOcr(options.ocrProvider, file.name, bytes, digitalExtraction.pageCount, options.onProgress)
+    : null;
   const text = ocrResult?.text ?? embeddedText;
   const inferredRole = role === "AUTO" ? classifyPdfImportPage(text) : role;
 
@@ -44,19 +56,25 @@ export async function extractPdfImportFile(
     requiresOcr,
     ocrApplied: ocrResult != null,
     confidence: ocrResult?.confidence ?? (requiresOcr ? 0.2 : 0.75),
+    aiDebug: ocrResult?.debug,
   };
 }
 
-async function extractWithOcr(provider: PdfImportOcrProvider, fileName: string, pdfBytes: Uint8Array, pageCount: number) {
-  const results: Array<{ text: string; confidence: number }> = [];
-
-  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-    results.push(await provider.extractText({ fileName, pageNumber, pdfBytes }));
-  }
+async function extractWithOcr(
+  provider: PdfImportOcrProvider,
+  fileName: string,
+  pdfBytes: Uint8Array,
+  pageCount: number,
+  onProgress?: PdfImportExtractionOptions["onProgress"],
+) {
+  onProgress?.({ phase: "ocr", status: "started", pageNumber: 1, totalPages: pageCount, fileName });
+  const result = await provider.extractText({ fileName, pdfBytes });
+  onProgress?.({ phase: "ocr", status: "completed", pageNumber: pageCount, totalPages: pageCount, fileName });
 
   return {
-    text: results.map((result, index) => `Pagina ${index + 1}:\n${result.text}`).join("\n\n"),
-    confidence: results.reduce((sum, result) => sum + result.confidence, 0) / Math.max(1, results.length),
+    text: result.text,
+    confidence: result.confidence,
+    debug: result.debug ? [result.debug] : [],
   };
 }
 

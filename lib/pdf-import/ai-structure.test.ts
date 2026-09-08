@@ -194,4 +194,52 @@ describe("pdf import ai structure", () => {
       }),
     );
   });
+
+  it("preserves budget titles, subtitles, and item hierarchy from AI JSON", async () => {
+    const executeAi: PdfImportAiExecutor = vi.fn().mockResolvedValue({
+      answer: JSON.stringify({
+        project: { name: "Obra jerarquica", currency: "PEN" },
+        budgets: [{
+          name: "Presupuesto de obra",
+          levels: [
+            { code: "1.01", name: "TRABAJOS PRELIMINARES", type: "TITLE", parentCode: null, sourcePage: 1, confidence: 0.95 },
+            { code: "01.01.01", name: "Obras Provisionales", type: "SUBTITLE", parentCode: "1.01", sourcePage: 1, confidence: 0.9 },
+          ],
+          items: [{
+            code: "01.01.01.01",
+            description: "Alquiler de Oficina",
+            unit: "mes",
+            quantity: "4",
+            unitPrice: "2500",
+            partial: "10000",
+            sourcePage: 1,
+            confidence: 0.88,
+          }],
+        }],
+        apus: [],
+        subpartidas: [],
+        resources: [],
+        warnings: [],
+      }),
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      requestedModel: "gemini-2.5-flash",
+      fallbackUsed: false,
+      warnings: [],
+    });
+
+    const result = await structurePdfImportWithAi({
+      executeAi,
+      userId: "user-1",
+      companyId: "company-1",
+      files: [{ id: "file-1", fileName: "scan.pdf", role: "BUDGET", text: "texto OCR", pageCount: 1, requiresOcr: true, confidence: 0.2 }],
+    });
+
+    expect(result.draft.budgets[0]?.levels).toEqual([
+      expect.objectContaining({ code: "1.01", name: "TRABAJOS PRELIMINARES", type: "TITLE", parentId: null }),
+      expect.objectContaining({ code: "01.01.01", name: "Obras Provisionales", type: "SUBTITLE" }),
+    ]);
+    expect(result.draft.budgets[0]?.levels[1]?.parentId).toBe(result.draft.budgets[0]?.levels[0]?.id);
+    expect(result.draft.budgets[0]?.items[0]?.levelId).toBe(result.draft.budgets[0]?.levels[1]?.id);
+  });
 });

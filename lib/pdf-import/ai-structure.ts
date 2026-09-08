@@ -5,7 +5,7 @@ import { extractJsonObjectFromText } from "@/lib/ai/structured-output";
 import { buildPdfImportStructurePrompt } from "./prompts";
 import { linkPdfImportDraft } from "./linker";
 import { calculatePdfImportDraftTotals } from "./calculations";
-import type { PdfAiImportDraft, PdfImportDocumentRole, PdfImportedApuRow } from "./types";
+import type { PdfAiImportDraft, PdfImportAiDebug, PdfImportDocumentRole, PdfImportedApuRow } from "./types";
 
 export type PdfImportAiExecutor = (input: {
   provider: AiProviderId;
@@ -29,7 +29,9 @@ export type PdfImportAiStructureInput = {
     text: string;
     pageCount: number;
     requiresOcr: boolean;
+    ocrApplied?: boolean;
     confidence: number;
+    aiDebug?: PdfImportAiDebug[];
   }>;
 };
 
@@ -63,6 +65,13 @@ const aiBudgetItemSchema = aiEvidenceFieldsSchema.extend({
   partial: aiDecimalSchema,
 });
 
+const aiBudgetLevelSchema = aiEvidenceFieldsSchema.extend({
+  code: z.string().nullable().catch(null),
+  name: z.string().nullable().catch(null),
+  type: z.enum(["TITLE", "SUBTITLE", "ITEM_GROUP", "SUBITEM"]).catch("SUBTITLE"),
+  parentCode: z.string().nullable().catch(null),
+});
+
 const aiApuRowSchema = aiEvidenceFieldsSchema.extend({
   description: z.string().nullable().catch(null),
   unit: z.string().nullable().catch(null),
@@ -92,6 +101,7 @@ const aiSubpartidaSchema = aiEvidenceFieldsSchema.extend({
 
 const aiBudgetSchema = z.object({
   name: z.string().nullable().catch(null),
+  levels: z.array(aiBudgetLevelSchema).catch([]),
   items: z.array(aiBudgetItemSchema).catch([]),
 });
 
@@ -195,16 +205,19 @@ function buildDraftFromAiStructure(input: {
       role: file.role,
       pageCount: file.pageCount,
       confidence: file.confidence,
+      ...(file.requiresOcr && file.ocrApplied ? { ocrText: file.text } : {}),
     })),
-    budgets: input.parsed.budgets.map((budget, budgetIndex) => ({
-      id: `ai-budget-${budgetIndex + 1}`,
-      name: budget.name || `Presupuesto ${budgetIndex + 1}`,
-      kind: "SUB_BUDGET",
-      currency,
-      levels: [],
-      items: budget.items
-        .filter((item) => item.code && item.description && item.unit)
-        .map((item, itemIndex) => ({
+    budgets: input.parsed.budgets.map((budget, budgetIndex) => {
+      const levels = buildAiBudgetLevels(budget.levels, budgetIndex);
+      return {
+        id: `ai-budget-${budgetIndex + 1}`,
+        name: budget.name || `Presupuesto ${budgetIndex + 1}`,
+        kind: "SUB_BUDGET" as const,
+        currency,
+        levels,
+        items: budget.items
+          .filter((item) => item.code && item.description && item.unit)
+          .map((item, itemIndex) => ({
           id: `ai-item-${budgetIndex + 1}-${itemIndex + 1}`,
           code: item.code ?? "",
           description: item.description ?? "",
@@ -212,6 +225,7 @@ function buildDraftFromAiStructure(input: {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           partial: item.partial,
+          levelId: findAiLevelId(item.code ?? "", levels),
           sortOrder: itemIndex + 1,
           evidence: {
             sourceFileName: firstFileName,
@@ -221,8 +235,9 @@ function buildDraftFromAiStructure(input: {
           },
           needsReview: item.confidence < 0.7,
           reviewReason: item.confidence < 0.7 ? "Confianza IA baja." : null,
-        })),
-    })),
+          })),
+      };
+    }),
     apus: input.parsed.apus
       .filter((apu) => apu.name && apu.unit)
       .map((apu, apuIndex) => ({
@@ -299,9 +314,52 @@ function buildDraftFromAiStructure(input: {
       ...input.warnings,
       `Estructurado con IA (${input.provider}) en ${input.latencyMs} ms.`,
     ],
+    aiDebug: input.files.flatMap((file) => file.aiDebug ?? []),
   };
 
   return linkPdfImportDraft(calculatePdfImportDraftTotals(draft), { priceTolerance: input.priceTolerance ?? "0.01" });
+}
+
+function buildAiBudgetLevels(
+  levels: Array<z.infer<typeof aiBudgetLevelSchema>>,
+  budgetIndex: number,
+) {
+  const validLevels = levels.filter((level) => level.code && level.name);
+  const idsByCode = new Map(validLevels.map((level, index) => [normalizeHierarchyCode(level.code ?? ""), `ai-level-${budgetIndex + 1}-${index + 1}`]));
+
+  return validLevels.map((level, index) => {
+    const code = level.code ?? "";
+    const normalizedCode = normalizeHierarchyCode(code);
+    const parentCode = level.parentCode ? normalizeHierarchyCode(level.parentCode) : findParentHierarchyCode(normalizedCode, idsByCode);
+    return {
+      id: idsByCode.get(normalizedCode) ?? `ai-level-${budgetIndex + 1}-${index + 1}`,
+      code,
+      name: level.name ?? "Nivel sin nombre",
+      type: level.type,
+      parentId: parentCode ? idsByCode.get(parentCode) ?? null : null,
+      sortOrder: index + 1,
+    };
+  });
+}
+
+function findAiLevelId(code: string, levels: Array<{ id: string; code: string }>) {
+  const normalizedCode = normalizeHierarchyCode(code);
+  return [...levels]
+    .sort((left, right) => right.code.length - left.code.length)
+    .find((level) => normalizedCode === normalizeHierarchyCode(level.code) || normalizedCode.startsWith(`${normalizeHierarchyCode(level.code)}.`))?.id ?? null;
+}
+
+function findParentHierarchyCode(code: string, idsByCode: Map<string, string>) {
+  const segments = code.split(".");
+  for (let length = segments.length - 1; length > 0; length -= 1) {
+    const candidate = segments.slice(0, length).join(".");
+    if (idsByCode.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+function normalizeHierarchyCode(code: string) {
+  return code.split(".").map((segment) => String(Number(segment))).join(".");
 }
 
 function normalizeAiResourceType(value: string | null) {

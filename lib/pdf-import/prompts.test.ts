@@ -13,5 +13,7 @@ describe("pdf import prompts", () => {
     expect(prompt).toContain("No inventes");
     expect(prompt).toContain("presupuesto.pdf");
     expect(prompt).toContain("01.01 Trazo");
+    expect(prompt).toContain("levels");
+    expect(prompt).toContain("parentCode");
   });
 });

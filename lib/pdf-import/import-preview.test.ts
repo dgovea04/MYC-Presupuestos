@@ -165,6 +165,35 @@ describe("pdf import preview", () => {
     expect(draft.links).toContainEqual(expect.objectContaining({ status: "MATCHED" }));
   });
 
+  it("normalizes Gemini OCR tables and preserves the OCR text backup", () => {
+    const ocrText = [
+      "Pagina 1:",
+      "Items | DescripciÃ³n | Unid. | Cant. | Precio | Total",
+      "01.01.01.01 | Alquiler de Oficina | mes | 4.00 | S/2,500.00 | S/10,000.00",
+      "Pagina 2:",
+      "01.01.01.02 | Cartel de Obra | und | 2.00 | S/1,559.51 | S/3,119.02",
+    ].join("\n");
+
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-gemini-ocr",
+        fileName: "scan.pdf",
+        role: "BUDGET",
+        text: ocrText,
+        pageCount: 2,
+        confidence: 0.75,
+        requiresOcr: true,
+        ocrApplied: true,
+      }],
+    });
+
+    expect(draft.budgets[0]?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "01.01.01.01", unit: "mes", quantity: "4.00", unitPrice: "2500.00", partial: "10000.00", evidence: expect.objectContaining({ sourcePage: 1 }) }),
+      expect.objectContaining({ code: "01.01.01.02", unit: "und", evidence: expect.objectContaining({ sourcePage: 2 }) }),
+    ]));
+    expect(draft.sourceFiles[0]?.ocrText).toBe(ocrText);
+  });
+
   it("adds OCR warnings for scanned files depending on provider outcome", () => {
     const draft = createPdfAiImportDraftFromText({
       files: [

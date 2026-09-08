@@ -30,6 +30,7 @@ export function resolveEffectiveGeminiModel(
 }
 
 export const GEMINI_MODEL_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
   { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite" },
@@ -245,7 +246,12 @@ export async function executeGeminiProvider({
   const isGemma = isGemmaModel(resolvedModel);
   const effectiveMessages = isGemma ? simplifyMessagesForGemma(messages) : messages;
   // Gemma uses simplified messages with flat prompt (Ollama-style SYSTEM: prefix in contents)
-  const requestBody = buildGeminiRequestBody(effectiveMessages, { useFlatPrompt: isGemma });
+  const requestBody = {
+    ...buildGeminiRequestBody(effectiveMessages, { useFlatPrompt: isGemma }),
+    ...(task === "pdf_import_structure"
+      ? { generationConfig: { responseMimeType: "application/json" } }
+      : {}),
+  };
 
   const response = await fetchImpl(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(resolvedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`,

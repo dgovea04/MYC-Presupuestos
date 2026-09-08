@@ -6,7 +6,14 @@ import {
   parseGeminiResponseText,
   resolveEffectiveGeminiModel,
   simplifyMessagesForGemma,
+  GEMINI_MODEL_OPTIONS,
 } from "@/lib/ai/gateway/providers/gemini-provider";
+
+describe("Gemini model options", () => {
+  it("includes Gemini 3.5 Flash", () => {
+    expect(GEMINI_MODEL_OPTIONS).toContainEqual({ value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" });
+  });
+});
 
 describe("buildGeminiRequestBody", () => {
   it("uses system_instruction for system messages and contents for user messages", () => {
@@ -302,6 +309,24 @@ describe("Gemini gateway provider", () => {
       requestedModel: "gemini-2.5-flash-lite",
       fallbackUsed: false,
       warnings: [],
+    });
+  });
+
+  it("requests native JSON output for PDF import structuring", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "{}" }] } }] }), { status: 200 }),
+    );
+
+    await executeGeminiProvider({
+      task: "pdf_import_structure",
+      messages: [{ role: "user", content: "Devuelve JSON" }],
+      fetchImpl: fetchMock,
+    });
+
+    const requestBody: unknown = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
+    expect(requestBody).toMatchObject({
+      generationConfig: { responseMimeType: "application/json" },
     });
   });
 

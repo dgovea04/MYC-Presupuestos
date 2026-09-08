@@ -24,12 +24,16 @@ export type CreatePdfAiImportDraftFromTextInput = {
     text: string;
     pageCount?: number;
     confidence?: number;
+    requiresOcr?: boolean;
+    ocrApplied?: boolean;
+    aiDebug?: PdfAiImportDraft["aiDebug"];
   }>;
 };
 
 export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFromTextInput): PdfAiImportDraft {
   const currency = input.currency ?? "PEN";
-  const budgetFiles = input.files.filter((file) => file.role === "BUDGET");
+  const normalizedFiles = input.files.map((file) => ({ ...file, text: normalizePdfImportText(file.text) }));
+  const budgetFiles = normalizedFiles.filter((file) => file.role === "BUDGET");
   const budgetItems = budgetFiles.flatMap((file) => parseBudgetItems(file.fileName, file.text, file.confidence));
   const budgetLevels = budgetFiles.flatMap((file) => parseBudgetLevels(file.fileName, file.text));
   const budgetFooterRows = budgetFiles.flatMap((file) => parseBudgetFooterRows(file.text));
@@ -38,7 +42,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
     ...item,
     levelId: findBudgetLevelId(item.code, budgetLevels),
   }));
-  const apus = input.files.flatMap((file) => (file.role === "APU" ? parseApus(file.fileName, file.text, file.confidence) : []));
+  const apus = normalizedFiles.flatMap((file) => (file.role === "APU" ? parseApus(file.fileName, file.text, file.confidence) : []));
   const resources = apus.flatMap((apu) => apu.rows.map((row): PdfImportedResource => createResourceFromApuRow(row, currency)));
   const warnings: string[] = [];
 
@@ -72,6 +76,7 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
       role: file.role,
       pageCount: file.pageCount ?? 1,
       confidence: file.confidence ?? 0.7,
+      ...(file.requiresOcr && file.ocrApplied ? { ocrText: file.text } : {}),
     })),
     budgets: [
       {
@@ -90,11 +95,24 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
     links: [],
     validations: [],
     warnings,
+    aiDebug: input.files.flatMap((file) => file.aiDebug ?? []),
   };
 
   const priceTolerance = input.priceTolerance ?? "0.01";
   const linkedDraft = linkPdfImportDraft(calculatePdfImportDraftTotals(draft), { priceTolerance });
   return createPdfImportWarnings(linkedDraft, { priceTolerance });
+}
+
+export function normalizePdfImportText(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/\s*\|\s*/g, " ")
+      .replace(/S\/\s*/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim())
+    .filter((line) => !/^[-\s|]+$/.test(line))
+    .join("\n");
 }
 
 function parsePdfSourceMetadata(text: string) {
@@ -194,9 +212,14 @@ function findBudgetLevelId(code: string, levels: PdfImportedBudgetLevel[]) {
 }
 
 function parseBudgetItems(fileName: string, text: string, confidence = 0.75): PdfImportedBudgetItem[] {
+  let sourcePage = 1;
   const lineItems = text
     .split(/\r?\n/)
-    .map((line, index) => parseBudgetLine(fileName, line, index + 1, confidence))
+    .map((line, index) => {
+      const pageMatch = line.match(/^Pagina\s+(\d+):$/i);
+      if (pageMatch) sourcePage = Number(pageMatch[1]);
+      return parseBudgetLine(fileName, line, index + 1, confidence, sourcePage);
+    })
     .filter((item): item is PdfImportedBudgetItem => item != null);
 
   return lineItems.length > 0 ? lineItems : parseFlattenedBudgetItems(fileName, text, confidence);
@@ -284,7 +307,7 @@ function normalizePdfUnit(value: string) {
   return repaired.replace(/Â([°²³])/g, "$1");
 }
 
-function parseBudgetLine(fileName: string, line: string, sortOrder: number, confidence: number): PdfImportedBudgetItem | null {
+function parseBudgetLine(fileName: string, line: string, sortOrder: number, confidence: number, sourcePage = 1): PdfImportedBudgetItem | null {
   const match = line.trim().match(/^(\d+(?:\.\d+)*)\s+(.+?)\s+([^\s\d][^\s]*)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)\s+(-?\d[\d,]*(?:\.\d+)?)$/);
   if (!match) {
     return null;
@@ -302,7 +325,7 @@ function parseBudgetLine(fileName: string, line: string, sortOrder: number, conf
     sortOrder,
     evidence: {
       sourceFileName: fileName,
-      sourcePage: 1,
+      sourcePage,
       rawText: line.trim(),
       confidence,
     },

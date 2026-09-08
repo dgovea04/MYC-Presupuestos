@@ -31,7 +31,7 @@ endobj
     expect(result.text).not.toContain("%PDF-1.7");
   });
 
-  it("runs OCR once per page when a PDF has no embedded text", async () => {
+  it("runs OCR once for the whole PDF when a PDF has no embedded text", async () => {
     const pdf = `%PDF-1.7
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -44,8 +44,8 @@ endobj
 5 0 obj << /Type /Page /Parent 2 0 R >> endobj
 %%EOF`;
     const ocrProvider: PdfImportOcrProvider = {
-      extractText: vi.fn(async ({ pageNumber }) => ({
-        text: pageNumber === 1 ? "PRESUPUESTO 01.01 Concreto" : `Pagina ${pageNumber}`,
+      extractText: vi.fn(async () => ({
+        text: "Pagina 1:\nPRESUPUESTO 01.01 Concreto\n\nPagina 2:\nPagina 2\n\nPagina 3:\nPagina 3",
         confidence: 0.8,
       })),
     };
@@ -56,7 +56,26 @@ endobj
     expect(result.ocrApplied).toBe(true);
     expect(result.role).toBe("BUDGET");
     expect(result.text).toContain("Pagina 3");
-    expect(ocrProvider.extractText).toHaveBeenCalledTimes(3);
+    expect(ocrProvider.extractText).toHaveBeenCalledTimes(1);
+    expect(ocrProvider.extractText).toHaveBeenCalledWith({
+      fileName: "scan.pdf",
+      pdfBytes: expect.any(Uint8Array),
+    });
+  });
+
+  it("emits page progress before and after each OCR request", async () => {
+    const progress = vi.fn();
+    const ocrProvider: PdfImportOcrProvider = {
+      extractText: vi.fn(async () => ({ text: "Pagina 1:\nTexto\n\nPagina 2:\nTexto", confidence: 0.8 })),
+    };
+    const pdf = `%PDF-1.7\n/Count 2\n/Type /Page\n/Type /Page\n%%EOF`;
+
+    await extractPdfImportFile(new File([pdf], "scan.pdf", { type: "application/pdf" }), "AUTO", { ocrProvider, onProgress: progress });
+
+    expect(progress.mock.calls).toEqual([
+      [{ phase: "ocr", status: "started", pageNumber: 1, totalPages: 2, fileName: "scan.pdf" }],
+      [{ phase: "ocr", status: "completed", pageNumber: 2, totalPages: 2, fileName: "scan.pdf" }],
+    ]);
   });
 
   it("counts pages from PDF structure instead of form-feed bytes", async () => {
@@ -100,7 +119,7 @@ endobj
     expect(ocrProvider.extractText).toHaveBeenCalledWith(
       expect.objectContaining({
         fileName: "scan.pdf",
-        pageNumber: 1,
+        pdfBytes: expect.any(Uint8Array),
       }),
     );
   });

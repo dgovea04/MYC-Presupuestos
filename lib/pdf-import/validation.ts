@@ -30,6 +30,7 @@ const pdfImportSourceFileSchema = z.object({
   role: pdfImportDocumentRoleSchema,
   pageCount: z.number().int().min(1),
   confidence: z.number().min(0).max(1),
+  ocrText: z.string().optional(),
 });
 
 const pdfImportedBudgetLevelSchema = z.object({

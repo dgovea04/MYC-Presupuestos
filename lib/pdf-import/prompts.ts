@@ -5,6 +5,16 @@ export const PDF_IMPORT_OUTPUT_JSON_SHAPE = {
   budgets: [
     {
       name: "nombre del presupuesto o especialidad",
+      levels: [
+        {
+          code: "codigo jerarquico observado, por ejemplo 1.01 o 01.01.01",
+          name: "titulo o subtitulo observado",
+          type: "TITLE|SUBTITLE|ITEM_GROUP|SUBITEM",
+          parentCode: "codigo jerarquico padre o null",
+          sourcePage: 1,
+          confidence: 0.9,
+        },
+      ],
       items: [
         {
           code: "codigo observado",
@@ -63,6 +73,8 @@ export function buildPdfImportStructurePrompt({ files, outputShape = PDF_IMPORT_
     "No inventes codigos, cantidades, precios, unidades ni rendimientos. Si un dato no esta observado, usa null o agrega una advertencia.",
     "Preserva los valores numericos como strings decimales sin simbolos de moneda.",
     "Marca confidence bajo cuando el texto sea OCR, incompleto o ambiguo.",
+    "Extrae tambien todos los titulos y subtitulos jerarquicos, aunque no tengan unidad, cantidad o precio.",
+    "Relaciona cada nivel con parentCode y conserva los codigos jerarquicos tal como aparecen.",
     "OUTPUT JSON SHAPE:",
     JSON.stringify(outputShape, null, 2),
     "DOCUMENTOS:",

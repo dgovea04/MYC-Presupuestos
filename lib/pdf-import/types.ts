@@ -24,6 +24,27 @@ export type PdfImportSourceFile = {
   role: PdfImportDocumentRole;
   pageCount: number;
   confidence: number;
+  ocrText?: string;
+};
+
+export type PdfImportAiDebug = {
+  stage: "ocr";
+  provider: "openai" | "gemini" | "openrouter";
+  model: string;
+  pageNumber: number;
+  fileName: string;
+  request: {
+    method: string;
+    url: string;
+    body: Record<string, unknown>;
+  };
+  response: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body: unknown;
+  };
+  error?: string;
 };
 
 export type PdfImportedProject = {
@@ -161,4 +182,5 @@ export type PdfAiImportDraft = {
   validations: PdfImportValidation[];
   reviewApprovals?: PdfImportReviewApproval[];
   warnings: string[];
+  aiDebug?: PdfImportAiDebug[];
 };
