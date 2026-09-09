@@ -29,7 +29,7 @@ export type PdfImportSourceFile = {
 
 export type PdfImportAiDebug = {
   stage: "ocr";
-  provider: "openai" | "gemini" | "openrouter";
+  provider: "openai" | "gemini" | "openrouter" | "ollama";
   model: string;
   pageNumber: number;
   fileName: string;
@@ -118,7 +118,9 @@ export type PdfImportedApu = {
   name: string;
   unit: string;
   performance: string;
+  performanceMissing?: boolean;
   totalUnitCost: string;
+  declaredUnitCost?: string;
   rows: PdfImportedApuRow[];
   evidence: PdfImportSourceEvidence;
 };
@@ -130,6 +132,7 @@ export type PdfImportedSubpartida = {
   unit: string;
   unitPrice: string;
   performance: string;
+  performanceMissing?: boolean;
   rows: PdfImportedApuRow[];
   evidence: PdfImportSourceEvidence;
 };

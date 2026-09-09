@@ -21,6 +21,12 @@ export function createPdfImportWarnings(draft: PdfAiImportDraft, options: PdfImp
     }
   }
 
+  for (const apu of draft.apus) {
+    if (apu.performanceMissing) {
+      addMissingPerformanceValidation(validations, warnings, apu);
+    }
+  }
+
   for (const link of draft.links) {
     if (link.kind !== "BUDGET_ITEM_APU" || !link.toId) {
       continue;
@@ -37,6 +43,19 @@ export function createPdfImportWarnings(draft: PdfAiImportDraft, options: PdfImp
     validations,
     warnings,
   };
+}
+
+function addMissingPerformanceValidation(validations: PdfImportValidation[], warnings: string[], apu: PdfImportedApu) {
+  const code = apu.budgetItemCode ?? apu.id;
+  const message = `La partida ${code} no informa rendimiento; se asumió 1. Verifica y aprueba este valor antes de importar.`;
+  pushUniqueValidation(validations, {
+    id: `validation-${apu.id}-missing-performance`,
+    severity: "error",
+    code: "MISSING_PERFORMANCE",
+    message,
+    entityId: apu.id,
+  });
+  pushUniqueWarning(warnings, message);
 }
 
 function addBudgetPartialValidation(validations: PdfImportValidation[], warnings: string[], item: PdfImportedBudgetItem) {

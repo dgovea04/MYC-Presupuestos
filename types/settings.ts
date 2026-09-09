@@ -27,7 +27,7 @@ export const DEFAULT_EXCEL_ROW_HEIGHT = 40;
 export const AI_PROVIDER_OPTIONS = ["auto", "ollama", "chatgpt_bridge", "openai", "gemini", "openrouter", "agent"] as const;
 export type AiProviderPreference = (typeof AI_PROVIDER_OPTIONS)[number];
 
-export const PDF_IMPORT_PROVIDER_OPTIONS = ["openai", "gemini", "openrouter"] as const;
+export const PDF_IMPORT_PROVIDER_OPTIONS = ["openai", "gemini", "openrouter", "ollama"] as const;
 export type PdfImportProvider = (typeof PDF_IMPORT_PROVIDER_OPTIONS)[number];
 export const DEFAULT_PDF_IMPORT_PROVIDER: PdfImportProvider = "openai";
 

@@ -24,6 +24,7 @@ describe("pdf import skill registry", () => {
 
     const content = request.messages.map((message) => message.content).join("\n");
     expect(request.schemaName).toBe("pdf_import_structure_v1");
+    expect(request.schema).toBeDefined();
     expect(content).toContain("Responde unicamente con JSON valido");
     expect(content).toContain("Estructura presupuesto.pdf");
   });

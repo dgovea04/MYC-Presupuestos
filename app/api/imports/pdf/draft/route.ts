@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     if (request.headers.get("accept")?.includes("application/x-ndjson")) {
       return createPdfDraftProgressStream({ session, input, aiConfiguration });
     }
-    const ocrProvider = aiConfiguration.apiKey
+    const ocrProvider = aiConfiguration.provider === "ollama" || aiConfiguration.apiKey
       ? createPdfImportOcrProvider(aiConfiguration)
       : undefined;
     const extractedFiles = await Promise.all(input.files.map(({ file, role }) => extractPdfImportFile(file, role, { ocrProvider })));
@@ -153,7 +153,7 @@ async function preparePdfDraft(input: {
   aiConfiguration: Awaited<ReturnType<typeof getPdfImportAiConfiguration>>;
   onProgress?: (event: PdfDraftProgressEvent) => void;
 }) {
-  const ocrProvider = input.aiConfiguration.apiKey ? createPdfImportOcrProvider(input.aiConfiguration) : undefined;
+  const ocrProvider = input.aiConfiguration.provider === "ollama" || input.aiConfiguration.apiKey ? createPdfImportOcrProvider(input.aiConfiguration) : undefined;
   const extractedFiles = await Promise.all(input.input.files.map(({ file, role }) => extractPdfImportFile(file, role, {
     ocrProvider,
     onProgress: (event) => input.onProgress?.({
@@ -233,7 +233,10 @@ function shouldUseAiStructureFallback(
 ) {
   const itemCount = draft.budgets.reduce((sum, budget) => sum + budget.items.length, 0);
   const hasApuSource = files.some((file) => file.role === "APU");
-  return itemCount === 0 || hasApuSource && draft.apus.length === 0 || files.some((file) => file.requiresOcr);
+  // OCR supplies text to the same deterministic parser used for digital PDFs.
+  // AI remains a fallback only when the parser cannot recover budget rows or
+  // when a separate APU source still requires interpretation.
+  return itemCount === 0 || hasApuSource && draft.apus.length === 0;
 }
 
 async function createAiStructuredDraftOrFallback(input: {

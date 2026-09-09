@@ -18,6 +18,36 @@ describe("PdfImporterPageContent", () => {
     expect(screen.getByRole("button", { name: /Generar draft/i })).toHaveProperty("disabled", true);
   });
 
+  it("presents the multi-file upload area with a shared document type selector", () => {
+    render(<PdfImporterPageContent companies={[{ id: "company-1", name: "Constructora Demo" }]} />);
+
+    expect(screen.getByRole("combobox", { name: "Tipo de archivo PDF" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Subir archivos PDF" })).toBeTruthy();
+    expect(screen.getByText("Arrastra y suelta archivos aquí o usa el botón superior")).toBeTruthy();
+    expect(screen.getByText(/PDF de presupuesto, precios unitarios/)).toBeTruthy();
+  });
+
+  it("keeps multiple selected PDFs and applies the selected type", () => {
+    const { container } = render(<PdfImporterPageContent companies={[{ id: "company-1", name: "Constructora Demo" }]} />);
+    const roleSelect = screen.getByRole("combobox", { name: "Tipo de archivo PDF" });
+    fireEvent.change(roleSelect, { target: { value: "APU" } });
+
+    const fileInput = container.querySelector('input[type="file"]');
+    fireEvent.change(fileInput!, {
+      target: {
+        files: [
+          new File(["budget"], "presupuesto.pdf", { type: "application/pdf" }),
+          new File(["apu"], "precios-unitarios.pdf", { type: "application/pdf" }),
+        ],
+      },
+    });
+
+    expect(screen.getByText("presupuesto.pdf")).toBeTruthy();
+    expect(screen.getByText("precios-unitarios.pdf")).toBeTruthy();
+    expect(screen.getAllByRole("combobox", { name: /Tipo de presupuesto.pdf|Tipo de precios-unitarios.pdf/ })).toHaveLength(2);
+    expect(screen.getAllByRole("combobox", { name: /Tipo de presupuesto.pdf|Tipo de precios-unitarios.pdf/ }).every((select) => (select as HTMLSelectElement).value === "APU")).toBe(true);
+  });
+
   it("shows the sanitized AI debugger when OCR fails", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
       error: "No se pudo preparar el draft de importacion PDF. Gemini OCR respondio con estado 503.",
@@ -291,9 +321,13 @@ describe("PdfImporterPageContent", () => {
 
     expect(screen.getByText("Revision requerida")).toBeTruthy();
     expect(screen.getByText("Partidas sin APU")).toBeTruthy();
+    expect(screen.getByText("01.01 · Partida sin APU")).toBeTruthy();
     expect(screen.getByDisplayValue("Partida sin APU")).toBeTruthy();
+    expect(screen.getByText("Sin APU")).toBeTruthy();
+    expect(screen.getByText("Diferencia: 20.00")).toBeTruthy();
     expect(screen.getByText("APU sin partida")).toBeTruthy();
     expect(screen.getByText("Diferencia de precio.")).toBeTruthy();
+    expect(screen.getByText("01.02 · Partida con diferencia")).toBeTruthy();
     expect(screen.getByText("Subpartida ambigua")).toBeTruthy();
     expect(screen.getByText("Cemento nuevo")).toBeTruthy();
     expect(screen.getAllByText("scan.pdf p. 1").length).toBeGreaterThan(0);
@@ -344,14 +378,14 @@ describe("PdfImporterPageContent", () => {
     );
 
     expect(screen.getByText("Pagina 1 de 2")).toBeTruthy();
-    expect(screen.getByText("Partida sin APU 1")).toBeTruthy();
-    expect(screen.getByText("Partida sin APU 6")).toBeTruthy();
-    expect(screen.queryByText("Partida sin APU 7")).toBeNull();
+    expect(screen.getByText("01.01 · Partida sin APU 1")).toBeTruthy();
+    expect(screen.getByText("01.06 · Partida sin APU 6")).toBeTruthy();
+    expect(screen.queryByText("01.07 · Partida sin APU 7")).toBeNull();
 
     fireEvent.click(screen.getByText("Siguiente"));
 
     expect(screen.getByText("Pagina 2 de 2")).toBeTruthy();
-    expect(screen.getByText("Partida sin APU 7")).toBeTruthy();
+    expect(screen.getByText("01.07 · Partida sin APU 7")).toBeTruthy();
   });
 
   it("allows approving a linked price difference for import review", () => {
@@ -361,6 +395,30 @@ describe("PdfImporterPageContent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aprobar diferencia" }));
 
     expect(screen.getByText("0 errores criticos")).toBeTruthy();
+  });
+
+  it("allows approving an assumed performance of one", () => {
+    render(<PdfImporterPageContent companies={[{ id: "company-1", name: "Constructora Demo" }]} initialDraft={{
+      source: "PDF_AI",
+      project: { name: "Proyecto", currency: "PEN" },
+      sourceFiles: [{ id: "file-1", fileName: "apus.pdf", role: "APU", pageCount: 1, confidence: 0.9 }],
+      budgets: [],
+      apus: [{
+        id: "apu-2-4", budgetItemCode: "2.4", name: "EXCAVACION EN EXPLANACIONES EN ROCA FIJA", unit: "M3",
+        performance: "1", performanceMissing: true, totalUnitCost: "27.62", rows: [],
+        evidence: { sourceFileName: "apus.pdf", sourcePage: 1, rawText: "Rendimiento: M3/DIA", confidence: 0.9 },
+      }],
+      subpartidas: [], resources: [], links: [],
+      validations: [{ id: "validation-apu-2-4-performance", severity: "error", code: "MISSING_PERFORMANCE", message: "La partida 2.4 no informa rendimiento; se asumió 1.", entityId: "apu-2-4" }],
+      warnings: ["La partida 2.4 no informa rendimiento; se asumiÃ³ 1."],
+    }} />);
+
+    expect(screen.getByText("APUs sin rendimiento")).toBeTruthy();
+    expect(screen.getAllByText("La partida 2.4 no informa rendimiento; se asumiÃ³ 1.")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Aprobar rendimiento 1" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Aprobar rendimiento 1" }));
+    expect(screen.queryByText("APUs sin rendimiento")).toBeNull();
+    expect(screen.getByText("Rendimiento 1 aprobado para apu-2-4.")).toBeTruthy();
   });
 
   it("allows linking a missing budget item APU from review", () => {

@@ -57,7 +57,8 @@ export function parseOllamaAnswer(payload: unknown) {
 }
 
 const DEFAULT_OLLAMA_TIMEOUT_MS = 180_000;
-const DEFAULT_JSON_NUM_PREDICT = 900;
+const DEFAULT_JSON_NUM_PREDICT = 8_000;
+const DEFAULT_JSON_NUM_CTX = 16_384;
 const DEFAULT_CHAT_NUM_PREDICT = 1_200;
 
 export async function askOllama({
@@ -82,10 +83,9 @@ export async function askOllama({
         model,
         messages,
         stream: false,
-        options: {
-          temperature: responseFormat ? 0 : 0.2,
-          num_predict: responseFormat ? DEFAULT_JSON_NUM_PREDICT : DEFAULT_CHAT_NUM_PREDICT,
-        },
+        options: responseFormat
+          ? { temperature: 0, num_predict: DEFAULT_JSON_NUM_PREDICT, num_ctx: DEFAULT_JSON_NUM_CTX }
+          : { temperature: 0.2, num_predict: DEFAULT_CHAT_NUM_PREDICT },
         ...(responseFormat ? { format: responseFormat } : {}),
       }),
     });

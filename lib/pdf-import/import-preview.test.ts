@@ -3,6 +3,49 @@ import { describe, expect, it } from "vitest";
 import { createPdfAiImportDraftFromText } from "./import-preview";
 
 describe("pdf import preview", () => {
+  it("uses the deterministic digital-PDF parser for OCR rows with segment markers", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-ocr-budget",
+        fileName: "solo-dos-hojas.pdf",
+        role: "BUDGET",
+        requiresOcr: true,
+        ocrApplied: true,
+        text: [
+          "Pagina 1, segmento 1:",
+          "01.01.01.01\tAlquiler de Oficina, vestuario y almacén\tmes\t4.00\t2500.00\t10000.00",
+          "Pagina 2, segmento 1:",
+          "01.01.02.02.03\tLimpieza final de la obra\tgbl\t1.00\t3056.70\t3056.70",
+        ].join("\n"),
+      }],
+    });
+
+    expect(draft.budgets[0]?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "01.01.01.01", description: "Alquiler de Oficina, vestuario y almacén" }),
+      expect.objectContaining({ code: "01.01.02.02.03", unit: "gbl", quantity: "1.00", partial: "3056.70" }),
+    ]));
+  });
+
+  it("deduplicates a row repeated across OCR segment overlap", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-overlap",
+        fileName: "scan.pdf",
+        role: "BUDGET",
+        requiresOcr: true,
+        ocrApplied: true,
+        text: [
+          "Pagina 1, segmento 2:",
+          "01.01.01.01\tAlquiler de oficina\tmes\t4.00\t2500.00\t10000.00",
+          "Pagina 1, segmento 3:",
+          "01.01.01.01\tAlquiler de oficina\tmes\t4.00\t2500.00\t10000.00",
+        ].join("\n"),
+      }],
+    });
+
+    expect(draft.budgets[0]?.items.filter((item) => item.code === "01.01.01.01")).toHaveLength(1);
+  });
+
   it("parses flattened rows from generated digital PDF text without AI", () => {
     const draft = createPdfAiImportDraftFromText({
       files: [
@@ -24,6 +67,81 @@ describe("pdf import preview", () => {
       unitPrice: "910909.61",
       partial: "910909.61",
     });
+  });
+
+  it("parses digital analysis and subpartida sections and links them deterministically", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [
+        {
+          id: "file-budget-real-format",
+          fileName: "Presupuesto.pdf",
+          role: "BUDGET",
+          text: "Pagina 1:\nPRESUPUESTO ITEM PARTIDA UNIDAD METRADO CU PARCIAL MOVILIZACION Y DESMOVILIZACION DE EQUIPOS 1.1 GLB 1.00 910,909.61 910,909.61",
+        },
+        {
+          id: "file-apu-real-format",
+          fileName: "Análisis_de_Costos.pdf",
+          role: "APU",
+          text: "Pagina 1:\nANÁLISIS DE COSTOS UNITARIOS PROYECTO: CARRETERA MONEDA: SOLES 1.1 MOVILIZACION Y DESMOVILIZACION DE EQUIPOS Rendimiento: 1.0000 GLB/DIA Unidad: GLB Costo Unitario: 910,909.61 x [GLB] Insumo Unidad Cuadrilla Cantidad PU Parcial PRODUCCION CONCRETO M3 1.00 910,909.61 910,909.61 Materiales: 910,909.61 Sub Partidas: 0.00",
+        },
+        {
+          id: "file-subpartidas-real-format",
+          fileName: "Sub_partidas.pdf",
+          role: "SUBPARTIDAS",
+          text: "Pagina 1:\nSUBPARTIDAS - ANÁLISIS DE COSTOS UNITARIOS PROYECTO: CARRETERA MONEDA: SOLES PRODUCCION CONCRETO Rendimiento: 120.0000 M3/DIA Unidad: M3 Costo Unitario: 327.41 x [M3] Insumo Unidad Cuadrilla Cantidad PU Parcial CEMENTO BLS 1.0000 23.32 23.32 Materiales: 23.32",
+        },
+      ],
+    });
+
+    expect(draft.apus).toHaveLength(1);
+    expect(draft.apus[0]).toMatchObject({ budgetItemCode: "1.1", unit: "GLB", totalUnitCost: "910909.61" });
+    expect(draft.apus[0]?.rows).toHaveLength(1);
+    expect(draft.subpartidas).toHaveLength(1);
+    expect(draft.subpartidas[0]).toMatchObject({ description: "PRODUCCION CONCRETO", unit: "M3", unitPrice: "23.32" });
+    expect(draft.links).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "BUDGET_ITEM_APU", status: "MATCHED" }),
+      expect.objectContaining({ kind: "APU_SUBPARTIDA", status: "MATCHED" }),
+    ]));
+  });
+
+  it("assumes performance 1 and flags an APU when the PDF omits its numeric performance", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [
+        {
+          id: "file-budget-missing-performance",
+          fileName: "Presupuesto.pdf",
+          role: "BUDGET",
+          text: "Pagina 1:\nEXCAVACION EN EXPLANACIONES EN ROCA FIJA 2.4 M3 1.00 27.62 27.62",
+        },
+        {
+          id: "file-apu-missing-performance",
+          fileName: "Análisis_de_Costos.pdf",
+          role: "APU",
+          text: "Pagina 1:\nANÁLISIS DE COSTOS UNITARIOS PROYECTO: CARRETERA MONEDA: SOLES 2.4 EXCAVACION EN EXPLANACIONES EN ROCA FIJA Rendimiento: M3/DIA Unidad: M3 Costo Unitario: 27.62 x [M3] Insumo Unidad Cuadrilla Cantidad PU Parcial MANO DE OBRA HH 1.00 10.00 10.00",
+        },
+      ],
+    });
+
+    expect(draft.apus).toEqual([
+      expect.objectContaining({ budgetItemCode: "2.4", performance: "1", performanceMissing: true }),
+    ]);
+    expect(draft.validations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "MISSING_PERFORMANCE", entityId: "apu-2-4" }),
+    ]));
+  });
+
+  it("keeps regular APUs when the same analysis PDF also has missing performances", () => {
+    const draft = createPdfAiImportDraftFromText({
+      files: [{
+        id: "file-apu-mixed-performance",
+        fileName: "Análisis_de_Costos.pdf",
+        role: "APU",
+        text: "Pagina 1: MONEDA: SOLES 1.1 MOVILIZACION Rendimiento: 1.0000 GLB/DIA Unidad: GLB Costo Unitario: 10.00 x [GLB] Insumo Unidad Cuadrilla Cantidad PU Parcial RECURSO GLB 1.00 10.00 10.00 2.4 EXCAVACION EN EXPLANACIONES EN ROCA FIJA Rendimiento: M3/DIA Unidad: M3 Costo Unitario: 27.62 x [M3] Insumo Unidad Cuadrilla Cantidad PU Parcial ROCA M3 1.00 27.62 27.62 2.5 REMOCION DE DERRUMBES Rendimiento: 375.0000 M3/DIA Unidad: M3 Costo Unitario: 8.31 x [M3] Insumo Unidad Cuadrilla Cantidad PU Parcial ROCA M3 1.00 8.31 8.31",
+      }],
+    });
+
+    expect(draft.apus.map((apu) => apu.budgetItemCode)).toEqual(expect.arrayContaining(["1.1", "2.4"]));
+    expect(draft.apus).toHaveLength(3);
   });
 
   it("creates title and subtitle levels and links detail items to them", () => {

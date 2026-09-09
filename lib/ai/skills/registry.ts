@@ -12,6 +12,9 @@ import { buildKhipuTaskPayload } from "@/lib/ai/task-payloads";
 import type { KhipuAiTask } from "@/lib/ai/gateway/types";
 import type { AiOutputSchemaName } from "@/lib/ai/task-payloads";
 import type { BuildSkillProviderRequestInput, KhipuSkill, SkillMessageInput } from "@/lib/ai/skills/types";
+import { z } from "zod";
+
+const pdfImportStructureJsonSchema = z.record(z.string(), z.unknown());
 
 const SKILLS: KhipuSkill[] = [
   createSkill({
@@ -57,6 +60,7 @@ const SKILLS: KhipuSkill[] = [
   createSkill({
     id: "skill-pdf-import",
     tasks: ["pdf_import_structure"],
+    schema: pdfImportStructureJsonSchema,
     schemaName: "pdf_import_structure_v1",
     instruction:
       "skill-pdf-import: Estructura presupuestos, APUs y subpartidas desde texto OCR/PDF. Devuelve solo JSON valido, sin inventar valores faltantes.",

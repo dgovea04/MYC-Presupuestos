@@ -41,14 +41,21 @@ function recalculateApu(apu: PdfImportedApu): PdfImportedApu {
   return {
     ...apu,
     rows,
-    totalUnitCost: sumRows(rows),
+    declaredUnitCost: apu.declaredUnitCost ?? apu.totalUnitCost,
+    totalUnitCost: apu.performanceMissing ? apu.totalUnitCost : sumRows(rows),
   };
 }
 
 function recalculateApuRow(row: PdfImportedApuRow): PdfImportedApuRow {
+  const quantity = new Decimal(row.quantity);
+  const unitPrice = new Decimal(row.unitPrice);
+  const subtotal = row.unit.trim().toUpperCase().startsWith("%")
+    ? quantity.dividedBy(100).times(unitPrice)
+    : quantity.times(unitPrice);
+
   return {
     ...row,
-    subtotal: formatPdfImportMoney(new Decimal(row.quantity).times(row.unitPrice)),
+    subtotal: formatPdfImportMoney(subtotal),
   };
 }
 

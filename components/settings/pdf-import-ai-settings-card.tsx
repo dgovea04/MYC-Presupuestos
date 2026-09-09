@@ -13,6 +13,7 @@ type PdfImportSettingsState = {
   openaiConfigured: boolean;
   geminiConfigured: boolean;
   openrouterConfigured: boolean;
+  ollamaConfigured: boolean;
 };
 
 const PROVIDERS: Array<{
@@ -38,6 +39,12 @@ const PROVIDERS: Array<{
     label: "OpenRouter",
     description: "Usa el modelo configurado en OpenRouter; debe soportar entrada PDF/visión.",
     configuredKey: "openrouterConfigured",
+  },
+  {
+    value: "ollama",
+    label: "Ollama local",
+    description: "OCR local con qwen2.5vl:7b para documentos y tablas. No requiere API key y necesita Ollama activo en este equipo.",
+    configuredKey: "ollamaConfigured",
   },
 ];
 
@@ -66,6 +73,7 @@ export function PdfImportAiSettingsCard() {
         openaiConfigured: payload.openaiConfigured === true,
         geminiConfigured: payload.geminiConfigured === true,
         openrouterConfigured: payload.openrouterConfigured === true,
+        ollamaConfigured: true,
       };
       setSettings(nextSettings);
       setSelectedProvider(provider);
@@ -106,6 +114,7 @@ export function PdfImportAiSettingsCard() {
         openaiConfigured: payload.openaiConfigured === true,
         geminiConfigured: payload.geminiConfigured === true,
         openrouterConfigured: payload.openrouterConfigured === true,
+        ollamaConfigured: true,
       });
       setSuccess("Proveedor del importador PDF guardado correctamente.");
     } catch (caughtError) {

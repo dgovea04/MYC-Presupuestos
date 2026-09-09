@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Loader2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Loader2, Paperclip, Upload } from "lucide-react";
 import { ImportProgressPanel, type ImportProgressPanelStep } from "@/components/imports/import-progress-panel";
 import { ImportWarningSummary } from "@/components/imports/import-warning-summary";
 import { PreviewDebugPanel } from "@/components/ai/debug-panel";
@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionPagination } from "@/components/ui/section-pagination";
-import { calculatePdfImportDraftTotals } from "@/lib/pdf-import/calculations";
-import type { PdfAiImportDraft, PdfImportAiDebug, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence, PdfImportedBudgetFooterRow, PdfImportedBudgetItem, PdfImportedBudgetLevel } from "@/lib/pdf-import/types";
+import { calculateDecimalDifference, calculatePdfImportDraftTotals } from "@/lib/pdf-import/calculations";
+import type { PdfAiImportDraft, PdfImportAiDebug, PdfImportDocumentRole, PdfImportLink, PdfImportSourceEvidence, PdfImportValidation, PdfImportedBudgetFooterRow, PdfImportedBudgetItem, PdfImportedBudgetLevel } from "@/lib/pdf-import/types";
 
 type RequestState = "idle" | "loading" | "success" | "error";
 
@@ -50,6 +50,8 @@ const progressSteps: ImportProgressPanelStep[] = [
 export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterPageContentProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [fileRoles, setFileRoles] = useState<Record<string, PdfImportDocumentRole>>({});
+  const [selectedRole, setSelectedRole] = useState<PdfImportDocumentRole>("AUTO");
+  const [dragOver, setDragOver] = useState(false);
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [projectName, setProjectName] = useState("");
   const [currency, setCurrency] = useState("PEN");
@@ -67,6 +69,7 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
   const [progressFile, setProgressFile] = useState<string | undefined>();
   const [progressStartedAt, setProgressStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (draftState !== "loading" || progressStartedAt === null) return undefined;
@@ -92,7 +95,13 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
     setProgressTotal(null);
     setProgressFile(undefined);
     setImportResult(null);
-    setFileRoles(Object.fromEntries(selectedFiles.map((file) => [file.name, inferInitialRole(file.name)])));
+    setFileRoles(Object.fromEntries(selectedFiles.map((file) => [file.name, selectedRole === "AUTO" ? inferInitialRole(file.name) : selectedRole])));
+  }
+
+  function onFilesDropped(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragOver(false);
+    onFilesSelected(event.dataTransfer.files);
   }
 
   async function createDraft() {
@@ -210,26 +219,64 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
           </Badge>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(180px,240px)_120px_140px]">
-          <Input accept=".pdf,application/pdf" multiple type="file" onChange={(event) => onFilesSelected(event.target.files)} />
-          <select
-            className="h-10 rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] outline-none transition focus:border-sky-500"
-            disabled={companies.length === 0}
-            value={companyId}
-            onChange={(event) => setCompanyId(event.target.value)}
-          >
-            {companies.length === 0 ? (
-              <option value="">Sin empresas</option>
-            ) : (
-              companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))
-            )}
-          </select>
-          <Input aria-label="Moneda" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} />
-          <Input aria-label="Tolerancia" value={priceTolerance} onChange={(event) => setPriceTolerance(event.target.value)} />
+        <div className="mt-5 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(16rem,1.35fr)_minmax(14rem,1fr)_7rem_9rem_auto]">
+          <div className="min-w-0 space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]" htmlFor="pdf-import-role">
+              Tipo de archivo
+            </label>
+            <select
+              id="pdf-import-role"
+              aria-label="Tipo de archivo PDF"
+              className="h-10 w-full rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] outline-none transition focus:border-sky-500"
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value as PdfImportDocumentRole)}
+            >
+              <option value="AUTO">Detectar automáticamente</option>
+              <option value="BUDGET">Presupuesto</option>
+              <option value="APU">Precios unitarios (APU)</option>
+              <option value="SUBPARTIDAS">Subpartidas</option>
+              <option value="OTHER">Otro</option>
+            </select>
+          </div>
+          <div className="min-w-0 space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]" htmlFor="pdf-import-company">
+              Empresa destino
+            </label>
+            <select
+              id="pdf-import-company"
+              aria-label="Empresa destino"
+              className="h-10 w-full rounded-xl border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text-strong)] outline-none transition focus:border-sky-500"
+              disabled={companies.length === 0}
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+            >
+              {companies.length === 0 ? <option value="">Sin empresas</option> : companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>
+          </div>
+          <div className="min-w-0 space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]" htmlFor="pdf-import-currency">Moneda</label>
+            <Input id="pdf-import-currency" aria-label="Moneda" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} />
+          </div>
+          <div className="min-w-0 space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-muted)]" htmlFor="pdf-import-tolerance">Tolerancia</label>
+            <Input id="pdf-import-tolerance" aria-label="Tolerancia" value={priceTolerance} onChange={(event) => setPriceTolerance(event.target.value)} />
+          </div>
+          <input ref={fileInputRef} accept=".pdf,application/pdf" multiple type="file" className="hidden" onChange={(event) => { onFilesSelected(event.target.files); event.target.value = ""; }} />
+          <Button type="button" variant="outline" className="h-10 shrink-0 gap-2" disabled={draftState === "loading"} onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4" />
+            Subir archivos PDF
+          </Button>
+        </div>
+
+        <div
+          className={`mt-4 rounded-xl border-2 border-dashed p-6 text-center transition ${dragOver ? "border-blue-400 bg-blue-50" : "border-[var(--app-border-soft)] bg-[var(--app-surface-elevated)]"}`}
+          onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onFilesDropped}
+        >
+          <Paperclip className="mx-auto mb-2 h-5 w-5 text-[var(--app-text-muted)]" aria-hidden="true" />
+          <p className="text-sm text-[var(--app-text-muted)]">Arrastra y suelta archivos aquí o usa el botón superior</p>
+          <p className="mt-1 text-xs text-[var(--app-text-muted)]">PDF de presupuesto, precios unitarios (APU) y subpartidas — máx. 10 archivos y 100 MB</p>
         </div>
 
         <div className="mt-3">
@@ -251,6 +298,7 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
               <div className="grid grid-cols-[minmax(0,1fr)_180px] items-center gap-3 border-t border-[var(--app-border-soft)] px-3 py-2" key={file.name}>
                 <span className="truncate text-sm text-[var(--app-text-strong)]">{file.name}</span>
                 <select
+                  aria-label={`Tipo de ${file.name}`}
                   className="h-9 rounded-lg border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-2 text-sm"
                   value={fileRoles[file.name] ?? "AUTO"}
                   onChange={(event) => setFileRoles((current) => ({ ...current, [file.name]: event.target.value as PdfImportDocumentRole }))}
@@ -428,13 +476,14 @@ function DraftPreview({
       ) : null}
 
       <div className="mt-5 overflow-hidden rounded-xl border border-[var(--app-border-soft)]">
-        <div className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px] bg-[var(--app-surface-elevated)] px-3 py-2 text-xs font-semibold text-[var(--app-text-muted)]">
+        <div className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px_130px] bg-[var(--app-surface-elevated)] px-3 py-2 text-xs font-semibold text-[var(--app-text-muted)]">
           <span>Codigo</span>
           <span>Partida</span>
           <span>Und</span>
           <span>Metrado</span>
           <span>P.U.</span>
           <span>Parcial</span>
+          <span>Verificación APU</span>
         </div>
         {draft.budgets.flatMap((budget) => buildBudgetTableRows(budget.items, budget.levels)).map((row) => (
           row.kind === "LEVEL" ? (
@@ -444,7 +493,7 @@ function DraftPreview({
             </div>
           ) : (
             <div
-              className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px] items-center gap-2 border-t border-[var(--app-border-soft)] px-3 py-2 text-sm"
+              className="grid grid-cols-[90px_minmax(0,1fr)_70px_90px_90px_90px_130px] items-center gap-2 border-t border-[var(--app-border-soft)] px-3 py-2 text-sm"
               key={row.item.id}
             >
               <span className="font-mono text-xs text-[var(--app-text-muted)]">{row.item.code}</span>
@@ -473,6 +522,7 @@ function DraftPreview({
                 onChange={(event) => onDraftChange(updateBudgetItemField(draft, row.item.id, "unitPrice", event.target.value))}
               />
               <span>{row.item.partial}</span>
+              <ApuVerification draft={draft} item={row.item} />
             </div>
           )
         ))}
@@ -509,6 +559,25 @@ function DraftPreview({
       <ReviewPanel draft={draft} onDraftChange={onDraftChange} />
     </section>
   );
+}
+
+function ApuVerification({ draft, item }: { draft: PdfAiImportDraft; item: PdfImportedBudgetItem }) {
+  const link = draft.links.find((entry) => entry.kind === "BUDGET_ITEM_APU" && entry.fromId === item.id);
+  const apu = link?.toId ? draft.apus.find((entry) => entry.id === link.toId) : undefined;
+  const baseClass = "truncate text-xs font-medium";
+
+  if (!link || link.status === "MISSING_APU") {
+    return <span className={`${baseClass} text-rose-700`} title="No se encontró un APU compatible">Sin APU</span>;
+  }
+  if (link.status === "MATCHED") {
+    return <span className={`${baseClass} text-emerald-700`} title="APU y precio verificados">OK</span>;
+  }
+  if (link.status === "PRICE_MISMATCH" && apu) {
+    const difference = calculateDecimalDifference(item.unitPrice, apu.totalUnitCost).toFixed(2);
+    return <span className={`${baseClass} text-amber-700`} title={link.reason}>Diferencia: {difference}</span>;
+  }
+  const label = link.status === "UNIT_MISMATCH" ? "Unidad incompatible" : link.status === "AMBIGUOUS" ? "APU ambiguo" : "Revisar APU";
+  return <span className={`${baseClass} text-amber-700`} title={link.reason}>{label}</span>;
 }
 
 type PdfBudgetTableRow =
@@ -577,6 +646,7 @@ type ReviewIssue = {
   detail: string;
   evidence?: PdfImportSourceEvidence;
   link?: PdfImportLink;
+  validation?: PdfImportValidation;
 };
 
 function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraftChange: (draft: PdfAiImportDraft) => void }) {
@@ -629,7 +699,7 @@ function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraf
                   {issue.link?.kind === "BUDGET_ITEM_APU" && issue.link.status === "MISSING_APU" ? (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       <select
-                        aria-label={`Seleccionar APU para ${issue.title}`}
+                        aria-label={`Seleccionar APU para ${issue.title.replace(/^[^·]+·\s*/, "")}`}
                         className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--app-border-soft)] bg-[var(--app-surface)] px-2 text-sm"
                         value={selectedApuByLinkId[issue.link.id] ?? ""}
                         onChange={(event) => setSelectedApuByLinkId((current) => ({ ...current, [issue.link!.id]: event.target.value }))}
@@ -712,6 +782,16 @@ function ReviewPanel({ draft, onDraftChange }: { draft: PdfAiImportDraft; onDraf
                       Aprobar diferencia
                     </Button>
                   ) : null}
+                  {issue.validation?.code === "MISSING_PERFORMANCE" ? (
+                    <Button
+                      className="mt-2"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onDraftChange(approveMissingPerformance(draft, issue.validation!))}
+                    >
+                      Aprobar rendimiento 1
+                    </Button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -743,7 +823,7 @@ function buildReviewGroups(draft: PdfAiImportDraft) {
     .map((link): ReviewIssue | null => {
       const item = budgetItemsById.get(link.fromId);
       return item
-        ? { id: link.id, title: item.description, detail: link.reason, evidence: item.evidence, link }
+        ? { id: link.id, title: `${item.code} · ${item.description}`, detail: link.reason, evidence: item.evidence, link }
         : null;
     })
     .filter(isReviewIssue);
@@ -763,7 +843,7 @@ function buildReviewGroups(draft: PdfAiImportDraft) {
     .map((link): ReviewIssue | null => {
       const item = budgetItemsById.get(link.fromId);
       return item
-        ? { id: link.id, title: item.description, detail: link.reason, evidence: item.evidence, link }
+        ? { id: link.id, title: `${item.code} · ${item.description}`, detail: link.reason, evidence: item.evidence, link }
         : null;
     })
     .filter(isReviewIssue);
@@ -792,10 +872,21 @@ function buildReviewGroups(draft: PdfAiImportDraft) {
     evidence,
   }));
 
+  const missingPerformances = draft.validations
+    .filter((validation) => validation.code === "MISSING_PERFORMANCE" && validation.entityId)
+    .map((validation): ReviewIssue | null => {
+      const apu = apusById.get(validation.entityId!);
+      return apu
+        ? { id: validation.id, title: `${apu.budgetItemCode ?? apu.id} · ${apu.name}`, detail: validation.message, evidence: apu.evidence, validation }
+        : null;
+    })
+    .filter(isReviewIssue);
+
   return [
     { title: "Partidas sin APU", items: missingApus },
     { title: "APUs sin partida", items: missingBudgetItems },
     { title: "Diferencias de precio", items: priceDifferences },
+    { title: "APUs sin rendimiento", items: missingPerformances },
     { title: "Subpartidas ambiguas", items: ambiguousSubpartidas },
     { title: "Recursos nuevos", items: newResources },
     { title: "Paginas OCR de baja confianza", items: lowConfidenceEvidence },
@@ -833,6 +924,21 @@ function approvePriceDifference(draft: PdfAiImportDraft, link: PdfImportLink): P
       "Diferencia de precio aprobada por revision humana.",
     ),
     warnings: [...draft.warnings, `Diferencia de precio aprobada para ${link.fromId}.`],
+  };
+}
+
+function approveMissingPerformance(draft: PdfAiImportDraft, validation: PdfImportValidation): PdfAiImportDraft {
+  return {
+    ...draft,
+    validations: draft.validations.filter((current) => current.id !== validation.id),
+    reviewApprovals: addReviewApproval(
+      draft,
+      `approval-${validation.id}`,
+      "MISSING_PERFORMANCE",
+      validation.entityId ?? "",
+      "Rendimiento 1 asumido aprobado por revision humana.",
+    ),
+    warnings: [...draft.warnings, `Rendimiento 1 aprobado para ${validation.entityId ?? "APU"}.`],
   };
 }
 

@@ -11,6 +11,9 @@ export type PdfImportAiConfiguration = {
 export async function getPdfImportAiConfiguration(userId: string): Promise<PdfImportAiConfiguration> {
   const settings = await getAiProviderSettings(userId);
   const provider = settings.pdfImportProvider;
+  if (provider === "ollama") {
+    return { provider, apiKey: "", model: "qwen2.5vl:7b" };
+  }
   const userApiKey = await getUserProviderApiKey(userId, provider);
 
   if (userApiKey) {
@@ -32,7 +35,8 @@ export async function getPdfImportAiConfiguration(userId: string): Promise<PdfIm
 async function getUserProviderApiKey(userId: string, provider: PdfImportProvider) {
   if (provider === "openai") return getDecryptedOpenaiApiKey(userId);
   if (provider === "gemini") return getDecryptedGeminiApiKey(userId);
-  return getDecryptedOpenrouterApiKey(userId);
+  if (provider === "openrouter") return getDecryptedOpenrouterApiKey(userId);
+  return "";
 }
 
 function getUserProviderModel(

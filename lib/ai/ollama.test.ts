@@ -69,7 +69,8 @@ describe("Ollama service", () => {
           stream: false,
           options: {
             temperature: 0,
-            num_predict: 900,
+            num_predict: 8000,
+            num_ctx: 16384,
           },
           format: "json",
         }),

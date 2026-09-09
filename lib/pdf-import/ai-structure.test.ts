@@ -99,6 +99,26 @@ describe("pdf import ai structure", () => {
     ).rejects.toThrow("No se pudo estructurar");
   });
 
+  it("returns a controlled failure when AI returns truncated JSON", async () => {
+    const executeAi: PdfImportAiExecutor = vi.fn().mockResolvedValue({
+      answer: '{"project":{"name":"Proyecto","currency":"PEN"},"budgets":[{"items":[{"code":"01.01"}',
+      provider: "ollama",
+      model: "llama3.1",
+      requestedModel: "llama3.1",
+      fallbackUsed: false,
+      warnings: [],
+    });
+
+    await expect(
+      structurePdfImportWithAi({
+        executeAi,
+        userId: "user-1",
+        companyId: "company-1",
+        files: [{ id: "file-1", fileName: "scan.pdf", role: "AUTO", text: "texto OCR", pageCount: 1, requiresOcr: true, confidence: 0.2 }],
+      }),
+    ).rejects.toThrow("No se pudo estructurar");
+  });
+
   it("structures subpartidas and links APU rows that reference them", async () => {
     const executeAi: PdfImportAiExecutor = vi.fn().mockResolvedValue({
       answer: JSON.stringify({

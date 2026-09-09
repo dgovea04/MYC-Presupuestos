@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     new Uint8Array(fileBuffer).set(bytes);
     const file = new File([fileBuffer], document.currentVersion.originalFileName, { type: document.currentVersion.mimeType });
     const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
-    const ocrProvider = aiConfiguration.apiKey ? createPdfImportOcrProvider(aiConfiguration) : undefined;
+    const ocrProvider = aiConfiguration.provider === "ollama" || aiConfiguration.apiKey ? createPdfImportOcrProvider(aiConfiguration) : undefined;
     const result = await reprocessDocumentCoverage({
       file,
       documentVersionId: document.currentVersion.id,

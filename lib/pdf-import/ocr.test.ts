@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createGeminiPdfImportOcrProvider, createOpenAiPdfImportOcrProvider, PdfImportOcrProviderError, PdfImportOcrUnavailableError, requireConfiguredPdfImportOcrProvider } from "./ocr";
+import { createGeminiPdfImportOcrProvider, createOllamaPdfImportOcrProvider, createOpenAiPdfImportOcrProvider, PdfImportOcrProviderError, PdfImportOcrUnavailableError, requireConfiguredPdfImportOcrProvider } from "./ocr";
 
 describe("pdf import OCR provider", () => {
   it("sends PDF bytes to OpenAI Responses as an input_file and returns extracted text", async () => {
@@ -104,6 +104,45 @@ describe("pdf import OCR provider", () => {
       }),
     );
     expect(fetchImpl.mock.calls[0]?.[1].body).toEqual(expect.stringContaining("Procesa todas las paginas del PDF en una sola respuesta"));
+  });
+
+  it("sends the PDF as a local image input to Ollama with qwen2.5vl:7b", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ message: { content: "01.01 Trazo y replanteo m2 10 2.50 25.00" } }),
+    });
+    const provider = createOllamaPdfImportOcrProvider({ fetchImpl, renderImpl: async () => ["rendered-page"] });
+
+    const result = await provider.extractText({ fileName: "scan.pdf", pdfBytes: new Uint8Array([1, 2, 3]) });
+
+    expect(result.text).toContain("Trazo y replanteo");
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://localhost:11434/api/chat",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"model":"qwen2.5vl:7b"') }),
+    );
+    const body = JSON.parse(fetchImpl.mock.calls[0]?.[1].body as string) as { messages: Array<{ images?: string[] }> };
+    expect(body.messages[0]?.images).toEqual(["rendered-page"]);
+    expect(JSON.parse(fetchImpl.mock.calls[0]?.[1].body as string).options).toMatchObject({ num_predict: 1_800, num_ctx: 8_192 });
+  });
+
+  it("processes each rendered PDF page independently and preserves page markers", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => ({ message: { content: "<|md_start|>Fila 1<|md_END|>" } }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => ({ message: { content: "Fila 2" } }) });
+    const provider = createOllamaPdfImportOcrProvider({ fetchImpl, renderImpl: async () => ["page-one", "page-two"] });
+
+    const result = await provider.extractText({ fileName: "scan.pdf", pdfBytes: new Uint8Array([1, 2, 3]) });
+
+    expect(result.text).toBe("Pagina 1, segmento 1:\nFila 1\n\nPagina 2, segmento 1:\nFila 2");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const firstPrompt = JSON.parse(fetchImpl.mock.calls[0]?.[1].body as string).messages[0].content as string;
+    const secondPrompt = JSON.parse(fetchImpl.mock.calls[1]?.[1].body as string).messages[0].content as string;
+    expect(firstPrompt).toContain("one logical row per line");
+    expect(firstPrompt).toContain("transcribe its column headers exactly once");
+    expect(secondPrompt).toContain("do not output them as a data row");
   });
 
   it("throws a clear error when no OCR provider is configured", async () => {

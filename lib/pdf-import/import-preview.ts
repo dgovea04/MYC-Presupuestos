@@ -43,7 +43,14 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
     levelId: findBudgetLevelId(item.code, budgetLevels),
   }));
   const apus = normalizedFiles.flatMap((file) => (file.role === "APU" ? parseApus(file.fileName, file.text, file.confidence) : []));
-  const resources = apus.flatMap((apu) => apu.rows.map((row): PdfImportedResource => createResourceFromApuRow(row, currency)));
+  const subpartidas = normalizedFiles.flatMap((file) => (file.role === "SUBPARTIDAS" ? parseSubpartidas(file.fileName, file.text, file.confidence) : []));
+  const linkedApus = apus.map((apu) => ({
+    ...apu,
+    rows: apu.rows.map((row) => subpartidas.some((subpartida) => normalizePdfImportDescription(subpartida.description) === normalizePdfImportDescription(row.description) && normalizePdfUnit(subpartida.unit) === normalizePdfUnit(row.unit))
+      ? { ...row, resourceType: "SUBPARTIDA" }
+      : row),
+  }));
+  const resources = linkedApus.flatMap((apu) => apu.rows.map((row): PdfImportedResource => createResourceFromApuRow(row, currency)));
   const warnings: string[] = [];
 
   for (const file of input.files) {
@@ -89,8 +96,8 @@ export function createPdfAiImportDraftFromText(input: CreatePdfAiImportDraftFrom
         footerRows: budgetFooterRows,
       },
     ],
-    apus,
-    subpartidas: [],
+    apus: linkedApus,
+    subpartidas,
     resources,
     links: [],
     validations: [],
@@ -109,7 +116,7 @@ export function normalizePdfImportText(text: string) {
     .map((line) => line
       .replace(/\s*\|\s*/g, " ")
       .replace(/S\/\s*/gi, "")
-      .replace(/\s{2,}/g, " ")
+      .replace(/ {2,}/g, " ")
       .trim())
     .filter((line) => !/^[-\s|]+$/.test(line))
     .join("\n");
@@ -163,7 +170,7 @@ function parseBudgetLevels(fileName: string, text: string): PdfImportedBudgetLev
     return parseLineOrientedBudgetLevels(fileName, lines);
   }
 
-  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+):\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+:)|$)/gi)];
+  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+)(?:,\s*segmento\s+\d+)?:\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+(?:,\s*segmento\s+\d+)?:)|$)/gi)];
   const blocks = pageBlocks.length > 0
     ? pageBlocks.map((match) => ({ page: Number(match[1]), text: match[2] ?? "" }))
     : [{ page: 1, text }];
@@ -201,7 +208,7 @@ function parseLineOrientedBudgetLevels(fileName: string, lines: string[]): PdfIm
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
-    const pageMatch = line.match(/^Pagina\s+(\d+):$/i);
+    const pageMatch = line.match(/^Pagina\s+(\d+)(?:,\s*segmento\s+\d+)?:$/i);
     if (pageMatch) {
       sourcePage = Number(pageMatch[1]);
       continue;
@@ -214,7 +221,7 @@ function parseLineOrientedBudgetLevels(fileName: string, lines: string[]): PdfIm
     let description = codeMatch[2]!.trim();
     let rawText = line;
     let nextIndex = index + 1;
-    while (nextIndex < lines.length && !/^\d+(?:\.\d+)*\s+/.test(lines[nextIndex]!) && !/^Pagina\s+\d+:$/i.test(lines[nextIndex]!)) {
+    while (nextIndex < lines.length && !/^\d+(?:\.\d+)*\s+/.test(lines[nextIndex]!) && !/^Pagina\s+\d+(?:,\s*segmento\s+\d+)?:$/i.test(lines[nextIndex]!)) {
       description += ` ${lines[nextIndex]!.trim()}`;
       rawText += ` ${lines[nextIndex]!.trim()}`;
       nextIndex += 1;
@@ -282,17 +289,27 @@ function parseBudgetItems(fileName: string, text: string, confidence = 0.75): Pd
   const lineItems = text
     .split(/\r?\n/)
     .map((line, index) => {
-      const pageMatch = line.match(/^Pagina\s+(\d+):$/i);
+      const pageMatch = line.match(/^Pagina\s+(\d+)(?:,\s*segmento\s+\d+)?:$/i);
       if (pageMatch) sourcePage = Number(pageMatch[1]);
       return parseBudgetLine(fileName, line, index + 1, confidence, sourcePage);
     })
     .filter((item): item is PdfImportedBudgetItem => item != null);
 
-  return lineItems.length > 0 ? lineItems : parseFlattenedBudgetItems(fileName, text, confidence);
+  const parsedItems = lineItems.length > 0 ? lineItems : parseFlattenedBudgetItems(fileName, text, confidence);
+  return deduplicateBudgetItems(parsedItems);
+}
+
+function deduplicateBudgetItems(items: PdfImportedBudgetItem[]) {
+  const seenCodes = new Set<string>();
+  return items.filter((item) => {
+    if (seenCodes.has(item.code)) return false;
+    seenCodes.add(item.code);
+    return true;
+  });
 }
 
 function parseFlattenedBudgetItems(fileName: string, text: string, confidence: number): PdfImportedBudgetItem[] {
-  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+):\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+:)|$)/gi)];
+  const pageBlocks = [...text.matchAll(/(?:^|\n)Pagina\s+(\d+)(?:,\s*segmento\s+\d+)?:\s*\n([\s\S]*?)(?=(?:\nPagina\s+\d+(?:,\s*segmento\s+\d+)?:)|$)/gi)];
   const blocks = pageBlocks.length > 0
     ? pageBlocks.map((match) => ({ page: Number(match[1]), text: match[2] ?? "" }))
     : [{ page: 1, text }];
@@ -370,7 +387,7 @@ function normalizePdfUnit(value: string) {
     "Ãš": "Ú", "Ã™": "Ù", "Ã˜": "Ø", "Ã†": "Æ", "Ã‡": "Ç", "Ã§": "ç",
   };
   const repaired = Object.entries(replacements).reduce((result, [broken, normalized]) => result.replaceAll(broken, normalized), value);
-  return repaired.replace(/Â([°²³])/g, "$1");
+  return repaired.replace(/Â([°²³])/g, "$1").replaceAll("\u00c3\u2018", "Ñ");
 }
 
 function parseBudgetLine(fileName: string, line: string, sortOrder: number, confidence: number, sourcePage = 1): PdfImportedBudgetItem | null {
@@ -399,6 +416,133 @@ function parseBudgetLine(fileName: string, line: string, sortOrder: number, conf
 }
 
 function parseApus(fileName: string, text: string, confidence = 0.75): PdfImportedApu[] {
+  const sections = parseCostSections(text, /(?:Pagina\s+\d+:\s*[\s\S]*?MONEDA:\s*[^\s]+|(?:Subcontratos|Sub Partidas|Materiales|Equipos|Mano de obra):\s*-?\d[\d,]*(?:\.\d+)?)\s+(\d+\.\d+(?:\.\d+)*)\s+([A-ZÁÉÍÓÚÑ][\s\S]*?)\s+Rendimiento:\s*(-?\d[\d,]*(?:\.\d+)?)\s+([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi);
+  const supplementalHeadingIndexes = [...text.matchAll(/\b\d+\.\d+(?:\.\d+)*\s+[A-ZÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜ 0-9.,='()\-/]{3,140}?\s+Rendimiento:/gi)]
+    .map((match) => match.index ?? 0);
+  const supplementalApus = [...text.matchAll(/(\d+\.\d+(?:\.\d+)*)\s+([A-ZÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜ 0-9.,='()\-/]{3,140}?)\s+Rendimiento:\s*(-?\d[\d,]*(?:\.\d+)?)\s+([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi)]
+    .filter((match) => !sections.some((section) => section.match[1] === match[1]) && !/(?:MONEDA|INSUMO|UNIDAD|CUADRILLA|CANTIDAD|PARCIAL|MATERIALES|EQUIPOS|MANO DE OBRA|SUB PARTIDAS)/i.test(match[2] ?? ""))
+    .map((match) => {
+      const id = `apu-${match[1]!.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+      const sourcePage = sourcePageAt(text, match.index ?? 0);
+      const bodyStart = (match.index ?? 0) + match[0].length;
+      const bodyEnd = supplementalHeadingIndexes.find((index) => index >= bodyStart) ?? text.length;
+      return {
+        id, budgetItemCode: match[1]!, name: match[2]!.trim(), unit: normalizePdfUnit(match[4]!), performance: normalizePdfNumber(match[3]!), totalUnitCost: normalizePdfNumber(match[6]!),
+        rows: parseCostRows(id, fileName, text.slice((match.index ?? 0) + match[0].length, bodyEnd), confidence, sourcePage),
+        evidence: { sourceFileName: fileName, sourcePage, rawText: match[0], confidence },
+      } satisfies PdfImportedApu;
+    });
+  const missingPerformanceMatches: Array<{ code: string; name: string; unit: string; totalUnitCost: string; index: number; end: number }> = [];
+  for (const performanceMatch of text.matchAll(/(?!)Rendimiento:\s*([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi)) {
+    if (/^-?\d[\d,]*(?:\.\d+)?$/.test(performanceMatch[1] ?? "")) continue;
+    const end = performanceMatch.index ?? 0;
+    const windowStart = Math.max(0, end - 180);
+    const window = text.slice(windowStart, end);
+    const headingMatches = [...window.matchAll(/(\d+\.\d+(?:\.\d+)*)\s+([A-Z][\s\S]{1,120}?)\s*$/gm)];
+    const heading = headingMatches.at(-1);
+    if (!heading) continue;
+    missingPerformanceMatches.push({ code: heading[1]!, name: heading[2]!.trim(), unit: performanceMatch[2]!, totalUnitCost: performanceMatch[3]!, index: windowStart + (heading.index ?? 0), end: performanceMatch.index! + performanceMatch[0].length });
+  }
+  for (const match of text.matchAll(/(\d+\.\d+(?:\.\d+)*)\s+([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ ]{3,100}?)\s+Rendimiento:\s*([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi)) {
+    if (/^-?\d[\d,]*(?:\.\d+)?$/.test(match[3] ?? "") || missingPerformanceMatches.some((current) => current.code === match[1])) continue;
+    missingPerformanceMatches.push({ code: match[1]!, name: match[2]!.trim(), unit: match[4]!, totalUnitCost: match[5]!, index: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+  }
+  for (const match of text.matchAll(/(\d+\.\d+(?:\.\d+)*)\s+([A-ZÁÉÍÓÚÑÜ][A-Za-zÁÉÍÓÚÑÜ 0-9.,='()\-/]{3,140}?)\s+Rendimiento:\s*([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi)) {
+    if (/^-?\d[\d,]*(?:\.\d+)?$/.test(match[3] ?? "") || missingPerformanceMatches.some((current) => current.code === match[1])) continue;
+    missingPerformanceMatches.push({ code: match[1]!, name: match[2]!.trim(), unit: match[4]!, totalUnitCost: match[5]!, index: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+  }
+  const missingPerformanceApus = missingPerformanceMatches.map((match) => {
+      const id = `apu-${match.code.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+      const sourcePage = sourcePageAt(text, match.index);
+      const nextIndex = text.slice(match.end).search(/\s+\d+\.\d+(?:\.\d+)*\s+[A-Z][\s\S]{1,120}?\s+Rendimiento:/i);
+      const bodyEnd = nextIndex >= 0 ? match.end + nextIndex : text.length;
+      return {
+        id,
+        budgetItemCode: match.code,
+        name: match.name,
+        unit: normalizePdfUnit(match.unit),
+        performance: "1",
+        performanceMissing: true,
+        totalUnitCost: normalizePdfNumber(match.totalUnitCost),
+        rows: parseCostRows(id, fileName, text.slice(match.end, bodyEnd), confidence, sourcePage),
+        evidence: { sourceFileName: fileName, sourcePage, rawText: text.slice(match.index, match.end), confidence },
+      } satisfies PdfImportedApu;
+    });
+  if (sections.length > 0) {
+    return [...sections.map((section) => {
+      const [, code, name, performance, , unit, totalUnitCost] = section.match;
+      const id = `apu-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+      const sourcePage = sourcePageAt(text, section.index);
+      const sectionEnd = section.index + section.match[0].length;
+      const nextAdditionalHeading = [...sections.map((candidate) => candidate.index), ...supplementalHeadingIndexes, ...missingPerformanceMatches.map((match) => match.index)]
+        .filter((index) => index >= sectionEnd)
+        .sort((left, right) => left - right)[0];
+      const bodyEnd = nextAdditionalHeading && nextAdditionalHeading > sectionEnd
+        ? nextAdditionalHeading
+        : sectionEnd + section.body.length;
+      return {
+        id,
+        budgetItemCode: code!,
+        name: name!.trim(),
+        unit: normalizePdfUnit(unit!),
+        performance: normalizePdfNumber(performance ?? "1"),
+        performanceMissing: !performance,
+        totalUnitCost: normalizePdfNumber(totalUnitCost!),
+        rows: parseCostRows(id, fileName, text.slice(sectionEnd, bodyEnd), confidence, sourcePage),
+        evidence: { sourceFileName: fileName, sourcePage, rawText: section.match[0], confidence },
+      } satisfies PdfImportedApu;
+    }), ...supplementalApus, ...missingPerformanceApus];
+  }
+
+  if (supplementalApus.length > 0 || missingPerformanceApus.length > 0) {
+    return [...supplementalApus, ...missingPerformanceApus];
+  }
+
+  const missingPerformanceSections = parseCostSections(text, /(?:MONEDA:\s*[^\s]+|(?:Subcontratos|Sub Partidas|Materiales|Equipos|Mano de obra):\s*-?\d[\d,]*(?:\.\d+)?)\s+(\d+\.\d+(?:\.\d+)*)\s+([A-Z][\s\S]*?)\s+Rendimiento:\s*([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi);
+  if (missingPerformanceSections.length > 0) {
+    return missingPerformanceSections.map((section) => {
+      const [, code, name, , unit, totalUnitCost] = section.match;
+      const id = `apu-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+      const sourcePage = sourcePageAt(text, section.index);
+      return {
+        id,
+        budgetItemCode: code!,
+        name: name!.trim(),
+        unit: normalizePdfUnit(unit!),
+        performance: "1",
+        performanceMissing: true,
+        totalUnitCost: normalizePdfNumber(totalUnitCost!),
+        rows: parseCostRows(id, fileName, section.body, confidence, sourcePage),
+        evidence: { sourceFileName: fileName, sourcePage, rawText: section.match[0], confidence },
+      } satisfies PdfImportedApu;
+    });
+  }
+
+  const unanchoredMissingPerformance = [...text.matchAll(/\b(\d+\.\d+(?:\.\d+)*)\s+([A-Z][\s\S]*?)\s+Rendimiento:\s*([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi)];
+  if (unanchoredMissingPerformance.length > 0) {
+    return unanchoredMissingPerformance.map((match, index) => {
+      const [, code, name, , unit, totalUnitCost] = match;
+      const id = `apu-${code!.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+      const sourcePage = sourcePageAt(text, match.index ?? 0);
+      const nextIndex = unanchoredMissingPerformance[index + 1]?.index ?? text.length;
+      return {
+        id,
+        budgetItemCode: code!,
+        name: name!.trim(),
+        unit: normalizePdfUnit(unit!),
+        performance: "1",
+        performanceMissing: true,
+        totalUnitCost: normalizePdfNumber(totalUnitCost!),
+        rows: parseCostRows(id, fileName, text.slice((match.index ?? 0) + match[0].length, nextIndex), confidence, sourcePage),
+        evidence: { sourceFileName: fileName, sourcePage, rawText: match[0], confidence },
+      } satisfies PdfImportedApu;
+    });
+  }
+
+  return parseLegacyApus(fileName, text, confidence);
+}
+
+function parseLegacyApus(fileName: string, text: string, confidence = 0.75): PdfImportedApu[] {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const apus: PdfImportedApu[] = [];
   let current: PdfImportedApu | null = null;
@@ -449,6 +593,80 @@ function parseApus(fileName: string, text: string, confidence = 0.75): PdfImport
   });
 
   return apus;
+}
+
+function parseSubpartidas(fileName: string, text: string, confidence = 0.75): PdfAiImportDraft["subpartidas"] {
+  const sections = parseCostSections(text, /(?:MONEDA:\s*[^\s]+|Sub Partidas:\s*-?\d[\d,]*(?:\.\d+)?)\s+([A-ZÁÉÍÓÚÑ][\s\S]*?)\s+Rendimiento:\s*(-?\d[\d,]*(?:\.\d+)?)\s+([^\s/]+)\/DIA\s+Unidad:\s*([^\s]+)\s+Costo Unitario:\s*(-?\d[\d,]*(?:\.\d+)?)/gi);
+  return sections.map((section, index) => {
+    const [, name, performance, , unit, unitPrice] = section.match;
+    const id = `subpartida-${index + 1}-${normalizeTextForId(name!)}`;
+    const sourcePage = sourcePageAt(text, section.index);
+    return {
+      id,
+      description: name!.trim(),
+      unit: normalizePdfUnit(unit!),
+      unitPrice: normalizePdfNumber(unitPrice!),
+    performance: normalizePdfNumber(performance ?? "1"),
+    performanceMissing: !performance,
+      rows: parseCostRows(id, fileName, section.body, confidence, sourcePage),
+      evidence: { sourceFileName: fileName, sourcePage, rawText: section.match[0], confidence },
+    };
+  });
+}
+
+function parseCostSections(text: string, pattern: RegExp) {
+  const matches = [...text.matchAll(pattern)].filter((match) => {
+    const name = match[2] ?? match[1] ?? "";
+    return !/(?:Subcontratos|Sub Partidas|Materiales|Equipos|Mano de obra):|\b(?:HH|HM|BLS|GLB|M3|M2|M3K|%MO)\b/i.test(name);
+  });
+  return matches.map((match, index) => ({
+    match,
+    index: match.index ?? 0,
+    body: text.slice((match.index ?? 0) + match[0].length, matches[index + 1]?.index ?? text.length),
+  }));
+}
+
+function parseCostRows(parentId: string, fileName: string, body: string, confidence: number, sourcePage: number): PdfImportedApuRow[] {
+  const number = "-?\\d[\\d,]*(?:\\.\\d+)?";
+  const unit = "[A-Za-zÁÉÍÓÚÑáéíóúñ%][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ%/.'´‘’-]*";
+  const cleanBody = body.replace(/(?:Mano de obra|Materiales|Equipos|Sub Partidas|Subcontratos):\s*-?\d[\d,]*(?:\.\d+)?/gi, " ");
+  const headerIndex = cleanBody.search(/\bParcial\b/i);
+  const rowBody = headerIndex >= 0 ? cleanBody.slice(headerIndex + "Parcial".length) : cleanBody;
+  const rowPattern = new RegExp(`(.+?)\\s+([^\\s]+)\\s+(?:(${number})\\s+)?(${number})\\s+(${number})\\s+(${number})(?=\\s|$)`, "gi");
+  const rows: PdfImportedApuRow[] = [];
+
+  for (const match of rowBody.matchAll(rowPattern)) {
+    const description = match[1]!.trim();
+    if (!description || /^(Insumo|Unidad|Cuadrilla|Cantidad|PU|Parcial)$/i.test(description)) continue;
+    const quantity = match[4]!;
+    const unitPrice = match[5]!;
+    const subtotal = match[6]!;
+    rows.push({
+      id: `row-${parentId}-${rows.length + 1}`,
+      description,
+      unit: normalizePdfUnit(match[2]!),
+      resourceType: inferResourceType(description),
+      quantity: normalizePdfNumber(quantity),
+      unitPrice: normalizePdfNumber(unitPrice),
+      subtotal: normalizePdfNumber(subtotal),
+      sortOrder: rows.length + 1,
+      evidence: { sourceFileName: fileName, sourcePage, rawText: match[0].trim(), confidence },
+    });
+  }
+  return rows;
+}
+
+function sourcePageAt(text: string, index: number) {
+  const pages = [...text.slice(0, index).matchAll(/Pagina\s+(\d+)/gi)];
+  return Number(pages.at(-1)?.[1] ?? 1);
+}
+
+function normalizeTextForId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "item";
+}
+
+function normalizePdfImportDescription(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function inferResourceType(description: string) {

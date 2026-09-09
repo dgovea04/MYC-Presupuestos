@@ -13,6 +13,53 @@ describe("pdf import calculations", () => {
     expect(result.apus[0]?.rows[0]?.subtotal).toBe("3.00");
     expect(result.apus[0]?.totalUnitCost).toBe("3.00");
   });
+
+  it("calculates labor percentage rows as a percentage of their base amount", () => {
+    const draft = createCalculationDraft();
+    const row = draft.apus[0]!.rows[0]!;
+    row.description = "HERRAMIENTAS MANUALES";
+    row.unit = "%MO";
+    row.quantity = "5.0000";
+    row.unitPrice = "1630.32";
+    row.subtotal = "999";
+
+    const result = calculatePdfImportDraftTotals(draft);
+
+    expect(result.apus[0]?.rows[0]?.subtotal).toBe("81.52");
+    expect(result.apus[0]?.totalUnitCost).toBe("81.52");
+  });
+
+  it("calculates material percentage rows as a percentage of their base amount", () => {
+    const draft = createCalculationDraft();
+    const row = draft.apus[0]!.rows[0]!;
+    row.unit = "%MT";
+    row.quantity = "10.0000";
+    row.unitPrice = "2.99";
+
+    const result = calculatePdfImportDraftTotals(draft);
+
+    expect(result.apus[0]?.rows[0]?.subtotal).toBe("0.30");
+  });
+
+  it("preserves the declared APU cost when only performance is missing", () => {
+    const draft = createCalculationDraft();
+    draft.apus[0]!.performanceMissing = true;
+    draft.apus[0]!.totalUnitCost = "30.00";
+
+    const result = calculatePdfImportDraftTotals(draft);
+
+    expect(result.apus[0]?.totalUnitCost).toBe("30.00");
+  });
+
+  it("keeps the source APU cost available after recalculating its rows", () => {
+    const draft = createCalculationDraft();
+    draft.apus[0]!.totalUnitCost = "30.00";
+
+    const result = calculatePdfImportDraftTotals(draft);
+
+    expect(result.apus[0]?.declaredUnitCost).toBe("30.00");
+    expect(result.apus[0]?.totalUnitCost).toBe("3.00");
+  });
 });
 
 function createCalculationDraft(): PdfAiImportDraft {

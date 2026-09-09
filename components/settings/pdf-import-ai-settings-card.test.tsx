@@ -53,6 +53,7 @@ describe("PdfImportAiSettingsCard", () => {
 
     const openrouterButton = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("OpenRouter"));
     expect(openrouterButton).toBeTruthy();
+    expect(container.textContent).toContain("Ollama local");
 
     await act(async () => {
       openrouterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

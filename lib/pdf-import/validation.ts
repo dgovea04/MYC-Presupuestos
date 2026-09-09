@@ -88,7 +88,9 @@ export const pdfImportedApuSchema = z.object({
   name: z.string().trim().min(1),
   unit: z.string().trim().min(1),
   performance: pdfImportDecimalSchema,
+  performanceMissing: z.boolean().optional(),
   totalUnitCost: pdfImportDecimalSchema,
+  declaredUnitCost: pdfImportDecimalSchema.optional(),
   rows: z.array(pdfImportedApuRowSchema),
   evidence: pdfImportSourceEvidenceSchema,
 });
@@ -100,6 +102,7 @@ export const pdfImportedSubpartidaSchema = z.object({
   unit: z.string().trim().min(1),
   unitPrice: pdfImportDecimalSchema,
   performance: pdfImportDecimalSchema,
+  performanceMissing: z.boolean().optional(),
   rows: z.array(pdfImportedApuRowSchema),
   evidence: pdfImportSourceEvidenceSchema,
 });

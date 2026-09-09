@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     await assertWorkspaceMembership({ userId: session.user.id, companyId: input.companyId, minimumRole: "EDITOR" });
     await assertWorkspaceFeatureAccess({ userId: session.user.id, companyId: input.companyId, feature: "ai.pdf" });
     const aiConfiguration = await getPdfImportAiConfiguration(session.user.id);
-    const ocrProvider = aiConfiguration.apiKey
+    const ocrProvider = aiConfiguration.provider === "ollama" || aiConfiguration.apiKey
       ? createPdfImportOcrProvider(aiConfiguration)
       : undefined;
     const files = await Promise.all(input.files.map(({ file, role }) => extractPdfImportFile(file, role, { ocrProvider })));

@@ -238,7 +238,7 @@ describe("/api/settings/ai-provider — pdfImportProvider whitelist", () => {
     updateAiProviderSettingsMock.mockResolvedValue(makeAiSettingsPayload());
   });
 
-  it.each(["openai", "gemini", "openrouter"])("accepts %s as PDF importer provider", async (provider) => {
+  it.each(["openai", "gemini", "openrouter", "ollama"])("accepts %s as PDF importer provider", async (provider) => {
     const response = await put({ pdfImportProvider: provider });
     expect(response.status).toBe(200);
     expect(updateAiProviderSettingsMock).toHaveBeenCalledWith(
@@ -248,11 +248,11 @@ describe("/api/settings/ai-provider — pdfImportProvider whitelist", () => {
   });
 
   it("rejects an unsupported PDF importer provider", async () => {
-    const response = await put({ pdfImportProvider: "ollama" });
+    const response = await put({ pdfImportProvider: "unsupported" });
     expect(response.status).toBe(400);
     const body = (await response.json()) as { field: string; validOptions: string[] };
     expect(body.field).toBe("pdfImportProvider");
-    expect(body.validOptions).toEqual(["openai", "gemini", "openrouter"]);
+    expect(body.validOptions).toEqual(["openai", "gemini", "openrouter", "ollama"]);
     expect(updateAiProviderSettingsMock).not.toHaveBeenCalled();
   });
 });

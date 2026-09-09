@@ -174,7 +174,12 @@ function parseAiStructureAnswer(answer: string) {
     }
   }
 
-  const jsonValue: unknown = JSON.parse(rawJson);
+  let jsonValue: unknown;
+  try {
+    jsonValue = JSON.parse(rawJson) as unknown;
+  } catch {
+    throw new Error("No se pudo estructurar la respuesta IA del paquete PDF: el JSON devuelto llego incompleto o truncado.");
+  }
   return {
     status,
     data: aiPdfImportStructureSchema.parse(jsonValue),

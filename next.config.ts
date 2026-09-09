@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverExternalPackages: ["pdfkit", "better-sqlite3"],
+  serverExternalPackages: ["pdfkit", "better-sqlite3", "pdfjs-dist", "@napi-rs/canvas"],
   webpack: (config, { isServer }) => {
 
     const webpack = require("webpack");

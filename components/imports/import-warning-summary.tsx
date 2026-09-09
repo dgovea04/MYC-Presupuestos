@@ -18,7 +18,9 @@ export function ImportWarningsBadge({ count }: { count: number }) {
 }
 
 export function ImportWarningSummary({ warnings }: ImportWarningSummaryProps) {
-  if (warnings.length === 0) {
+  const uniqueWarnings = [...new Set(warnings)];
+
+  if (uniqueWarnings.length === 0) {
     return (
       <div className="theme-status-success mt-4 rounded-xl border p-4">
         <div className="flex items-center gap-2 text-sm font-semibold">
@@ -37,7 +39,7 @@ export function ImportWarningSummary({ warnings }: ImportWarningSummaryProps) {
         Advertencias de conversion
       </div>
       <ul className="mt-3 space-y-1 text-sm">
-        {warnings.map((warning) => (
+        {uniqueWarnings.map((warning) => (
           <li key={warning}>{warning}</li>
         ))}
       </ul>
