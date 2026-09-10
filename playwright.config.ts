@@ -9,6 +9,30 @@ const knowledgeE2EEnvironment = {
   MC_KNOWLEDGE_BACKFILL: "true",
 };
 
+const bridgeRetryFixtureKeys = [
+  "E2E_REVIEW_BRIDGE_RUN_ID",
+  "E2E_REVIEW_BRIDGE_FINDING_ID",
+  "E2E_REVIEW_BRIDGE_COMPANY_ID",
+  "E2E_REVIEW_BRIDGE_PROJECT_ID",
+  "E2E_REVIEW_BRIDGE_QUERY",
+  "E2E_REVIEW_BRIDGE_LOCAL",
+  "E2E_REVIEW_BRIDGE_TEST_DATABASE",
+] as const;
+
+const configuredBridgeRetryFixtureKeys = bridgeRetryFixtureKeys.filter((key) => Boolean(process.env[key]?.trim()));
+const bridgeRetryFixtureRequested = configuredBridgeRetryFixtureKeys.length > 0;
+const missingBridgeRetryFixtureKeys = bridgeRetryFixtureKeys.filter((key) => !process.env[key]?.trim());
+
+const usesExternalE2EServer = Boolean(process.env.E2E_BASE_URL || process.env.E2E_NO_WEBSERVER);
+
+if (bridgeRetryFixtureRequested && missingBridgeRetryFixtureKeys.length > 0) {
+  throw new Error(`El fixture E2E bridge/retry está configurado parcialmente. Define estas variables: ${missingBridgeRetryFixtureKeys.join(", ")}. Solo se permite omitir todas las E2E_REVIEW_BRIDGE_* para saltar el escenario.`);
+}
+
+if (bridgeRetryFixtureRequested && usesExternalE2EServer) {
+  throw new Error("El escenario bridge/retry requiere el servidor gestionado por Playwright para inyectar las flags Knowledge. No uses E2E_BASE_URL ni E2E_NO_WEBSERVER.");
+}
+
 /**
  * Playwright config for the Excel-mode e2e smoke suite.
  *
@@ -35,13 +59,15 @@ export default defineConfig({
     navigationTimeout: 60_000,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: process.env.E2E_NO_WEBSERVER
+  webServer: usesExternalE2EServer
     ? undefined
     : {
         command: "npm run dev",
-        url: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+        url: "http://localhost:3000",
         env: knowledgeE2EEnvironment,
-        reuseExistingServer: true,
+        // The bridge/retry test must be served by this process so its Knowledge
+        // feature flags are known. Other opt-in E2E tests can still reuse dev.
+        reuseExistingServer: !bridgeRetryFixtureRequested,
         timeout: 180_000,
         stdout: "pipe",
         stderr: "pipe",

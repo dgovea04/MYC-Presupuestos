@@ -2,6 +2,8 @@ import "dotenv/config";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
+import type { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "@/lib/db/prisma-client";
 
 const E2E_USER_EMAIL = process.env.E2E_USER_EMAIL ?? "e2e@mycpresupuestos.local";
 const E2E_USER_PASSWORD = process.env.E2E_USER_PASSWORD ?? "E2eLocalTest123!";
@@ -12,20 +14,42 @@ const REVIEW_BRIDGE_FINDING_ID = process.env.E2E_REVIEW_BRIDGE_FINDING_ID;
 const REVIEW_BRIDGE_COMPANY_ID = process.env.E2E_REVIEW_BRIDGE_COMPANY_ID;
 const REVIEW_BRIDGE_PROJECT_ID = process.env.E2E_REVIEW_BRIDGE_PROJECT_ID;
 const REVIEW_BRIDGE_QUERY = process.env.E2E_REVIEW_BRIDGE_QUERY;
-const REVIEW_BRIDGE_RETRY_JOB_ID = process.env.E2E_REVIEW_BRIDGE_RETRY_JOB_ID;
-const REVIEW_BRIDGE_RETRY_YIELD_KEY = process.env.E2E_REVIEW_BRIDGE_RETRY_YIELD_KEY;
+const REVIEW_BRIDGE_LOCAL = process.env.E2E_REVIEW_BRIDGE_LOCAL;
+const REVIEW_BRIDGE_TEST_DATABASE = process.env.E2E_REVIEW_BRIDGE_TEST_DATABASE;
 const execFileAsync = promisify(execFile);
 
+const BRIDGE_FIXTURE_ENVIRONMENT = {
+  E2E_REVIEW_BRIDGE_RUN_ID: REVIEW_BRIDGE_RUN_ID,
+  E2E_REVIEW_BRIDGE_FINDING_ID: REVIEW_BRIDGE_FINDING_ID,
+  E2E_REVIEW_BRIDGE_COMPANY_ID: REVIEW_BRIDGE_COMPANY_ID,
+  E2E_REVIEW_BRIDGE_PROJECT_ID: REVIEW_BRIDGE_PROJECT_ID,
+  E2E_REVIEW_BRIDGE_QUERY: REVIEW_BRIDGE_QUERY,
+  E2E_REVIEW_BRIDGE_LOCAL: REVIEW_BRIDGE_LOCAL,
+  E2E_REVIEW_BRIDGE_TEST_DATABASE: REVIEW_BRIDGE_TEST_DATABASE,
+} as const;
+
+const KNOWLEDGE_RETRY_TRIGGER = "e2e_knowledge_yield_retry_trigger";
+const KNOWLEDGE_RETRY_FUNCTION = "e2e_knowledge_yield_retry_failure";
+const KNOWLEDGE_RETRY_CONTROL_TABLE = "e2e_knowledge_retry_control";
+
 type ReviewFindingResponse = {
-  findings?: Array<{ id: string; updatedAt: string }>;
+  findings?: Array<{ id: string; companyId: string; projectId: string; reviewRunId: string; updatedAt: string }>;
 };
 
 type KnowledgeQueueResponse = {
-  retryableJobs?: Array<{ id: string; status: string }>;
+  retryableJobs?: Array<{
+    id: string;
+    idempotencyKey: string;
+    status: string;
+    companyId: string;
+    projectId: string;
+    findingId: string;
+    decisionId: string;
+  }>;
 };
 
 type KnowledgeRetrievalResponse = {
-  yields?: Array<{ idempotencyKey?: string | null }>;
+  yields?: Array<{ idempotencyKey?: string | null; companyId?: string | null; projectId?: string | null }>;
 };
 
 const knowledgeE2EEnvironment = {
@@ -37,16 +61,86 @@ const knowledgeE2EEnvironment = {
   MC_KNOWLEDGE_BACKFILL: "true",
 };
 
-function hasBridgeRetryFixture(): boolean {
-  return [
-    REVIEW_BRIDGE_RUN_ID,
-    REVIEW_BRIDGE_FINDING_ID,
-    REVIEW_BRIDGE_COMPANY_ID,
-    REVIEW_BRIDGE_PROJECT_ID,
-    REVIEW_BRIDGE_QUERY,
-    REVIEW_BRIDGE_RETRY_JOB_ID,
-    REVIEW_BRIDGE_RETRY_YIELD_KEY,
-  ].every(Boolean);
+function bridgeFixtureState(): "absent" | "configured" {
+  const entries = Object.entries(BRIDGE_FIXTURE_ENVIRONMENT);
+  const configured = entries.filter(([, value]) => Boolean(value?.trim()));
+  if (configured.length === 0) return "absent";
+
+  const missing = entries.filter(([, value]) => !value?.trim()).map(([key]) => key);
+  if (missing.length > 0) {
+    throw new Error(`El fixture E2E bridge/retry está configurado parcialmente. Define estas variables: ${missing.join(", ")}. Solo se permite omitir todas las E2E_REVIEW_BRIDGE_* para saltar el escenario.`);
+  }
+  return "configured";
+}
+
+function assertLocalBridgeEnvironment(): void {
+  if (REVIEW_BRIDGE_LOCAL !== "true" || REVIEW_BRIDGE_TEST_DATABASE !== "true") {
+    throw new Error("El fixture bridge/retry requiere E2E_REVIEW_BRIDGE_LOCAL=true y E2E_REVIEW_BRIDGE_TEST_DATABASE=true.");
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("El escenario bridge/retry está bloqueado en NODE_ENV=production.");
+  }
+  if (process.env.E2E_BASE_URL || process.env.E2E_NO_WEBSERVER) {
+    throw new Error("El escenario bridge/retry requiere el servidor gestionado por Playwright para inyectar las flags Knowledge. No uses E2E_BASE_URL ni E2E_NO_WEBSERVER.");
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error("El fixture bridge/retry requiere DATABASE_URL de PostgreSQL local.");
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error("DATABASE_URL no es una URL válida de PostgreSQL local para el fixture bridge/retry.");
+  }
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (!/^postgres(?:ql)?:$/.test(parsed.protocol) || !localHosts.has(parsed.hostname.toLowerCase())) {
+    throw new Error("El fixture bridge/retry solo admite DATABASE_URL PostgreSQL con host localhost, 127.0.0.1 o ::1.");
+  }
+}
+
+function bridgePrisma(): PrismaClient {
+  return createPrismaClient(["error"]);
+}
+
+async function assertFixtureRelationships(prisma: PrismaClient): Promise<void> {
+  const [project, run, finding] = await Promise.all([
+    prisma.project.findFirst({
+      where: { id: REVIEW_BRIDGE_PROJECT_ID!, companyId: REVIEW_BRIDGE_COMPANY_ID! },
+      select: { id: true, companyId: true },
+    }),
+    prisma.reviewRun.findFirst({
+      where: { id: REVIEW_BRIDGE_RUN_ID!, companyId: REVIEW_BRIDGE_COMPANY_ID!, projectId: REVIEW_BRIDGE_PROJECT_ID! },
+      select: { id: true, companyId: true, projectId: true },
+    }),
+    prisma.reviewFinding.findFirst({
+      where: {
+        id: REVIEW_BRIDGE_FINDING_ID!,
+        companyId: REVIEW_BRIDGE_COMPANY_ID!,
+        projectId: REVIEW_BRIDGE_PROJECT_ID!,
+        reviewRunId: REVIEW_BRIDGE_RUN_ID!,
+      },
+      select: { id: true, companyId: true, projectId: true, reviewRunId: true },
+    }),
+  ]);
+
+  if (!project || !run || !finding) {
+    throw new Error("El fixture bridge/retry no está aislado o contiene relaciones inválidas: project, run y finding deben pertenecer al mismo companyId/projectId y finding debe pertenecer al run indicado.");
+  }
+}
+
+async function installRetryFailureTrigger(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS public.${KNOWLEDGE_RETRY_CONTROL_TABLE} ("companyId" TEXT NOT NULL, "projectId" TEXT NOT NULL, PRIMARY KEY ("companyId", "projectId"))`);
+  await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION public.${KNOWLEDGE_RETRY_FUNCTION}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."idempotencyKey" LIKE 'review-yield:%' AND EXISTS (SELECT 1 FROM public.${KNOWLEDGE_RETRY_CONTROL_TABLE} WHERE "companyId" = NEW."companyId" AND "projectId" = NEW."projectId") THEN RAISE EXCEPTION 'E2E transient Knowledge yield failure'; END IF; RETURN NEW; END; $$`);
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${KNOWLEDGE_RETRY_TRIGGER} ON public."knowledge_yield_observations"`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER ${KNOWLEDGE_RETRY_TRIGGER} BEFORE INSERT OR UPDATE ON public."knowledge_yield_observations" FOR EACH ROW EXECUTE FUNCTION public.${KNOWLEDGE_RETRY_FUNCTION}()`);
+  await prisma.$executeRawUnsafe(`DELETE FROM public.${KNOWLEDGE_RETRY_CONTROL_TABLE}`);
+  await prisma.$executeRaw`INSERT INTO public.e2e_knowledge_retry_control ("companyId", "projectId") VALUES (${REVIEW_BRIDGE_COMPANY_ID!}, ${REVIEW_BRIDGE_PROJECT_ID!}) ON CONFLICT DO NOTHING`;
+}
+
+async function removeRetryFailureTrigger(prisma: PrismaClient): Promise<void> {
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${KNOWLEDGE_RETRY_TRIGGER} ON public."knowledge_yield_observations"`);
+  await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS public.${KNOWLEDGE_RETRY_FUNCTION}()`);
+  await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS public.${KNOWLEDGE_RETRY_CONTROL_TABLE}`);
 }
 
 async function runKnowledgeWorker(): Promise<void> {
@@ -196,65 +290,92 @@ test.describe("Revisión Inteligente", () => {
 
 test.describe("Knowledge bridge retry", () => {
   test("bridges a review decision into Knowledge and completes a retry idempotently", async ({ page }) => {
-    test.skip(!hasBridgeRetryFixture(), "Configura el fixture E2E_REVIEW_BRIDGE_* para el escenario bridge/retry contra PostgreSQL local.");
-    await signIn(page);
+    if (bridgeFixtureState() === "absent") {
+      test.skip(true, "Configura todo el fixture E2E_REVIEW_BRIDGE_* para ejecutar el escenario bridge/retry contra PostgreSQL local.");
+      return;
+    }
+    assertLocalBridgeEnvironment();
+    const prisma = bridgePrisma();
 
-    const findingsResponse = await page.request.get(`/api/review-runs/${REVIEW_BRIDGE_RUN_ID}/findings?page=1&pageSize=100`);
-    expect(findingsResponse.status(), await findingsResponse.text()).toBe(200);
-    const findings = await findingsResponse.json() as ReviewFindingResponse;
-    const finding = findings.findings?.find((entry) => entry.id === REVIEW_BRIDGE_FINDING_ID);
-    expect(finding).toBeTruthy();
+    try {
+      await assertFixtureRelationships(prisma);
+      await installRetryFailureTrigger(prisma);
+      await signIn(page);
 
-    const decisionResponse = await page.request.post(`/api/review-findings/${REVIEW_BRIDGE_FINDING_ID}/decisions`, {
-      data: {
-        resolution: "CONFIRMED_ISSUE",
-        note: "E2E bridge/retry verification",
-        expectedUpdatedAt: finding?.updatedAt,
-      },
-    });
-    expect(decisionResponse.status(), await decisionResponse.text()).toBe(201);
+      const findingsResponse = await page.request.get(`/api/review-runs/${REVIEW_BRIDGE_RUN_ID}/findings?page=1&pageSize=100`);
+      expect(findingsResponse.status(), await findingsResponse.text()).toBe(200);
+      const findings = await findingsResponse.json() as ReviewFindingResponse;
+      const finding = findings.findings?.find((entry) => entry.id === REVIEW_BRIDGE_FINDING_ID);
+      expect(finding).toMatchObject({
+        id: REVIEW_BRIDGE_FINDING_ID,
+        companyId: REVIEW_BRIDGE_COMPANY_ID,
+        projectId: REVIEW_BRIDGE_PROJECT_ID,
+        reviewRunId: REVIEW_BRIDGE_RUN_ID,
+      });
 
-    await expect.poll(async () => {
-      const response = await page.request.get(`/api/knowledge/retrieval?q=${encodeURIComponent(REVIEW_BRIDGE_QUERY ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`);
-      if (!response.ok()) return 0;
-      const retrieval = await response.json() as KnowledgeRetrievalResponse;
-      return retrieval.yields?.filter((yieldObservation) => yieldObservation.idempotencyKey?.startsWith("review-yield:")).length ?? 0;
-    }, { timeout: 30_000 }).toBeGreaterThan(0);
+      const decisionResponse = await page.request.post(`/api/review-findings/${REVIEW_BRIDGE_FINDING_ID}/decisions`, {
+        headers: { "X-Correlation-Id": `e2e-bridge-retry:${REVIEW_BRIDGE_RUN_ID}:${REVIEW_BRIDGE_FINDING_ID}` },
+        data: {
+          resolution: "CONFIRMED_ISSUE",
+          note: "E2E bridge/retry verification",
+          expectedUpdatedAt: finding?.updatedAt,
+        },
+      });
+      expect(decisionResponse.status(), await decisionResponse.text()).toBe(201);
+      const decision = await decisionResponse.json() as { id: string; findingId: string };
+      expect(decision.findingId).toBe(REVIEW_BRIDGE_FINDING_ID);
 
-    const queueUrl = `/api/admin/knowledge/queue?companyId=${encodeURIComponent(REVIEW_BRIDGE_COMPANY_ID ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`;
-    await expect.poll(async () => {
-      const response = await page.request.get(queueUrl);
-      if (!response.ok()) return undefined;
-      const queue = await response.json() as KnowledgeQueueResponse;
-      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
-    }, { timeout: 30_000 }).toBe("RETRYABLE_FAILED");
+      const queueUrl = `/api/admin/knowledge/queue?companyId=${encodeURIComponent(REVIEW_BRIDGE_COMPANY_ID!)}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID!)}`;
+      const jobKey = `review-learning:${decision.id}`;
+      const currentJob = async (): Promise<NonNullable<KnowledgeQueueResponse["retryableJobs"]>[number] | undefined> => {
+        const response = await page.request.get(queueUrl);
+        if (!response.ok()) return undefined;
+        const queue = await response.json() as KnowledgeQueueResponse;
+        return queue.retryableJobs?.find((job) => job.idempotencyKey === jobKey);
+      };
 
-    const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${REVIEW_BRIDGE_RETRY_JOB_ID}/retry`);
-    expect(retryResponse.status(), await retryResponse.text()).toBe(200);
-    await expect.poll(async () => {
-      const response = await page.request.get(queueUrl);
-      if (!response.ok()) return undefined;
-      const queue = await response.json() as KnowledgeQueueResponse;
-      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
-    }, { timeout: 30_000 }).toBe("PENDING");
+      await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("PENDING");
+      expect(await currentJob()).toMatchObject({
+        companyId: REVIEW_BRIDGE_COMPANY_ID,
+        projectId: REVIEW_BRIDGE_PROJECT_ID,
+        findingId: REVIEW_BRIDGE_FINDING_ID,
+        decisionId: decision.id,
+        idempotencyKey: jobKey,
+      });
 
-    await runKnowledgeWorker();
-    await expect.poll(async () => {
-      const response = await page.request.get(queueUrl);
-      if (!response.ok()) return undefined;
-      const queue = await response.json() as KnowledgeQueueResponse;
-      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
-    }, { timeout: 30_000 }).toBe("SUCCEEDED");
+      // This is a real PostgreSQL trigger scoped to the isolated fixture. The
+      // first worker execution must observe a transient write failure itself.
+      await runKnowledgeWorker();
+      await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("RETRYABLE_FAILED");
+      const retryJob = await currentJob();
+      expect(retryJob).toBeTruthy();
 
-    const retryYieldCount = async (): Promise<number> => {
-      const response = await page.request.get(`/api/knowledge/retrieval?q=${encodeURIComponent(REVIEW_BRIDGE_QUERY ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`);
-      expect(response.status(), await response.text()).toBe(200);
-      const retrieval = await response.json() as KnowledgeRetrievalResponse;
-      return retrieval.yields?.filter((yieldObservation) => yieldObservation.idempotencyKey === REVIEW_BRIDGE_RETRY_YIELD_KEY).length ?? 0;
-    };
+      await removeRetryFailureTrigger(prisma);
+      const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${retryJob!.id}/retry`);
+      expect(retryResponse.status(), await retryResponse.text()).toBe(200);
+      await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("PENDING");
 
-    expect(await retryYieldCount()).toBe(1);
-    await runKnowledgeWorker();
-    expect(await retryYieldCount()).toBe(1);
+      await runKnowledgeWorker();
+      await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("SUCCEEDED");
+
+      const decisionYieldKey = `review-yield:${decision.id}`;
+      const retryYieldCount = async (): Promise<number> => {
+        const response = await page.request.get(`/api/knowledge/retrieval?q=${encodeURIComponent(REVIEW_BRIDGE_QUERY!)}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID!)}`);
+        expect(response.status(), await response.text()).toBe(200);
+        const retrieval = await response.json() as KnowledgeRetrievalResponse;
+        return retrieval.yields?.filter((yieldObservation) => (
+          yieldObservation.idempotencyKey === decisionYieldKey
+          && yieldObservation.companyId === REVIEW_BRIDGE_COMPANY_ID
+          && yieldObservation.projectId === REVIEW_BRIDGE_PROJECT_ID
+        )).length ?? 0;
+      };
+
+      expect(await retryYieldCount()).toBe(1);
+      await runKnowledgeWorker();
+      expect(await retryYieldCount()).toBe(1);
+    } finally {
+      await removeRetryFailureTrigger(prisma).catch(() => undefined);
+      await prisma.$disconnect();
+    }
   });
 });
