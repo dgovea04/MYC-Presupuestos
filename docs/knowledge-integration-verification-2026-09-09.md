@@ -10,12 +10,14 @@ La implementación de las tareas 1–6 quedó validada en `main`. La prueba E2E 
 
 | Comando | Resultado |
 |---|---|
-| `npm.cmd test` | PASS — 732 archivos, 5600 tests |
+| `npm.cmd test` | PASS — 736 archivos, 5612 tests |
 | `npm.cmd run typecheck` | PASS — exit 0 |
 | `npm.cmd run lint` | PASS — exit 0, sin warnings |
 | `npm.cmd run build` | PASS — exit 0 |
 | `npm.cmd test -- playwright.config.test.ts` | PASS — 1/1 |
 | `npm.cmd run test:e2e -- tests/e2e/review-intelligence.spec.ts` | 4 skipped sin fixture; no assertions reales ejecutadas |
+
+La corrección final de dry-run/JSON y la estabilización del test dotenv quedaron en `b4bc70a` y `5f6a963`; la suite completa se repitió después de esos commits y pasó.
 
 El build emitió un warning no bloqueante de trazado NFT relacionado con `lib/s10/sqlserver-local.ts` y avisos existentes sobre `ENCRYPTION_KEY`; no alteraron el exit code. La suite mantiene algunos warnings de consola de pruebas existentes, pero todos los tests pasan.
 
