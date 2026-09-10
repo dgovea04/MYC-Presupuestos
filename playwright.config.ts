@@ -1,5 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const knowledgeE2EEnvironment = {
+  ...process.env,
+  MC_KNOWLEDGE_REVIEW_LEARNING_BRIDGE: "true",
+  MC_KNOWLEDGE_REVIEW_ENRICHMENT: "true",
+  MC_KNOWLEDGE_RETRIEVAL_V1: "true",
+  MC_KNOWLEDGE_ADMIN_REVIEW_QUEUE: "true",
+  MC_KNOWLEDGE_BACKFILL: "true",
+};
+
 /**
  * Playwright config for the Excel-mode e2e smoke suite.
  *
@@ -31,6 +40,7 @@ export default defineConfig({
     : {
         command: "npm run dev",
         url: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+        env: knowledgeE2EEnvironment,
         reuseExistingServer: true,
         timeout: 180_000,
         stdout: "pipe",

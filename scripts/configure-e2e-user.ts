@@ -47,7 +47,7 @@ async function main() {
         status: "ACTIVE",
         role: "ADMIN",
         isSuperAdmin: false,
-        adminProfile: null,
+        adminProfile: "ADMIN",
         mfaEnabled: false,
         mfaSecretEncrypted: null,
         sessionVersion: { increment: 1 },
@@ -81,7 +81,7 @@ async function main() {
       data: {
         role: "ADMIN",
         isSuperAdmin: false,
-        adminProfile: null,
+        adminProfile: "ADMIN",
       },
     });
   }

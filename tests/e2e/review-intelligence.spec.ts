@@ -1,10 +1,61 @@
 import "dotenv/config";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
 
 const E2E_USER_EMAIL = process.env.E2E_USER_EMAIL ?? "e2e@mycpresupuestos.local";
 const E2E_USER_PASSWORD = process.env.E2E_USER_PASSWORD ?? "E2eLocalTest123!";
 const REVIEW_BUDGET_PATH = process.env.E2E_REVIEW_BUDGET_PATH;
 const REVIEW_XLSX_FIXTURE = process.env.E2E_REVIEW_XLSX_FIXTURE;
+const REVIEW_BRIDGE_RUN_ID = process.env.E2E_REVIEW_BRIDGE_RUN_ID;
+const REVIEW_BRIDGE_FINDING_ID = process.env.E2E_REVIEW_BRIDGE_FINDING_ID;
+const REVIEW_BRIDGE_COMPANY_ID = process.env.E2E_REVIEW_BRIDGE_COMPANY_ID;
+const REVIEW_BRIDGE_PROJECT_ID = process.env.E2E_REVIEW_BRIDGE_PROJECT_ID;
+const REVIEW_BRIDGE_QUERY = process.env.E2E_REVIEW_BRIDGE_QUERY;
+const REVIEW_BRIDGE_RETRY_JOB_ID = process.env.E2E_REVIEW_BRIDGE_RETRY_JOB_ID;
+const REVIEW_BRIDGE_RETRY_YIELD_KEY = process.env.E2E_REVIEW_BRIDGE_RETRY_YIELD_KEY;
+const execFileAsync = promisify(execFile);
+
+type ReviewFindingResponse = {
+  findings?: Array<{ id: string; updatedAt: string }>;
+};
+
+type KnowledgeQueueResponse = {
+  retryableJobs?: Array<{ id: string; status: string }>;
+};
+
+type KnowledgeRetrievalResponse = {
+  yields?: Array<{ idempotencyKey?: string | null }>;
+};
+
+const knowledgeE2EEnvironment = {
+  ...process.env,
+  MC_KNOWLEDGE_REVIEW_LEARNING_BRIDGE: "true",
+  MC_KNOWLEDGE_REVIEW_ENRICHMENT: "true",
+  MC_KNOWLEDGE_RETRIEVAL_V1: "true",
+  MC_KNOWLEDGE_ADMIN_REVIEW_QUEUE: "true",
+  MC_KNOWLEDGE_BACKFILL: "true",
+};
+
+function hasBridgeRetryFixture(): boolean {
+  return [
+    REVIEW_BRIDGE_RUN_ID,
+    REVIEW_BRIDGE_FINDING_ID,
+    REVIEW_BRIDGE_COMPANY_ID,
+    REVIEW_BRIDGE_PROJECT_ID,
+    REVIEW_BRIDGE_QUERY,
+    REVIEW_BRIDGE_RETRY_JOB_ID,
+    REVIEW_BRIDGE_RETRY_YIELD_KEY,
+  ].every(Boolean);
+}
+
+async function runKnowledgeWorker(): Promise<void> {
+  await execFileAsync(
+    process.execPath,
+    ["./node_modules/tsx/dist/cli.mjs", "scripts/process-knowledge-integration-jobs.ts"],
+    { cwd: process.cwd(), env: knowledgeE2EEnvironment, timeout: 60_000 },
+  );
+}
 
 async function signIn(page: Page): Promise<void> {
   await page.goto("/login");
@@ -140,5 +191,70 @@ test.describe("Revisión Inteligente", () => {
     await signIn(page);
     const response = await page.request.get("/api/projects/foreign-project/review-documents");
     expect([403, 404]).toContain(response.status());
+  });
+});
+
+test.describe("Knowledge bridge retry", () => {
+  test("bridges a review decision into Knowledge and completes a retry idempotently", async ({ page }) => {
+    test.skip(!hasBridgeRetryFixture(), "Configura el fixture E2E_REVIEW_BRIDGE_* para el escenario bridge/retry contra PostgreSQL local.");
+    await signIn(page);
+
+    const findingsResponse = await page.request.get(`/api/review-runs/${REVIEW_BRIDGE_RUN_ID}/findings?page=1&pageSize=100`);
+    expect(findingsResponse.status(), await findingsResponse.text()).toBe(200);
+    const findings = await findingsResponse.json() as ReviewFindingResponse;
+    const finding = findings.findings?.find((entry) => entry.id === REVIEW_BRIDGE_FINDING_ID);
+    expect(finding).toBeTruthy();
+
+    const decisionResponse = await page.request.post(`/api/review-findings/${REVIEW_BRIDGE_FINDING_ID}/decisions`, {
+      data: {
+        resolution: "CONFIRMED_ISSUE",
+        note: "E2E bridge/retry verification",
+        expectedUpdatedAt: finding?.updatedAt,
+      },
+    });
+    expect(decisionResponse.status(), await decisionResponse.text()).toBe(201);
+
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/knowledge/retrieval?q=${encodeURIComponent(REVIEW_BRIDGE_QUERY ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`);
+      if (!response.ok()) return 0;
+      const retrieval = await response.json() as KnowledgeRetrievalResponse;
+      return retrieval.yields?.filter((yieldObservation) => yieldObservation.idempotencyKey?.startsWith("review-yield:")).length ?? 0;
+    }, { timeout: 30_000 }).toBeGreaterThan(0);
+
+    const queueUrl = `/api/admin/knowledge/queue?companyId=${encodeURIComponent(REVIEW_BRIDGE_COMPANY_ID ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`;
+    await expect.poll(async () => {
+      const response = await page.request.get(queueUrl);
+      if (!response.ok()) return undefined;
+      const queue = await response.json() as KnowledgeQueueResponse;
+      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
+    }, { timeout: 30_000 }).toBe("RETRYABLE_FAILED");
+
+    const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${REVIEW_BRIDGE_RETRY_JOB_ID}/retry`);
+    expect(retryResponse.status(), await retryResponse.text()).toBe(200);
+    await expect.poll(async () => {
+      const response = await page.request.get(queueUrl);
+      if (!response.ok()) return undefined;
+      const queue = await response.json() as KnowledgeQueueResponse;
+      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
+    }, { timeout: 30_000 }).toBe("PENDING");
+
+    await runKnowledgeWorker();
+    await expect.poll(async () => {
+      const response = await page.request.get(queueUrl);
+      if (!response.ok()) return undefined;
+      const queue = await response.json() as KnowledgeQueueResponse;
+      return queue.retryableJobs?.find((job) => job.id === REVIEW_BRIDGE_RETRY_JOB_ID)?.status;
+    }, { timeout: 30_000 }).toBe("SUCCEEDED");
+
+    const retryYieldCount = async (): Promise<number> => {
+      const response = await page.request.get(`/api/knowledge/retrieval?q=${encodeURIComponent(REVIEW_BRIDGE_QUERY ?? "")}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID ?? "")}`);
+      expect(response.status(), await response.text()).toBe(200);
+      const retrieval = await response.json() as KnowledgeRetrievalResponse;
+      return retrieval.yields?.filter((yieldObservation) => yieldObservation.idempotencyKey === REVIEW_BRIDGE_RETRY_YIELD_KEY).length ?? 0;
+    };
+
+    expect(await retryYieldCount()).toBe(1);
+    await runKnowledgeWorker();
+    expect(await retryYieldCount()).toBe(1);
   });
 });
