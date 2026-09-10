@@ -45,6 +45,36 @@ npm.cmd test -- scripts/backfill-knowledge.integration.test.ts
 
 `fix: enable postgres backfill integration test`
 
+## Fix round 1 — assertions PostgreSQL reforzadas
+
+- `scripts/backfill-knowledge.integration.test.ts` ahora compara en dry-run todas las tablas mutables relevantes del tenant: sources, evidence, canonical items/resources, price observations, APU versions, `KnowledgeApuResource`, provenance links de items/resources y vínculos source/evidence de APU.
+- La primera corrida verifica `created.apuResources=1` y `skipped.apuResources=2` para `NO_MATCH`/`AMBIGUOUS`; el replay verifica `created.apuResources=0`, `skipped.apuResources=3` y conteos persistidos idénticos.
+- La provenance se valida por claves exactas de source/evidence: source `MIGRATION`, evidencia de item y resource con sus links canónicos, y evidencia/source enlazados al APU normal y a su `KnowledgeApuResource` canónico.
+- Se corrigió la referencia de `budget.projectId` al crear provenance de items.
+
+### Verificación Fix round 1
+
+```text
+npm.cmd test -- scripts/backfill-knowledge.integration.test.ts
+1 archivo, 2 tests pasaron contra PostgreSQL real.
+
+npm.cmd test -- lib/knowledge/backfill.test.ts lib/knowledge/provenance-bridge.test.ts
+2 archivos, 19 tests pasaron.
+
+npm.cmd run typecheck
+Pasó.
+
+npm.cmd run lint
+Pasó.
+
+git diff --check
+Pasó.
+```
+
+### Commit Fix round 1
+
+`test: strengthen postgres backfill assertions`
+
 ## Concerns
 
 - El directorio preexistente `presupuesto-ejemplo/pdf escaneado/` permaneció intacto y no se incluyó.

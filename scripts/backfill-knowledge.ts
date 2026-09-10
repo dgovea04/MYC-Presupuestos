@@ -82,7 +82,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     if (!row.description.trim() || !row.budget.projectId) { report.skipped.items++; continue; }
     report.candidates.items++;
     try {
-      const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
+      const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.projectId });
       if (dryRun) continue;
       const normalizedName = row.description.trim().toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalItem.findFirst({ where: { normalizedName, companyId: row.budget.project.companyId }, select: { id: true } });
