@@ -11,9 +11,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const itemId = (await params).id;
     const companyId = session.user.activeCompanyId ?? session.user.companyId;
-    if (!companyId) return NextResponse.json({ error: "No hay company activa" }, { status: 403 });
     const globalSession = await requireSuperAdminSession(request);
     await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "CanonicalItem", entityId: itemId, companyId, minimumRole: "EDITOR", capability: globalSession ? "knowledge.manage" : undefined });
     const body = schema.parse(await request.json()); return NextResponse.json(await addItemAlias(itemId, body.alias, true), { status: 201 });
-  } catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Alias inválido" : error instanceof Error ? error.message : "No se pudo confirmar el alias" }, { status: 400 }); }
+  } catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Alias inválido" : error instanceof Error ? error.message : "No se pudo confirmar el alias" }, { status: error instanceof z.ZodError ? 400 : 403 }); }
 }

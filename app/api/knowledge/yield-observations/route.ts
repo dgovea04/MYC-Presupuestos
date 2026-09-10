@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     await assertKnowledgeWriteAccess({ actorUserId: session.user.id, scope: body.scope, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined, projectId: body.projectId, userId: body.scope === "USER" ? session.user.id : undefined, capability: globalSession ? "knowledge.manage" : undefined });
     if (companyId) {
       await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "KnowledgeSource", entityId: body.sourceId, companyId, projectId: body.projectId });
-      await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "CanonicalItem", entityId: body.canonicalItemId, companyId, projectId: body.projectId });
+      await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "CanonicalItem", entityId: body.canonicalItemId, companyId, projectId: body.projectId, scope: body.scope === "GLOBAL" ? "GLOBAL" : undefined, capability: globalSession ? "knowledge.manage" : undefined });
       if (body.evidenceId) await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "KnowledgeEvidence", entityId: body.evidenceId, companyId, projectId: body.projectId });
     }
     return NextResponse.json(await createYieldObservation({ ...body, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined, userId: body.scope === "USER" ? session.user.id : undefined }), { status: 201 });

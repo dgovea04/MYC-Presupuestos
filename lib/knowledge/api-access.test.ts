@@ -49,6 +49,10 @@ describe("knowledge API scope access", () => {
       projectId: "project-b",
       scope: "PROJECT",
     })).rejects.toThrow("El proyecto no pertenece a este workspace");
+    expect(prismaMock.knowledgeSource.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.knowledgeEvidence.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.canonicalItem.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.canonicalResource.findUnique).not.toHaveBeenCalled();
   });
 
   it("requires EDITOR membership for writes", async () => {

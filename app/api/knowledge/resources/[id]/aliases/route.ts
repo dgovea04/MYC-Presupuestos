@@ -17,6 +17,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = schema.parse(await request.json());
     return NextResponse.json(await addResourceAlias(resourceId, body.alias, true), { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof z.ZodError ? "Alias inválido" : error instanceof Error ? error.message : "No se pudo confirmar el alias" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof z.ZodError ? "Alias inválido" : error instanceof Error ? error.message : "No se pudo confirmar el alias" }, { status: error instanceof z.ZodError ? 400 : 403 });
   }
 }
