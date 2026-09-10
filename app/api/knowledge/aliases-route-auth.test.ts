@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 import { POST as postItemAlias } from "./items/[id]/aliases/route";
 import { POST as postResourceAlias } from "./resources/[id]/aliases/route";
 
@@ -20,7 +21,7 @@ describe("knowledge aliases route tenant authorization", () => {
     vi.clearAllMocks();
     getAuthSession.mockResolvedValue({ user: { id: "u1", activeCompanyId: "company-a" } });
     requireSuperAdminSession.mockResolvedValue(null);
-    assertKnowledgeWriteAccess.mockRejectedValue(new Error("Knowledge tenant access denied"));
+    assertKnowledgeWriteAccess.mockRejectedValue(new WorkspaceAuthorizationError("Knowledge tenant access denied"));
   });
 
   it("does not write an item alias when the item belongs to another company", async () => {
@@ -47,5 +48,29 @@ describe("knowledge aliases route tenant authorization", () => {
 
     expect(response.status).toBe(201);
     expect(assertKnowledgeWriteAccess).toHaveBeenCalledWith({ actorUserId: "admin-1", entityType: "CanonicalItem", entityId: "global-item", companyId: undefined, minimumRole: "EDITOR", capability: "knowledge.manage" });
+  });
+
+  it.each([
+    ["item", postItemAlias, "item-1"],
+    ["resource", postResourceAlias, "resource-1"],
+  ] as const)("returns 400 for an invalid %s alias payload", async (_entity, postAlias, id) => {
+    assertKnowledgeWriteAccess.mockResolvedValue({ scope: "COMPANY", companyId: "company-a", projectId: null });
+
+    const response = await postAlias(new Request("http://localhost", { method: "POST", body: JSON.stringify({ alias: "" }) }), { params: Promise.resolve({ id }) });
+
+    expect(response.status).toBe(400);
+  });
+
+  it.each([
+    ["item", postItemAlias, addItemAlias, "item-1"],
+    ["resource", postResourceAlias, addResourceAlias, "resource-1"],
+  ] as const)("returns 500 instead of 403 when the %s alias service fails", async (_entity, postAlias, addAlias, id) => {
+    assertKnowledgeWriteAccess.mockResolvedValue({ scope: "COMPANY", companyId: "company-a", projectId: null });
+    addAlias.mockRejectedValue(new Error("database unavailable"));
+
+    const response = await postAlias(new Request("http://localhost", { method: "POST", body: JSON.stringify({ alias: "alias" }) }), { params: Promise.resolve({ id }) });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "No se pudo confirmar el alias" });
   });
 });

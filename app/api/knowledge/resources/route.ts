@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const globalSession = body.scope === "GLOBAL" ? await requireSuperAdminSession(request) : null;
     if (body.scope === "GLOBAL" && !globalSession) return NextResponse.json({ error: "Solo un super administrador puede crear conocimiento global" }, { status: 403 });
     if (body.scope === "COMPANY" && !companyId) return NextResponse.json({ error: "Workspace no disponible" }, { status: 403 });
-    await assertKnowledgeWriteAccess({ actorUserId: session.user.id, companyId: body.scope === "GLOBAL" ? undefined : companyId, scope: body.scope, capability: globalSession ? "knowledge.manage" : undefined });
+    await assertKnowledgeWriteAccess({ actorUserId: session.user.id, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined, scope: body.scope, capability: globalSession ? "knowledge.manage" : undefined });
     return NextResponse.json(await createCanonicalResource({ ...body, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined }), { status: 201 });
   } catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo crear el recurso" }, { status: 400 }); }
 }

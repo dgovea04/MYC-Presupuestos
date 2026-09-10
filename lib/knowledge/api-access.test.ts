@@ -5,6 +5,7 @@ import {
   assertKnowledgeReadAccess,
   assertKnowledgeWriteAccess,
 } from "./api-access";
+import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 
 const { assertWorkspaceMembership, assertProjectInWorkspace, prismaMock } = vi.hoisted(() => ({
   assertWorkspaceMembership: vi.fn().mockResolvedValue({ companyId: "c1", role: "EDITOR" }),
@@ -105,6 +106,17 @@ describe("knowledge API scope access", () => {
 
     await expect(missing).rejects.toThrow("Knowledge tenant access denied");
     await expect(foreign).rejects.toThrow("Knowledge tenant access denied");
+  });
+
+  it("reports ownership denials using the workspace authorization error pattern", async () => {
+    prismaMock.knowledgeSource.findUnique.mockResolvedValueOnce(null);
+
+    await expect(assertKnowledgeWriteAccess({
+      actorUserId: "u1",
+      companyId: "company-a",
+      entityType: "KnowledgeSource",
+      entityId: "missing-source",
+    })).rejects.toBeInstanceOf(WorkspaceAuthorizationError);
   });
 
   it("allows a user scope only for the authenticated user", async () => {

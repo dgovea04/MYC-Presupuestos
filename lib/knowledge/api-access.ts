@@ -1,4 +1,5 @@
 import { assertProjectInWorkspace, assertWorkspaceMembership } from "@/lib/workspace/access";
+import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 import { prisma } from "@/lib/db/prisma";
 import type { AdminCapability } from "@/lib/auth/admin-permissions";
 import type { KnowledgeScope } from "@/lib/knowledge/types";
@@ -32,6 +33,12 @@ const workspaceRoleRank: Record<WorkspaceRole, number> = {
   EDITOR: 2,
   VIEWER: 1,
 };
+
+function authorizationError(error: unknown): WorkspaceAuthorizationError {
+  return error instanceof WorkspaceAuthorizationError
+    ? error
+    : new WorkspaceAuthorizationError(error instanceof Error ? error.message : KNOWLEDGE_ACCESS_DENIED);
+}
 
 export async function assertKnowledgeApiScopeAccess(options: {
   actorUserId: string;
@@ -68,11 +75,11 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   }
 
   if (options.scope === "USER" && options.userId && options.userId !== options.actorUserId) {
-    throw new Error("No puedes escribir conocimiento de otro usuario");
+    throw new WorkspaceAuthorizationError("No puedes escribir conocimiento de otro usuario");
   }
 
   if (options.scope === "GLOBAL" && options.capability !== "knowledge.manage") {
-    throw new Error(KNOWLEDGE_ACCESS_DENIED);
+    throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
   }
 
   const requestedRole = options.minimumRole ?? defaultRole;
@@ -85,12 +92,20 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   }
 
   if (options.companyId && options.scope !== "GLOBAL") {
-    await assertWorkspaceMembership({ userId: options.actorUserId, companyId: options.companyId, minimumRole });
+    try {
+      await assertWorkspaceMembership({ userId: options.actorUserId, companyId: options.companyId, minimumRole });
+    } catch (error) {
+      throw authorizationError(error);
+    }
   }
 
   if (options.projectId) {
     if (!options.companyId) throw new Error("companyId es requerido para alcance PROJECT");
-    await assertProjectInWorkspace({ companyId: options.companyId, projectId: options.projectId });
+    try {
+      await assertProjectInWorkspace({ companyId: options.companyId, projectId: options.projectId });
+    } catch (error) {
+      throw authorizationError(error);
+    }
   }
 
   const requestedOwnership: KnowledgeOwnership = {
@@ -102,18 +117,18 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   if (!options.entityType || !options.entityId) return requestedOwnership;
 
   const ownership = await findKnowledgeEntityOwnership(options.entityType, options.entityId);
-  if (!ownership) throw new Error(KNOWLEDGE_ACCESS_DENIED);
+  if (!ownership) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
 
   if (ownership.scope === "GLOBAL") {
-    if (options.capability !== "knowledge.manage") throw new Error(KNOWLEDGE_ACCESS_DENIED);
+    if (options.capability !== "knowledge.manage") throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
     return ownership;
   }
 
   if (!options.companyId || ownership.companyId !== options.companyId || (options.projectId !== undefined && ownership.projectId !== options.projectId)) {
-    throw new Error(KNOWLEDGE_ACCESS_DENIED);
+    throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
   }
 
-  if (options.scope === "GLOBAL") throw new Error(KNOWLEDGE_ACCESS_DENIED);
+  if (options.scope === "GLOBAL") throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
   return ownership;
 }
 
