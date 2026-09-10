@@ -5,6 +5,35 @@ import type { KnowledgeScopeContext } from "./types";
 
 export interface CanonicalResourceInput extends KnowledgeScopeContext { name: string; category: string; canonicalUnit?: string; }
 
+export type CanonicalResourceLookupCandidate = {
+  id: string;
+  normalizedName: string;
+  canonicalUnit: string | null;
+  scope: "GLOBAL" | "COMPANY";
+  companyId: string | null;
+  aliases: readonly { normalizedAlias: string }[];
+};
+
+export type CanonicalResourceLookupIndex = ReadonlyMap<string, readonly CanonicalResourceLookupCandidate[]>;
+
+export function buildCanonicalResourceLookupIndex(candidates: readonly CanonicalResourceLookupCandidate[]): CanonicalResourceLookupIndex {
+  const index = new Map<string, CanonicalResourceLookupCandidate[]>();
+  for (const candidate of candidates) {
+    for (const value of [candidate.normalizedName, ...candidate.aliases.map((alias) => alias.normalizedAlias)]) {
+      const key = normalizeKnowledgeText(value);
+      if (!key) continue;
+      const matches = index.get(key) ?? [];
+      if (!matches.some((match) => match.id === candidate.id)) matches.push(candidate);
+      index.set(key, matches);
+    }
+  }
+  return index;
+}
+
+export function lookupCanonicalResourceCandidates(index: CanonicalResourceLookupIndex, description: string): readonly CanonicalResourceLookupCandidate[] {
+  return index.get(normalizeKnowledgeText(description)) ?? [];
+}
+
 export async function createCanonicalResource(input: CanonicalResourceInput) {
   validateKnowledgeScope(input);
   const normalizedName = normalizeKnowledgeText(input.name);
@@ -21,4 +50,3 @@ export async function addResourceAlias(canonicalResourceId: string, alias: strin
   if (!normalizedAlias) throw new Error("Alias is required");
   return prisma.canonicalResourceAlias.create({ data: { canonicalResourceId, alias: alias.trim(), normalizedAlias, confirmed } });
 }
-

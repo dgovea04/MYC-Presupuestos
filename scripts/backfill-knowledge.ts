@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome } from "@/lib/knowledge/backfill";
+import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome, resolveBackfillCanonicalResource, summarizeBackfillApuResourceResolutions } from "@/lib/knowledge/backfill";
+import { buildCanonicalResourceLookupIndex } from "@/lib/knowledge/canonical-resources";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import { logKnowledgeOperation } from "@/lib/knowledge/observability";
 import { createMigrationKnowledgeProvenance, linkMigrationKnowledgeEntity } from "@/lib/knowledge/provenance-bridge";
@@ -22,7 +23,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     prisma.budgetItem.findMany({ where: budgetFilter ? { budget: budgetFilter } : undefined, select: { id: true, description: true, unit: true, budget: { select: { projectId: true, project: { select: { companyId: true } } } } }, take: 10_000 }),
     prisma.apu.findMany({ where: budgetFilter ? { budgetItem: { budget: budgetFilter } } : undefined, select: { id: true, name: true, unit: true, performance: true, budgetItem: { select: { budget: { select: { projectId: true, project: { select: { companyId: true } } } } } }, resources: { select: { resourceId: true, description: true, quantity: true, unitPrice: true, resourceType: true, resource: { select: { description: true, unit: true } } } } }, take: 10_000 }),
   ]);
-  const report = { dryRun, companyId: companyId ?? null, projectId: projectId ?? null, correlationId, candidates: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, errors: [] as Array<{ domain: string; id: string; message: string }> };
+  const report = { dryRun, companyId: companyId ?? null, projectId: projectId ?? null, candidates: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, resolutionConflicts: [] as Array<{ domain: "apu-resource"; apuId: string; resourceId: string | null; reason: "NO_MATCH" | "AMBIGUOUS" }>, errors: [] as Array<{ domain: string; id: string; message: string }> };
 
   async function createProvenance(input: { domain: "item" | "resource" | "price" | "apu"; sourceRecordId: string; tenantCompanyId: string; tenantProjectId?: string }) {
     const sourceKey = buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId });
@@ -91,11 +92,29 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     try {
       const provenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
       if (dryRun) continue;
-      const snapshot = { apuId: row.id, name: row.name, unit: row.unit, performance: String(row.performance), resources: row.resources.map((resource, index) => ({ resourceId: resource.resourceId, description: resource.resource?.description ?? resource.description, unit: resource.resource?.unit ?? "", quantity: String(resource.quantity), unitPrice: String(resource.unitPrice), resourceType: resource.resourceType, sortOrder: index })) };
+      const canonicalResources = await prisma.canonicalResource.findMany({
+        where: { OR: [{ scope: "GLOBAL" }, { scope: "COMPANY", companyId: tenant.companyId }] },
+        select: { id: true, normalizedName: true, canonicalUnit: true, scope: true, companyId: true, aliases: { select: { normalizedAlias: true } } },
+      });
+      const canonicalResourceIndex = buildCanonicalResourceLookupIndex(canonicalResources);
+      const resolvedResources = row.resources.map((resource, index) => {
+        const description = resource.resource?.description ?? resource.description;
+        const unit = resource.resource?.unit ?? "";
+        const resolution = resolveBackfillCanonicalResource({ resourceId: resource.resourceId, description, unit, companyId: tenant.companyId }, canonicalResourceIndex);
+        return { sourceResourceId: resource.resourceId, canonicalResourceId: resolution.kind === "matched" ? resolution.canonicalResourceId : null, resolution, description, unit, quantity: String(resource.quantity), unitPrice: String(resource.unitPrice), resourceType: resource.resourceType, sortOrder: index };
+      });
+      const resolutionSummary = summarizeBackfillApuResourceResolutions(resolvedResources.map((resource) => ({ resourceId: resource.sourceResourceId, resolution: resource.resolution })));
+      report.candidates.apuResources += resolvedResources.length;
+      report.skipped.apuResources += resolutionSummary.skipped;
+      for (const conflict of resolutionSummary.conflicts) report.resolutionConflicts.push({ domain: "apu-resource", apuId: row.id, ...conflict });
+      const snapshot = { apuId: row.id, name: row.name, unit: row.unit, performance: String(row.performance), resources: resolvedResources };
       const contentHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
       const existingApu = await prisma.knowledgeApuVersion.findUnique({ where: { idempotencyKey: `backfill:apu:${row.id}` }, select: { id: true } });
-      await prisma.knowledgeApuVersion.upsert({ where: { idempotencyKey: `backfill:apu:${row.id}` }, create: { idempotencyKey: `backfill:apu:${row.id}`, apuId: row.id, versionNumber: 1, name: row.name, unit: row.unit, performance: row.performance, contentHash, scope: "PROJECT", companyId: tenant.companyId, projectId: row.budgetItem.budget.projectId, sourceId: provenance.source.id, evidenceId: provenance.evidence.id, createdById: undefined, beforeSnapshot: null, afterSnapshot: snapshot, resources: { create: snapshot.resources.map((resource) => ({ resourceId: resource.resourceId, description: resource.description, unit: resource.unit, quantity: resource.quantity, unitPrice: resource.unitPrice, resourceType: resource.resourceType, sortOrder: resource.sortOrder })) } }, update: { sourceId: provenance.source.id, evidenceId: provenance.evidence.id } });
+      const resourceRows = resolvedResources.map((resource) => ({ ...(resource.canonicalResourceId ? { resourceId: resource.canonicalResourceId } : {}), description: resource.description, unit: resource.unit, quantity: resource.quantity, unitPrice: resource.unitPrice, resourceType: resource.resourceType, sortOrder: resource.sortOrder }));
+      await prisma.knowledgeApuVersion.upsert({ where: { idempotencyKey: `backfill:apu:${row.id}` }, create: { idempotencyKey: `backfill:apu:${row.id}`, apuId: row.id, versionNumber: 1, name: row.name, unit: row.unit, performance: row.performance, contentHash, scope: "PROJECT", companyId: tenant.companyId, projectId: row.budgetItem.budget.projectId, sourceId: provenance.source.id, evidenceId: provenance.evidence.id, createdById: undefined, beforeSnapshot: null, afterSnapshot: snapshot, resources: { create: resourceRows } }, update: { sourceId: provenance.source.id, evidenceId: provenance.evidence.id, contentHash, afterSnapshot: snapshot, resources: { deleteMany: {}, create: resourceRows } } });
       if (existingApu) report.skipped.apus++; else report.created.apus++;
+      if (existingApu) report.skipped.apuResources += resolutionSummary.matched;
+      else report.created.apuResources += resolutionSummary.matched;
     } catch (error) { report.errors.push({ domain: "apu", id: row.id, message: error instanceof Error ? error.message : "unknown" }); }
   }
   logKnowledgeOperation({ stage: "backfill", outcome: report.errors.length ? "failure" : "success", correlationId, companyId, projectId, metadata: report });
