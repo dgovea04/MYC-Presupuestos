@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 
 const { requireAdminSession, assertKnowledgeReadAccess, isKnowledgeFeatureEnabled, getKnowledgeAdminQueue } = vi.hoisted(() => ({ requireAdminSession: vi.fn(), assertKnowledgeReadAccess: vi.fn(), isKnowledgeFeatureEnabled: vi.fn(), getKnowledgeAdminQueue: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireAdminSession }));
@@ -48,6 +49,18 @@ describe("admin knowledge queue route", () => {
 
     expect(response.status).toBe(400);
     expect(assertKnowledgeReadAccess).not.toHaveBeenCalled();
+    expect(getKnowledgeAdminQueue).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when queue scope authorization is denied", async () => {
+    requireAdminSession.mockResolvedValueOnce({ user: { id: "admin-1" } });
+    assertKnowledgeReadAccess.mockRejectedValueOnce(new WorkspaceAuthorizationError("No tienes acceso a este proyecto"));
+
+    const response = await GET(new Request("http://localhost/api/admin/knowledge/queue?companyId=c1&projectId=foreign-project"));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "No tienes acceso a este proyecto" });
+    expect(isKnowledgeFeatureEnabled).not.toHaveBeenCalled();
     expect(getKnowledgeAdminQueue).not.toHaveBeenCalled();
   });
 
