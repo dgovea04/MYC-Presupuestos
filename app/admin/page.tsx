@@ -20,6 +20,7 @@ import { AdminAiUsageDrilldown } from "@/components/admin/admin-ai-usage-drilldo
 import { AdminMfaSettings } from "@/components/admin/admin-mfa-settings";
 import { ResourcePriceProviderAdminPanel } from "@/components/admin/resource-price-provider-admin-panel";
 import { LocalResourcePriceAdminPanel } from "@/components/admin/local-resource-price-admin-panel";
+import { KnowledgeAdminContent } from "@/components/admin/knowledge-admin-content";
 import { AdminUserAccessForm } from "@/components/admin/admin-user-access-form";
 import { ManualPaymentRequests } from "@/components/admin/manual-payment-requests";
 import { AppShell } from "@/components/layout/app-shell";
@@ -29,6 +30,8 @@ import { CompactStatCard } from "@/components/ui/compact-stat-card";
 import { OperationalPanel, OperationalSectionHeader } from "@/components/ui/operational-surfaces";
 import { hasAdminCapability } from "@/lib/auth/admin-permissions";
 import { requireAdminSession } from "@/lib/auth/session";
+import { getKnowledgeAdminDashboard } from "@/lib/knowledge/admin-dashboard";
+import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import {
   getAdminDashboardStats,
   normalizeAdminUserPage,
@@ -108,7 +111,9 @@ export default async function AdminPage({
     page: normalizeAdminAuditPage(Number(resolvedSearchParams.auditPage ?? "1")),
   };
   const marketingRange = normalizeAdminMarketingDateRange(resolvedSearchParams.marketingFrom, resolvedSearchParams.marketingTo);
-  const adminTab = normalizeAdminTab(resolvedSearchParams.adminTab);
+  const knowledgeEnabled = isKnowledgeFeatureEnabled("adminReviewQueue");
+  const requestedAdminTab = normalizeAdminTab(resolvedSearchParams.adminTab);
+  const adminTab = requestedAdminTab === "knowledge" && !knowledgeEnabled ? "analytics" : requestedAdminTab;
   const betaCampaignId = resolvedSearchParams.betaCampaignId || undefined;
   const betaDuration: 60 | 90 | undefined = resolvedSearchParams.betaDuration === "60" || resolvedSearchParams.betaDuration === "90"
     ? Number(resolvedSearchParams.betaDuration) as 60 | 90
@@ -132,6 +137,7 @@ export default async function AdminPage({
         listBetaApplications(),
       ])
     : null;
+  const knowledgeDashboard = adminTab === "knowledge" ? await getKnowledgeAdminDashboard() : null;
   const canManageBeta = hasAdminCapability(session.user, "beta.manage");
   const canExportBeta = hasAdminCapability(session.user, "beta.export");
   // Usuarios del filtro de IA: consumidores del periodo + usuarios de la página
@@ -154,8 +160,11 @@ export default async function AdminPage({
           activeTab={adminTab}
           marketingFrom={resolvedSearchParams.marketingFrom}
           marketingTo={resolvedSearchParams.marketingTo}
+          showKnowledge={knowledgeEnabled}
         />
       </div>
+
+      {adminTab === "knowledge" && knowledgeDashboard ? <KnowledgeAdminContent dashboard={knowledgeDashboard} /> : null}
 
       {adminTab === "analytics" ? (
         <>

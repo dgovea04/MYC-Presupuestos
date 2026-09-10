@@ -7,6 +7,7 @@ describe("AdminPageTabs", () => {
     expect(normalizeAdminTab("unknown")).toBe("analytics");
     expect(normalizeAdminTab(undefined)).toBe("analytics");
     expect(normalizeAdminTab("users")).toBe("users");
+    expect(normalizeAdminTab("knowledge")).toBe("knowledge");
   });
 
   it("renders all admin areas and preserves the marketing range", () => {
@@ -23,6 +24,8 @@ describe("AdminPageTabs", () => {
     expect(markup).toContain("Precios");
     expect(markup).toContain("Seguridad");
     expect(markup).toContain("Auditoría");
+    expect(markup).toContain("Knowledge");
+    expect(markup).toContain("adminTab=knowledge&amp;marketingFrom=2026-08-01");
     expect(markup).toContain("adminTab=billing");
     expect(markup).toContain("marketingFrom=2026-08-01");
     expect(markup).toContain("marketingTo=2026-08-07");

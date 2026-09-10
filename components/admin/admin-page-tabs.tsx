@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Bot, CreditCard, DollarSign, FlaskConical, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CreditCard, DollarSign, FlaskConical, ScrollText, ShieldCheck, Users } from "lucide-react";
 
 export const ADMIN_TABS = [
   { id: "analytics", label: "Analytics", description: "Adquisición y monetización", icon: BarChart3 },
@@ -10,6 +10,7 @@ export const ADMIN_TABS = [
   { id: "beta", label: "Beta comercial", description: "Campañas Pro temporales", icon: FlaskConical },
   { id: "security", label: "Seguridad", description: "Protección y ciclo de vida", icon: ShieldCheck },
   { id: "audit", label: "Auditoría", description: "Registro administrativo", icon: ScrollText },
+  { id: "knowledge", label: "Knowledge", description: "Catalogo y evidencia", icon: BookOpen },
 ] as const;
 
 export type AdminTab = (typeof ADMIN_TABS)[number]["id"];
@@ -22,15 +23,17 @@ export function AdminPageTabs({
   activeTab,
   marketingFrom,
   marketingTo,
+  showKnowledge = true,
 }: {
   activeTab: AdminTab;
   marketingFrom?: string;
   marketingTo?: string;
+  showKnowledge?: boolean;
 }) {
   return (
     <nav aria-label="Secciones de administración" className="theme-surface-card overflow-x-auto rounded-2xl border p-1.5 shadow-sm">
       <div className="flex min-w-max gap-1">
-        {ADMIN_TABS.map((tab) => {
+        {ADMIN_TABS.filter((tab) => showKnowledge || tab.id !== "knowledge").map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.id === activeTab;
           const params = new URLSearchParams({ adminTab: tab.id });
