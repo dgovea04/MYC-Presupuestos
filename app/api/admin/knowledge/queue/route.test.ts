@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 
-const { requireAdminSession, assertKnowledgeReadAccess, isKnowledgeFeatureEnabled, getKnowledgeAdminQueue } = vi.hoisted(() => ({ requireAdminSession: vi.fn(), assertKnowledgeReadAccess: vi.fn(), isKnowledgeFeatureEnabled: vi.fn(), getKnowledgeAdminQueue: vi.fn() }));
-vi.mock("@/lib/auth/session", () => ({ requireAdminSession }));
+const { getAuthSession, requireAdminSession, assertKnowledgeReadAccess, isKnowledgeFeatureEnabled, getKnowledgeAdminQueue } = vi.hoisted(() => ({ getAuthSession: vi.fn().mockResolvedValue(null), requireAdminSession: vi.fn(), assertKnowledgeReadAccess: vi.fn(), isKnowledgeFeatureEnabled: vi.fn(), getKnowledgeAdminQueue: vi.fn() }));
+vi.mock("@/lib/auth/session", () => ({ getAuthSession, requireAdminSession }));
 vi.mock("@/lib/knowledge/api-access", () => ({ assertKnowledgeReadAccess }));
 vi.mock("@/lib/knowledge/feature-flags", () => ({ isKnowledgeFeatureEnabled }));
 vi.mock("@/lib/knowledge/admin-queue", () => ({ getKnowledgeAdminQueue }));
@@ -17,7 +17,7 @@ describe("admin knowledge queue route", () => {
 
   it("requires audit read capability", async () => {
     requireAdminSession.mockResolvedValueOnce(null);
-    expect((await GET(new Request("http://localhost/api/admin/knowledge/queue"))).status).toBe(403);
+    expect((await GET(new Request("http://localhost/api/admin/knowledge/queue"))).status).toBe(401);
   });
 
   it("passes validated queue filters to the service", async () => {
@@ -62,6 +62,16 @@ describe("admin knowledge queue route", () => {
     await expect(response.json()).resolves.toEqual({ error: "No tienes acceso a este proyecto" });
     expect(isKnowledgeFeatureEnabled).not.toHaveBeenCalled();
     expect(getKnowledgeAdminQueue).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when an authenticated administrator lacks the capability", async () => {
+    getAuthSession.mockResolvedValueOnce({ user: { id: "user-1" } });
+    requireAdminSession.mockResolvedValueOnce(null);
+
+    const response = await GET(new Request("http://localhost/api/admin/knowledge/queue"));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "No autorizado" });
   });
 
   it("does not turn an internal queue failure into a forbidden response", async () => {

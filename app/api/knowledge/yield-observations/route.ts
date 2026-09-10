@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAuthSession, requireSuperAdminSession } from "@/lib/auth/session";
 import { assertKnowledgeWriteAccess } from "@/lib/knowledge/api-access";
 import { createYieldObservation } from "@/lib/knowledge/observations";
+import { knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 
 const schema = z.object({ canonicalItemId: z.string().min(1), apuVersionId: z.string().optional(), value: z.string().min(1), unit: z.string().min(1), crew: z.string().optional(), projectType: z.string().optional(), regionId: z.string().optional(), scope: z.enum(["GLOBAL", "COMPANY", "PROJECT", "USER"]), projectId: z.string().optional(), sourceId: z.string().min(1), evidenceId: z.string().optional(), observedAt: z.coerce.date(), confidence: z.enum(["VERY_LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"]) }).strict();
 
@@ -23,6 +24,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(await createYieldObservation({ ...body, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined, userId: body.scope === "USER" ? session.user.id : undefined }), { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo crear la observación" }, { status: 400 });
+    return knowledgeRouteErrorResponse(error, "No se pudo crear la observación");
   }
 }

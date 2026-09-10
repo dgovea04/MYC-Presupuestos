@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAuthSession, requireSuperAdminSession } from "@/lib/auth/session";
 import { recordKnowledgeEvent } from "@/lib/knowledge/events";
 import { assertKnowledgeWriteAccess } from "@/lib/knowledge/api-access";
+import { knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 
 const schema = z.object({
   eventType: z.string().min(1), scope: z.enum(["GLOBAL", "COMPANY", "PROJECT", "USER"]), projectId: z.string().optional(),
@@ -27,6 +28,6 @@ export async function POST(request: Request) {
     const result = await recordKnowledgeEvent({ ...body, companyId: companyId ?? undefined, projectId: projectId ?? undefined, sourceId: body.sourceId ?? undefined, evidenceId: body.evidenceId ?? undefined, userId: session.user.id });
     return NextResponse.json(result, { status: result.created ? 201 : 200 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo registrar el evento" }, { status: 400 });
+    return knowledgeRouteErrorResponse(error, "No se pudo registrar el evento");
   }
 }

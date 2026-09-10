@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { AdminCapability } from "@/lib/auth/admin-permissions";
 import type { KnowledgeScope } from "@/lib/knowledge/types";
 import type { WorkspaceRole } from "@/types/workspace";
+import { KnowledgeRequestValidationError } from "@/lib/knowledge/route-errors";
 
 export type KnowledgeEntityType = "KnowledgeSource" | "KnowledgeEvidence" | "CanonicalItem" | "CanonicalResource";
 
@@ -62,11 +63,11 @@ export async function assertKnowledgeApiScopeAccess(options: {
     throw new Error("No puedes escribir conocimiento de otro usuario");
   }
   if (options.scope === "COMPANY" || options.scope === "PROJECT") {
-    if (!options.companyId) throw new Error("companyId es requerido para este alcance");
+    if (!options.companyId) throw new KnowledgeRequestValidationError("companyId es requerido para este alcance");
     await assertWorkspaceMembership({ userId: options.actorUserId, companyId: options.companyId, minimumRole: options.minimumRole ?? "EDITOR" });
   }
   if (options.scope === "PROJECT") {
-    if (!options.projectId) throw new Error("projectId es requerido para alcance PROJECT");
+    if (!options.projectId) throw new KnowledgeRequestValidationError("projectId es requerido para alcance PROJECT");
     await assertProjectInWorkspace({ companyId: options.companyId!, projectId: options.projectId });
   }
 }
@@ -81,7 +82,7 @@ export async function assertKnowledgeWriteAccess(options: KnowledgeAccessOptions
 
 async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRole: WorkspaceRole): Promise<KnowledgeOwnership> {
   if ((options.entityType === undefined) !== (options.entityId === undefined)) {
-    throw new Error("entityType y entityId deben proporcionarse juntos");
+    throw new KnowledgeRequestValidationError("entityType y entityId deben proporcionarse juntos");
   }
 
   if (options.scope === "USER" && options.userId && options.userId !== options.actorUserId) {
@@ -98,7 +99,7 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
     : requestedRole;
 
   if (options.scope !== "GLOBAL" && (options.scope === "COMPANY" || options.scope === "PROJECT") && !options.companyId) {
-    throw new Error("companyId es requerido para este alcance");
+    throw new KnowledgeRequestValidationError("companyId es requerido para este alcance");
   }
 
   if (options.companyId && options.scope !== "GLOBAL") {
@@ -112,7 +113,7 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   }
 
   if (options.projectId) {
-    if (!options.companyId) throw new Error("companyId es requerido para alcance PROJECT");
+    if (!options.companyId) throw new KnowledgeRequestValidationError("companyId es requerido para alcance PROJECT");
     try {
       await assertProjectInWorkspace({ companyId: options.companyId, projectId: options.projectId });
     } catch (error) {

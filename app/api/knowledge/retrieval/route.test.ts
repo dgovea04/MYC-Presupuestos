@@ -45,4 +45,14 @@ describe("knowledge retrieval route", () => {
     expect(response.status).toBe(400);
     expect(retrieveKnowledgeV1).not.toHaveBeenCalled();
   });
+
+  it("hides retrieval service errors behind a safe 500", async () => {
+    getAuthSession.mockResolvedValueOnce({ user: { id: "u1", activeCompanyId: "c1" } });
+    retrieveKnowledgeV1.mockRejectedValueOnce(new Error("database password leaked"));
+
+    const response = await GET(new Request("http://localhost/api/knowledge/retrieval?q=cemento"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "No se pudo recuperar conocimiento" });
+  });
 });

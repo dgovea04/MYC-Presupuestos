@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminSession } from "@/lib/auth/session";
+import { requireKnowledgeAdminSession, knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 import { createKnowledgeSupplier, listKnowledgeSuppliers } from "@/lib/knowledge/suppliers";
 
 const schema = z.object({ name: z.string().min(1), legalName: z.string().optional(), ruc: z.string().optional(), regionId: z.string().optional(), sourceId: z.string().optional(), website: z.string().url().optional(), phone: z.string().optional(), email: z.string().email().optional(), status: z.string().optional() }).strict();
 
 export async function GET(request: Request) {
-  if (!(await requireAdminSession("audit.read", request))) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  return NextResponse.json({ suppliers: await listKnowledgeSuppliers(new URL(request.url).searchParams.get("regionId") ?? undefined) });
+  const authorization = await requireKnowledgeAdminSession("audit.read", request);
+  if ("response" in authorization) return authorization.response;
+  try { return NextResponse.json({ suppliers: await listKnowledgeSuppliers(new URL(request.url).searchParams.get("regionId") ?? undefined) }); }
+  catch (error) { return knowledgeRouteErrorResponse(error, "No se pudieron consultar los proveedores"); }
 }
 
 export async function POST(request: Request) {
-  if (!(await requireAdminSession("knowledge.manage", request))) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const authorization = await requireKnowledgeAdminSession("knowledge.manage", request);
+  if ("response" in authorization) return authorization.response;
   try { return NextResponse.json(await createKnowledgeSupplier(schema.parse(await request.json())), { status: 201 }); }
-  catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo crear el proveedor" }, { status: 400 }); }
+  catch (error) { return knowledgeRouteErrorResponse(error, "No se pudo crear el proveedor"); }
 }

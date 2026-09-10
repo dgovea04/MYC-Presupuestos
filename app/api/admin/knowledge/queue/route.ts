@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/auth/session";
 import { getKnowledgeAdminQueue } from "@/lib/knowledge/admin-queue";
 import { assertKnowledgeReadAccess } from "@/lib/knowledge/api-access";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
-import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
+import { requireKnowledgeAdminSession, knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 
 export async function GET(request: Request) {
-  const session = await requireAdminSession("audit.read");
-  if (!session?.user?.id) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const authorization = await requireKnowledgeAdminSession("audit.read", request);
+  if ("response" in authorization) return authorization.response;
+  const session = authorization.session;
   const url = new URL(request.url);
   const companyId = url.searchParams.get("companyId") ?? undefined;
   const projectId = url.searchParams.get("projectId") ?? undefined;
@@ -17,10 +17,7 @@ export async function GET(request: Request) {
   try {
     await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, projectId, scope: projectId ? "PROJECT" : "COMPANY" });
   } catch (error) {
-    if (error instanceof WorkspaceAuthorizationError) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
-    }
-    throw error;
+    return knowledgeRouteErrorResponse(error, "No se pudo validar el alcance de Knowledge");
   }
   if (!isKnowledgeFeatureEnabled("adminReviewQueue", { companyId, projectId })) {
     return NextResponse.json({ error: "Knowledge admin queue disabled", feature: "adminReviewQueue" }, { status: 503 });

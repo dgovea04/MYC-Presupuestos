@@ -343,12 +343,13 @@ test.describe("Knowledge bridge retry", () => {
         idempotencyKey: jobKey,
       });
 
+      const retryJob = await currentJob();
+      expect(retryJob).toBeTruthy();
+
       // This is a real PostgreSQL trigger scoped to the isolated fixture. The
       // first worker execution must observe a transient write failure itself.
       await runKnowledgeWorker(retryJob!.id);
       await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("RETRYABLE_FAILED");
-      const retryJob = await currentJob();
-      expect(retryJob).toBeTruthy();
 
       await removeRetryFailureTrigger(prisma);
       const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${retryJob!.id}/retry?companyId=${encodeURIComponent(REVIEW_BRIDGE_COMPANY_ID!)}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID!)}`);

@@ -3,6 +3,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { retrieveKnowledgeV1 } from "@/lib/knowledge/retrieval-v1";
 import { assertKnowledgeReadAccess } from "@/lib/knowledge/api-access";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
+import { knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 
 export async function GET(request: Request) {
   const session = await getAuthSession();
@@ -28,5 +29,5 @@ export async function GET(request: Request) {
     if (confidenceValue && !confidences.includes(confidenceValue as typeof confidences[number])) return NextResponse.json({ error: "confidence inválido" }, { status: 400 });
     return NextResponse.json(await retrieveKnowledgeV1({ companyId, projectId, query, limit: limitValue, ...(statusValue ? { status: statusValue as typeof statuses[number] } : {}), ...(confidenceValue ? { confidence: confidenceValue as typeof confidences[number] } : {}), ...(regionId ? { regionId } : {}) }));
   }
-  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo recuperar conocimiento" }, { status: 403 }); }
+  catch (error) { return knowledgeRouteErrorResponse(error, "No se pudo recuperar conocimiento"); }
 }

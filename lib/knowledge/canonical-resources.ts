@@ -18,6 +18,17 @@ export type CanonicalResourceLookupCandidateInput = Omit<CanonicalResourceLookup
 
 export type CanonicalResourceLookupIndex = ReadonlyMap<string, readonly CanonicalResourceLookupCandidate[]>;
 
+export function deduplicateCanonicalResourceLookupCandidates(candidates: readonly CanonicalResourceLookupCandidateInput[]): CanonicalResourceLookupCandidateInput[] {
+  const unique = new Map<string, CanonicalResourceLookupCandidateInput>();
+  for (const candidate of candidates) {
+    const normalizedName = normalizeKnowledgeText(candidate.normalizedName);
+    const canonicalUnit = candidate.canonicalUnit ? normalizeKnowledgeUnit(candidate.canonicalUnit) : null;
+    const key = [candidate.scope, candidate.companyId ?? "global", normalizedName, canonicalUnit ?? ""].join("|");
+    if (!unique.has(key)) unique.set(key, { ...candidate, normalizedName, canonicalUnit });
+  }
+  return [...unique.values()];
+}
+
 export function buildCanonicalResourceLookupIndex(candidates: readonly CanonicalResourceLookupCandidateInput[]): CanonicalResourceLookupIndex {
   const index = new Map<string, CanonicalResourceLookupCandidate[]>();
   for (const candidate of candidates) {

@@ -4,6 +4,7 @@ import { getAuthSession, requireSuperAdminSession } from "@/lib/auth/session";
 import { createCanonicalResource } from "@/lib/knowledge/canonical-resources";
 import { prisma } from "@/lib/db/prisma";
 import { assertKnowledgeReadAccess, assertKnowledgeWriteAccess } from "@/lib/knowledge/api-access";
+import { knowledgeRouteErrorResponse } from "@/lib/knowledge/route-errors";
 
 const schema = z.object({ name: z.string().min(1), category: z.string().min(1), canonicalUnit: z.string().optional(), scope: z.enum(["GLOBAL", "COMPANY"]).default("COMPANY") }).strict();
 
@@ -12,10 +13,14 @@ export async function GET(request: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   const companyId = session.user.activeCompanyId ?? session.user.companyId;
   if (!companyId) return NextResponse.json({ error: "Workspace no disponible" }, { status: 403 });
-  await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, scope: "COMPANY" });
-  const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
-  const resources = await prisma.canonicalResource.findMany({ where: { normalizedName: { contains: q.toLocaleLowerCase("es-PE") }, OR: [{ scope: "GLOBAL" }, { scope: "COMPANY", companyId }] }, include: { aliases: true }, orderBy: { updatedAt: "desc" }, take: 100 });
-  return NextResponse.json({ resources });
+  try {
+    await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, scope: "COMPANY" });
+    const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+    const resources = await prisma.canonicalResource.findMany({ where: { normalizedName: { contains: q.toLocaleLowerCase("es-PE") }, OR: [{ scope: "GLOBAL" }, { scope: "COMPANY", companyId }] }, include: { aliases: true }, orderBy: { updatedAt: "desc" }, take: 100 });
+    return NextResponse.json({ resources });
+  } catch (error) {
+    return knowledgeRouteErrorResponse(error, "No se pudieron consultar los recursos");
+  }
 }
 
 export async function POST(request: Request) {
@@ -29,5 +34,5 @@ export async function POST(request: Request) {
     if (body.scope === "COMPANY" && !companyId) return NextResponse.json({ error: "Workspace no disponible" }, { status: 403 });
     await assertKnowledgeWriteAccess({ actorUserId: session.user.id, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined, scope: body.scope, capability: globalSession ? "knowledge.manage" : undefined });
     return NextResponse.json(await createCanonicalResource({ ...body, companyId: body.scope === "GLOBAL" ? undefined : companyId ?? undefined }), { status: 201 });
-  } catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo crear el recurso" }, { status: 400 }); }
+  } catch (error) { return knowledgeRouteErrorResponse(error, "No se pudo crear el recurso"); }
 }
