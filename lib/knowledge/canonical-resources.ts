@@ -14,16 +14,20 @@ export type CanonicalResourceLookupCandidate = {
   aliases: readonly { normalizedAlias: string }[];
 };
 
+export type CanonicalResourceLookupCandidateInput = Omit<CanonicalResourceLookupCandidate, "scope"> & { scope: string };
+
 export type CanonicalResourceLookupIndex = ReadonlyMap<string, readonly CanonicalResourceLookupCandidate[]>;
 
-export function buildCanonicalResourceLookupIndex(candidates: readonly CanonicalResourceLookupCandidate[]): CanonicalResourceLookupIndex {
+export function buildCanonicalResourceLookupIndex(candidates: readonly CanonicalResourceLookupCandidateInput[]): CanonicalResourceLookupIndex {
   const index = new Map<string, CanonicalResourceLookupCandidate[]>();
   for (const candidate of candidates) {
-    for (const value of [candidate.normalizedName, ...candidate.aliases.map((alias) => alias.normalizedAlias)]) {
+    if (candidate.scope !== "GLOBAL" && candidate.scope !== "COMPANY") continue;
+    const lookupCandidate: CanonicalResourceLookupCandidate = { ...candidate, scope: candidate.scope };
+    for (const value of [lookupCandidate.normalizedName, ...lookupCandidate.aliases.map((alias) => alias.normalizedAlias)]) {
       const key = normalizeKnowledgeText(value);
       if (!key) continue;
       const matches = index.get(key) ?? [];
-      if (!matches.some((match) => match.id === candidate.id)) matches.push(candidate);
+      if (!matches.some((match) => match.id === lookupCandidate.id)) matches.push(lookupCandidate);
       index.set(key, matches);
     }
   }

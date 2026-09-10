@@ -23,7 +23,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     prisma.budgetItem.findMany({ where: budgetFilter ? { budget: budgetFilter } : undefined, select: { id: true, description: true, unit: true, budget: { select: { projectId: true, project: { select: { companyId: true } } } } }, take: 10_000 }),
     prisma.apu.findMany({ where: budgetFilter ? { budgetItem: { budget: budgetFilter } } : undefined, select: { id: true, name: true, unit: true, performance: true, budgetItem: { select: { budget: { select: { projectId: true, project: { select: { companyId: true } } } } } }, resources: { select: { resourceId: true, description: true, quantity: true, unitPrice: true, resourceType: true, resource: { select: { description: true, unit: true } } } } }, take: 10_000 }),
   ]);
-  const report = { dryRun, companyId: companyId ?? null, projectId: projectId ?? null, candidates: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, resolutionConflicts: [] as Array<{ domain: "apu-resource"; apuId: string; resourceId: string | null; reason: "NO_MATCH" | "AMBIGUOUS" }>, errors: [] as Array<{ domain: string; id: string; message: string }> };
+  const report = { dryRun, correlationId, companyId: companyId ?? null, projectId: projectId ?? null, candidates: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, resolutionConflicts: [] as Array<{ domain: "apu-resource"; apuId: string; resourceId: string | null; reason: "NO_MATCH" | "AMBIGUOUS" }>, errors: [] as Array<{ domain: string; id: string; message: string }> };
 
   async function createProvenance(input: { domain: "item" | "resource" | "price" | "apu"; sourceRecordId: string; tenantCompanyId: string; tenantProjectId?: string }) {
     const sourceKey = buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId });
@@ -91,7 +91,6 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     report.candidates.apus++;
     try {
       const provenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
-      if (dryRun) continue;
       const canonicalResources = await prisma.canonicalResource.findMany({
         where: { OR: [{ scope: "GLOBAL" }, { scope: "COMPANY", companyId: tenant.companyId }] },
         select: { id: true, normalizedName: true, canonicalUnit: true, scope: true, companyId: true, aliases: { select: { normalizedAlias: true } } },
@@ -107,6 +106,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       report.candidates.apuResources += resolvedResources.length;
       report.skipped.apuResources += resolutionSummary.skipped;
       for (const conflict of resolutionSummary.conflicts) report.resolutionConflicts.push({ domain: "apu-resource", apuId: row.id, ...conflict });
+      if (dryRun) continue;
       const snapshot = { apuId: row.id, name: row.name, unit: row.unit, performance: String(row.performance), resources: resolvedResources };
       const contentHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
       const existingApu = await prisma.knowledgeApuVersion.findUnique({ where: { idempotencyKey: `backfill:apu:${row.id}` }, select: { id: true } });

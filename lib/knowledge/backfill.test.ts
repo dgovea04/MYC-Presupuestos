@@ -74,6 +74,14 @@ describe("backfill canonical resource resolution", () => {
     expect(result).toEqual({ kind: "matched", canonicalResourceId: "canonical-cement" });
     expect(result).not.toEqual(expect.objectContaining({ canonicalResourceId: "resource-cement" }));
   });
+
+  it("ignores canonical resources outside the global/company lookup scopes", () => {
+    const index = buildCanonicalResourceLookupIndex([
+      { id: "project-cement", normalizedName: "cemento", canonicalUnit: "KG", scope: "PROJECT" as string, companyId: "c1", aliases: [] },
+    ]);
+
+    expect(resolveBackfillCanonicalResource({ resourceId: "resource-cement", description: "Cemento", unit: "kg", companyId: "c1" }, index)).toEqual({ kind: "skipped", reason: "NO_MATCH" });
+  });
 });
 
 describe("backfill APU resource resolution reporting", () => {
