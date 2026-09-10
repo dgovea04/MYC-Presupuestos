@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-const { getAuthSession, requireSuperAdminSession, assertKnowledgeApiScopeAccess, assertKnowledgeEntityAccess, recordKnowledgeEvent } = vi.hoisted(() => ({ getAuthSession: vi.fn(), requireSuperAdminSession: vi.fn(), assertKnowledgeApiScopeAccess: vi.fn(), assertKnowledgeEntityAccess: vi.fn(), recordKnowledgeEvent: vi.fn() }));
+const { getAuthSession, requireSuperAdminSession, assertKnowledgeWriteAccess, recordKnowledgeEvent } = vi.hoisted(() => ({ getAuthSession: vi.fn(), requireSuperAdminSession: vi.fn(), assertKnowledgeWriteAccess: vi.fn(), recordKnowledgeEvent: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ getAuthSession, requireSuperAdminSession }));
-vi.mock("@/lib/knowledge/api-access", () => ({ assertKnowledgeApiScopeAccess, assertKnowledgeEntityAccess }));
+vi.mock("@/lib/knowledge/api-access", () => ({ assertKnowledgeWriteAccess }));
 vi.mock("@/lib/knowledge/events", () => ({ recordKnowledgeEvent }));
 
 const body = { eventType: "ITEM_CONFIRMED", scope: "COMPANY", entityType: "CanonicalItem", entityId: "i1", sourceType: "HUMAN", idempotencyKey: "event-1" };

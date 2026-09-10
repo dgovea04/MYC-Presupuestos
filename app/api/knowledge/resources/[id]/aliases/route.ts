@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession, requireSuperAdminSession } from "@/lib/auth/session";
-import { assertKnowledgeEntityAccess } from "@/lib/knowledge/api-access";
-import { prisma } from "@/lib/db/prisma";
+import { assertKnowledgeWriteAccess } from "@/lib/knowledge/api-access";
 import { addResourceAlias } from "@/lib/knowledge/canonical-resources";
 
 const schema = z.object({ alias: z.string().min(1) }).strict();
@@ -11,17 +10,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const session = await getAuthSession();
   if (!session?.user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   try {
-    const resource = await prisma.canonicalResource.findUnique({ where: { id: (await params).id } });
-    if (!resource) return NextResponse.json({ error: "Recurso no encontrado" }, { status: 404 });
-    if (resource.scope === "GLOBAL") {
-      if (!await requireSuperAdminSession(request)) return NextResponse.json({ error: "Solo un superadministrador puede confirmar alias globales" }, { status: 403 });
-    } else {
-      const companyId = session.user.activeCompanyId ?? session.user.companyId;
-      if (!companyId) return NextResponse.json({ error: "No hay company activa" }, { status: 403 });
-      await assertKnowledgeEntityAccess({ actorUserId: session.user.id, entityType: "CanonicalResource", entityId: resource.id, companyId, minimumRole: "EDITOR" });
-    }
+    const resourceId = (await params).id;
+    const companyId = session.user.activeCompanyId ?? session.user.companyId;
+    const globalSession = await requireSuperAdminSession(request);
+    await assertKnowledgeWriteAccess({ actorUserId: session.user.id, entityType: "CanonicalResource", entityId: resourceId, companyId, minimumRole: "EDITOR", capability: globalSession ? "knowledge.manage" : undefined });
     const body = schema.parse(await request.json());
-    return NextResponse.json(await addResourceAlias(resource.id, body.alias, true), { status: 201 });
+    return NextResponse.json(await addResourceAlias(resourceId, body.alias, true), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof z.ZodError ? "Alias inválido" : error instanceof Error ? error.message : "No se pudo confirmar el alias" }, { status: 400 });
   }

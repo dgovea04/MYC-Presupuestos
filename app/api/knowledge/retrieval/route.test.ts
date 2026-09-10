@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
-const { getAuthSession, assertWorkspaceMembership, assertProjectInWorkspace, retrieveKnowledgeV1 } = vi.hoisted(() => ({ getAuthSession: vi.fn(), assertWorkspaceMembership: vi.fn(), assertProjectInWorkspace: vi.fn(), retrieveKnowledgeV1: vi.fn() }));
+const { getAuthSession, assertKnowledgeReadAccess, retrieveKnowledgeV1 } = vi.hoisted(() => ({ getAuthSession: vi.fn(), assertKnowledgeReadAccess: vi.fn(), retrieveKnowledgeV1: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ getAuthSession }));
-vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership, assertProjectInWorkspace }));
+vi.mock("@/lib/knowledge/api-access", () => ({ assertKnowledgeReadAccess }));
 vi.mock("@/lib/knowledge/retrieval-v1", () => ({ retrieveKnowledgeV1 }));
 
 describe("knowledge retrieval route", () => {
@@ -18,8 +18,7 @@ describe("knowledge retrieval route", () => {
     retrieveKnowledgeV1.mockResolvedValueOnce({ items: [], resources: [], prices: [], yields: [], apuVersions: [], assertions: [] });
     const response = await GET(new Request("http://localhost/api/knowledge/retrieval?q=cemento&companyId=c1&projectId=p1"));
     expect(response.status).toBe(200);
-    expect(assertWorkspaceMembership).toHaveBeenCalledWith({ userId: "u1", companyId: "c1", minimumRole: "VIEWER" });
-    expect(assertProjectInWorkspace).toHaveBeenCalledWith({ companyId: "c1", projectId: "p1" });
+    expect(assertKnowledgeReadAccess).toHaveBeenCalledWith({ actorUserId: "u1", companyId: "c1", projectId: "p1", scope: "PROJECT" });
     expect(retrieveKnowledgeV1).toHaveBeenCalledWith({ companyId: "c1", projectId: "p1", query: "cemento", limit: 20 });
   });
 

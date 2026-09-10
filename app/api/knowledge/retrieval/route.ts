@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { retrieveKnowledgeV1 } from "@/lib/knowledge/retrieval-v1";
-import { assertWorkspaceMembership, assertProjectInWorkspace } from "@/lib/workspace/access";
+import { assertKnowledgeReadAccess } from "@/lib/knowledge/api-access";
 
 export async function GET(request: Request) {
   const session = await getAuthSession();
@@ -11,9 +11,8 @@ export async function GET(request: Request) {
   const query = url.searchParams.get("q")?.trim() ?? "";
   if (!companyId || !query) return NextResponse.json({ error: "companyId y q son requeridos" }, { status: 400 });
   try {
-    await assertWorkspaceMembership({ userId: session.user.id, companyId, minimumRole: "VIEWER" });
-  const projectId = url.searchParams.get("projectId") ?? undefined;
-    if (projectId) await assertProjectInWorkspace({ companyId, projectId });
+    const projectId = url.searchParams.get("projectId") ?? undefined;
+    await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, projectId, scope: projectId ? "PROJECT" : "COMPANY" });
     const statusValue = url.searchParams.get("status") ?? undefined;
     const confidenceValue = url.searchParams.get("confidence") ?? undefined;
     const regionId = url.searchParams.get("regionId") ?? undefined;
