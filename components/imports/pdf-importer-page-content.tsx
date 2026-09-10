@@ -68,6 +68,7 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
   const [progressTotal, setProgressTotal] = useState<number | null>(null);
   const [progressFile, setProgressFile] = useState<string | undefined>();
   const [progressStartedAt, setProgressStartedAt] = useState<number | null>(null);
+  const [getCurrentTimestamp] = useState(() => () => Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,7 +118,7 @@ export function PdfImporterPageContent({ companies, initialDraft }: PdfImporterP
     setImportResult(null);
     setProgress(2);
     setProgressDetail("Preparando OCR y validando el paquete PDF.");
-    setProgressStartedAt(Date.now());
+    setProgressStartedAt(getCurrentTimestamp());
     setElapsedSeconds(0);
 
     const formData = createFormData();
