@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { retrieveCanonicalItems } from "@/lib/knowledge/retrieval";
+import { retrieveKnowledgeV1 } from "@/lib/knowledge/retrieval-v1";
 import { assertWorkspaceMembership, assertProjectInWorkspace } from "@/lib/workspace/access";
 
 export async function GET(request: Request) {
   const session = await getAuthSession();
   if (!session?.user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   const url = new URL(request.url);
-  const companyId = url.searchParams.get("companyId") ?? session.user.activeCompanyId ?? session.user.companyId;
+  const companyId = session.user.activeCompanyId ?? session.user.companyId;
   const query = url.searchParams.get("q")?.trim() ?? "";
   if (!companyId || !query) return NextResponse.json({ error: "companyId y q son requeridos" }, { status: 400 });
   try {
     await assertWorkspaceMembership({ userId: session.user.id, companyId, minimumRole: "VIEWER" });
-    const projectId = url.searchParams.get("projectId") ?? undefined;
+  const projectId = url.searchParams.get("projectId") ?? undefined;
     if (projectId) await assertProjectInWorkspace({ companyId, projectId });
-    return NextResponse.json({ items: await retrieveCanonicalItems({ companyId, projectId, query, limit: Number(url.searchParams.get("limit") ?? "20") }) });
+    const statusValue = url.searchParams.get("status") ?? undefined;
+    const confidenceValue = url.searchParams.get("confidence") ?? undefined;
+    const regionId = url.searchParams.get("regionId") ?? undefined;
+    const statuses = ["OBSERVED", "CONFIRMED", "VERIFIED", "CANONICAL", "REJECTED", "DEPRECATED"] as const;
+    const confidences = ["LOW", "MEDIUM", "HIGH"] as const;
+    const limitValue = Number(url.searchParams.get("limit") ?? "20");
+    if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 100) return NextResponse.json({ error: "limit inválido" }, { status: 400 });
+    if (statusValue && !statuses.includes(statusValue as typeof statuses[number])) return NextResponse.json({ error: "status inválido" }, { status: 400 });
+    if (confidenceValue && !confidences.includes(confidenceValue as typeof confidences[number])) return NextResponse.json({ error: "confidence inválido" }, { status: 400 });
+    return NextResponse.json(await retrieveKnowledgeV1({ companyId, projectId, query, limit: limitValue, ...(statusValue ? { status: statusValue as typeof statuses[number] } : {}), ...(confidenceValue ? { confidence: confidenceValue as typeof confidences[number] } : {}), ...(regionId ? { regionId } : {}) }));
   }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo recuperar conocimiento" }, { status: 403 }); }
 }

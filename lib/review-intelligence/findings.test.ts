@@ -1,6 +1,12 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+const { createKnowledgeEvidenceFromReview } = vi.hoisted(() => ({ createKnowledgeEvidenceFromReview: vi.fn().mockResolvedValue({ evidence: { id: "knowledge-evidence-1" } }) }));
+vi.mock("@/lib/knowledge/provenance-bridge", () => ({ createKnowledgeEvidenceFromReview }));
+const { recordPersistedReviewDecisionKnowledgeEvents } = vi.hoisted(() => ({ recordPersistedReviewDecisionKnowledgeEvents: vi.fn().mockResolvedValue([{ event: { id: "knowledge-event-1" }, created: true }]) }));
+vi.mock("@/lib/knowledge/review-learning-events", () => ({ recordPersistedReviewDecisionKnowledgeEvents }));
+const { processPersistedReviewLearning } = vi.hoisted(() => ({ processPersistedReviewLearning: vi.fn().mockResolvedValue({ status: "SKIPPED" }) }));
+vi.mock("@/lib/knowledge/learning-bridge", () => ({ processPersistedReviewLearning }));
 vi.stubEnv("NEXTAUTH_SECRET", "test-review-secret");
 import { getFinding, listFindings, recordFindingDecision, validateReviewLink, viewReviewEvidence, type FindingFilters } from "@/lib/review-intelligence/findings";
 
@@ -21,13 +27,36 @@ describe("review findings service", () => {
   });
 
   it("creates an append-only decision and audit event after optimistic concurrency succeeds", async () => {
-    const tx = { reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", reviewRunId: "run-1", status: "PENDING", updatedAt: new Date("2026-09-02T12:00:00.000Z") }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) }, findingDecision: { create: vi.fn().mockResolvedValue({ id: "decision-1", findingId: "finding-1", resolution: "CONFIRMED_ISSUE", note: null, expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), createdAt: new Date("2026-09-02T12:01:00.000Z") }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) } };
+    const tx = { reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", reviewRunId: "run-1", evidenceId: "evidence-1", status: "PENDING", updatedAt: new Date("2026-09-02T12:00:00.000Z") }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) }, findingDecision: { create: vi.fn().mockResolvedValue({ id: "decision-1", findingId: "finding-1", resolution: "CONFIRMED_ISSUE", note: null, expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), createdAt: new Date("2026-09-02T12:01:00.000Z") }) }, reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) } };
     const client = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)), reviewFinding: tx.reviewFinding, reviewRun: tx.reviewRun, findingDecision: tx.findingDecision, reviewAuditEvent: tx.reviewAuditEvent } as never;
     const result = await recordFindingDecision({ findingId: "finding-1", companyId: "company-1", userId: "user-1", resolution: "CONFIRMED_ISSUE", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), role: "EDITOR", correlationId: "corr-1" }, client);
     expect(result.id).toBe("decision-1");
     expect(tx.findingDecision.create).toHaveBeenCalledOnce();
     expect(tx.reviewAuditEvent.create).toHaveBeenCalledOnce();
     expect(tx.reviewAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ correlationId: "corr-1", payloadJson: expect.objectContaining({ role: "EDITOR", newStatus: "RESOLVED" }) }) }));
+    expect(createKnowledgeEvidenceFromReview).toHaveBeenCalledWith({ reviewEvidenceId: "evidence-1", actorUserId: "user-1", companyId: "company-1", projectId: "project-1" });
+    expect(recordPersistedReviewDecisionKnowledgeEvents).toHaveBeenCalledWith({ decisionId: "decision-1", actorUserId: "user-1", correlationId: "corr-1" });
+    expect(processPersistedReviewLearning).toHaveBeenCalledWith({ decisionId: "decision-1", actorUserId: "user-1", correlationId: "corr-1" });
+  });
+
+  it("keeps the persisted Review decision when the Knowledge worker path fails", async () => {
+    vi.clearAllMocks();
+    processPersistedReviewLearning.mockRejectedValueOnce(new Error("Knowledge unavailable"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const tx = {
+      reviewFinding: { findFirst: vi.fn().mockResolvedValue({ id: "finding-1", companyId: "company-1", projectId: "project-1", budgetId: "budget-1", budgetItemId: "item-1", reviewRunId: "run-1", evidenceId: "evidence-1", status: "PENDING", updatedAt: new Date("2026-09-02T12:00:00.000Z") }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      reviewRun: { findFirst: vi.fn().mockResolvedValue({ id: "run-1", status: "COMPLETED" }) },
+      findingDecision: { create: vi.fn().mockResolvedValue({ id: "decision-failed-bridge", findingId: "finding-1", resolution: "CONFIRMED_ISSUE", note: null, expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), previousStatus: "PENDING", newStatus: "RESOLVED", correctionVersionId: null, createdAt: new Date("2026-09-02T12:01:00.000Z") }) },
+      reviewAuditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) },
+    };
+    const client = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)), ...tx } as never;
+
+    const result = await recordFindingDecision({ findingId: "finding-1", companyId: "company-1", userId: "user-1", resolution: "CONFIRMED_ISSUE", expectedUpdatedAt: new Date("2026-09-02T12:00:00.000Z"), role: "EDITOR", correlationId: "corr-failure" }, client);
+    expect(result.id).toBe("decision-failed-bridge");
+    expect(tx.findingDecision.create).toHaveBeenCalledOnce();
+    expect(processPersistedReviewLearning).toHaveBeenCalledWith({ decisionId: "decision-failed-bridge", actorUserId: "user-1", correlationId: "corr-failure" });
+    expect(warn).toHaveBeenCalledWith("Knowledge review learning was not processed", expect.any(Error));
+    warn.mockRestore();
   });
 
   it("exposes the complete decision history in finding detail", async () => {

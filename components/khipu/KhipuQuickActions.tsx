@@ -73,7 +73,7 @@ export function KhipuQuickActions({
   className,
 }: KhipuQuickActionsProps) {
   return (
-    <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2", className)}>
+    <div className={cn("grid grid-cols-1 gap-3", className)}>
       {actions.map((action) => {
         const Icon = action.icon;
 

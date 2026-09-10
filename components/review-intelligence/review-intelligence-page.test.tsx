@@ -300,6 +300,13 @@ describe("FindingDetail", () => {
     expect(screen.getByRole("region", { name: "Visor estructurado de provenance" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /V.*lido sin cambios/ })).toBeNull();
   });
+  it("shows Knowledge origin, scope, confidence, date, and primary evidence navigation", () => {
+    render(<FindingDetail finding={{ ...finding, knowledge: [{ id: "knowledge-1", scope: "PROJECT", confidence: "HIGH", observedAt: "2026-09-09T00:00:00.000Z", evidenceId: "knowledge-evidence-1" }] }} canResolve={false} onChanged={vi.fn()} />);
+    expect(screen.getByRole("region", { name: "Señales de MC Knowledge" })).toBeTruthy();
+    expect(screen.getByText("Scope: PROJECT")).toBeTruthy();
+    expect(screen.getByText("Confianza: HIGH")).toBeTruthy();
+    expect(screen.getByText("Navegar a evidencia primaria").getAttribute("href")).toBe("/api/review-evidence/evidence-1/view?token=temporary");
+  });
   it("renders comparison details for yield, specification, and missing APU components", () => {
     const { rerender } = render(<FindingDetail finding={{ ...finding, findingType: "YIELD_MISMATCH", comparison: { documentValue: "8.000", budgetValue: "4.000", difference: "4.000", unit: "m3" } }} canResolve={false} onChanged={vi.fn()} />);
     expect(screen.getByText("Rendimiento documentado")).toBeTruthy();

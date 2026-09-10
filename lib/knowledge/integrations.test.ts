@@ -14,4 +14,9 @@ describe("knowledge integration adapters", () => {
     await recordReviewDecisionKnowledgeEvent({ userId: "u1", companyId: "c1", projectId: "p1", findingId: "f1", resolution: "CONFIRMED_ISSUE" });
     expect(recordKnowledgeEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "REVIEW_ISSUE_CONFIRMED", entityId: "f1" }));
   });
+
+  it("keys review learning events by persisted decision", async () => {
+    await recordReviewDecisionKnowledgeEvent({ userId: "u1", companyId: "c1", projectId: "p1", findingId: "f1", decisionId: "d1", resolution: "FALSE_POSITIVE", correlationId: "corr-1", evidenceId: "e1" });
+    expect(recordKnowledgeEvent).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "review-decision:d1:REVIEW_ISSUE_REJECTED", evidenceId: "e1", metadata: { correlationId: "corr-1", decisionId: "d1" } }));
+  });
 });

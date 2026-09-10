@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await requireAdminSession("audit.read", request))) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (!(await requireAdminSession("knowledge.manage", request))) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   try { return NextResponse.json(await createKnowledgeSupplier(schema.parse(await request.json())), { status: 201 }); }
   catch (error) { return NextResponse.json({ error: error instanceof z.ZodError ? "Payload inválido" : error instanceof Error ? error.message : "No se pudo crear el proveedor" }, { status: 400 }); }
 }

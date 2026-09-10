@@ -138,6 +138,8 @@ export interface FindingView {
   comparison?: FindingComparisonView | null;
   evidence?: FindingEvidenceView | null;
   entityLink?: FindingLinkView | null;
+  knowledge?: Array<{ id: string; scope: string; confidence?: string; observedAt?: string; evidenceId?: string; provenance?: Record<string, unknown> }>;
+  knowledgeTelemetry?: { enabled: boolean; fallback: boolean; latencyMs: number; error?: string };
   decisionHistory: FindingDecisionView[];
 }
 

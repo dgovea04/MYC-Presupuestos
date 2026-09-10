@@ -22,6 +22,7 @@ export interface ReviewRuleEvidence {
   quantity?: Decimal;
   yield?: Decimal;
   unit?: string;
+  unitPrice?: Decimal;
   technicalSpecification?: string;
   apuComponents?: string[];
 }
@@ -106,6 +107,24 @@ export function evaluateFindingRules(input: ReviewRuleInput): FindingCandidate[]
         percentage: comparison.percentage?.toString(),
         unit: input.item.unit,
         details: { documentYield: comparison.documentValue.toString(), budgetYield: comparison.budgetValue.toString() },
+      }));
+    }
+  }
+  if (enabled(input, "PRICE_MISMATCH") && input.item.unitPrice?.isFinite() && input.evidence.unitPrice?.isFinite()) {
+    const comparison = calculateQuantityDifference({
+      documentValue: input.evidence.unitPrice,
+      budgetValue: input.item.unitPrice,
+      tolerance: input.tolerance,
+      minimumAbsoluteTolerance: new Decimal("0.01"),
+    });
+    if (comparison.exceedsTolerance) {
+      findings.push(candidate(input, "PRICE_MISMATCH", "El precio unitario documentado supera la tolerancia configurada.", "HIGH", {
+        documentValue: comparison.documentValue.toString(),
+        budgetValue: comparison.budgetValue.toString(),
+        difference: comparison.difference.toString(),
+        percentage: comparison.percentage?.toString(),
+        unit: input.item.unit,
+        details: { documentUnitPrice: comparison.documentValue.toString(), budgetUnitPrice: comparison.budgetValue.toString() },
       }));
     }
   }

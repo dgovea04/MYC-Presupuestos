@@ -18,5 +18,6 @@ describe("knowledge regions route", () => {
     const response = await POST(new Request("http://localhost/api/knowledge/regions", { method: "POST", body: JSON.stringify({ level: "DEPARTMENT", name: "Cusco" }) }));
     expect(response.status).toBe(201);
     expect(createKnowledgeRegion).toHaveBeenCalledWith({ level: "DEPARTMENT", name: "Cusco" });
+    expect(requireAdminSession).toHaveBeenCalledWith("knowledge.manage", expect.any(Request));
   });
 });

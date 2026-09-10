@@ -37,7 +37,8 @@
     "price-api:dev": "node ./node_modules/tsx/dist/cli.mjs services/mc-presupuestos-price-api/src/server.ts",
     "price-api:typecheck": "node ./node_modules/typescript/bin/tsc --project services/mc-presupuestos-price-api/tsconfig.json --noEmit",
     "test:price-api": "node ./node_modules/vitest/vitest.mjs run services/mc-presupuestos-price-api/src/handler.test.ts",
-    "test": "node ./node_modules/vitest/vitest.mjs run"
+    "test": "node ./node_modules/vitest/vitest.mjs run",
+    "knowledge:worker": "node ./node_modules/tsx/dist/cli.mjs scripts/process-knowledge-integration-jobs.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.91",

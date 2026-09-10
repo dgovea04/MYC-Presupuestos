@@ -193,6 +193,7 @@ enum ReviewRunStatus {
 enum ReviewFindingType {
   QUANTITY_MISMATCH
   YIELD_MISMATCH
+  PRICE_MISMATCH
   UNIT_INCONSISTENCY
   TECHNICAL_SPEC_MISMATCH
   MISSING_DOCUMENTATION
@@ -2793,9 +2794,13 @@ model ApuResource {
 
 model KnowledgeSource {
   id          String   @id @default(cuid())
+  idempotencyKey String? @unique
   sourceType  String
   label       String
   privacy     String   @default("PRIVATE")
+  companyId   String?
+  projectId   String?
+  createdById String?
   metadata    Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2807,11 +2812,13 @@ model KnowledgeSource {
   suppliers   KnowledgeSupplier[]
 
   @@index([sourceType, createdAt(sort: Desc)])
+  @@index([companyId, projectId, createdAt(sort: Desc)])
   @@map("knowledge_sources")
 }
 
 model KnowledgeEvidence {
   id          String   @id @default(cuid())
+  idempotencyKey String? @unique
   sourceId    String
   documentId  String?
   fileName    String?
@@ -2821,15 +2828,20 @@ model KnowledgeEvidence {
   url         String?
   quote       String?  @db.Text
   checksum    String?
+  companyId   String?
+  projectId   String?
+  createdById String?
   metadata    Json?
   createdAt   DateTime @default(now())
   source      KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   events      KnowledgeEvent[]
   priceObservations PriceObservation[]
   yieldObservations YieldObservation[]
+  reviewEvidenceLinks KnowledgeReviewEvidenceLink[]
 
   @@index([sourceId, createdAt(sort: Desc)])
   @@index([checksum])
+  @@index([companyId, projectId, createdAt(sort: Desc)])
   @@map("knowledge_evidence")
 }
 
@@ -2925,6 +2937,7 @@ model CanonicalResourceAlias {
 
 model KnowledgeApuVersion {
   id              String          @id @default(cuid())
+  idempotencyKey  String?         @unique
   apuId           String
   versionNumber   Int
   name            String
@@ -2936,6 +2949,11 @@ model KnowledgeApuVersion {
   projectId       String?
   sourceId        String?
   evidenceId      String?
+  reviewFindingId String?
+  reviewDecisionId String?
+  createdById     String?
+  beforeSnapshot  Json?
+  afterSnapshot   Json?
   createdAt       DateTime        @default(now())
   resources       KnowledgeApuResource[]
 
@@ -3000,6 +3018,7 @@ model KnowledgeSupplier {
 
 model PriceObservation {
   id          String          @id @default(cuid())
+  idempotencyKey String?       @unique
   resourceId  String
   value       Decimal         @db.Decimal(18, 6)
   currency    String
@@ -3026,6 +3045,7 @@ model PriceObservation {
 
 model YieldObservation {
   id              String          @id @default(cuid())
+  idempotencyKey   String?         @unique
   canonicalItemId String
   apuVersionId    String?
   value           Decimal         @db.Decimal(18, 6)
@@ -3052,6 +3072,7 @@ model YieldObservation {
 
 model KnowledgeAssertion {
   id          String          @id @default(cuid())
+  idempotencyKey String?      @unique
   subjectType String
   subjectId   String
   predicate    String
@@ -3061,12 +3082,82 @@ model KnowledgeAssertion {
   confidence  KnowledgeConfidence
   companyId   String?
   projectId   String?
+  sourceId    String?
+  evidenceId  String?
+  reviewFindingId String?
+  reviewDecisionId String?
+  createdById String?
+  updatedById String?
+  rejectionReason String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  conflicts   KnowledgeAssertionConflict[] @relation("AssertionConflicts")
+  conflictingWith KnowledgeAssertionConflict[] @relation("ConflictingAssertions")
 
   @@index([subjectId, predicate])
   @@index([scope, companyId, projectId])
   @@map("knowledge_assertions")
+}
+
+model KnowledgeAssertionConflict {
+  id                    String   @id @default(cuid())
+  idempotencyKey        String   @unique
+  assertionId           String
+  conflictingAssertionId String
+  status                String   @default("OPEN")
+  reason                String   @db.Text
+  resolvedById          String?
+  resolvedAt            DateTime?
+  createdAt             DateTime @default(now())
+  assertion             KnowledgeAssertion @relation("AssertionConflicts", fields: [assertionId], references: [id], onDelete: Cascade)
+  conflictingAssertion  KnowledgeAssertion @relation("ConflictingAssertions", fields: [conflictingAssertionId], references: [id], onDelete: Cascade)
+
+  @@unique([assertionId, conflictingAssertionId])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([assertionId, status])
+  @@map("knowledge_assertion_conflicts")
+}
+
+model KnowledgeReviewEvidenceLink {
+  id                  String           @id @default(cuid())
+  reviewEvidenceId    String
+  knowledgeEvidenceId String
+  companyId           String
+  projectId           String
+  relationType        String
+  createdById         String
+  createdAt           DateTime         @default(now())
+  knowledgeEvidence   KnowledgeEvidence @relation(fields: [knowledgeEvidenceId], references: [id], onDelete: Cascade)
+  reviewEvidence      ReviewEvidence   @relation(fields: [reviewEvidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewEvidenceId, knowledgeEvidenceId])
+  @@index([companyId, projectId, createdAt(sort: Desc)])
+  @@index([reviewEvidenceId])
+  @@index([knowledgeEvidenceId])
+  @@map("knowledge_review_evidence_links")
+}
+
+model KnowledgeIntegrationJob {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  companyId      String
+  projectId      String
+  findingId      String
+  decisionId     String
+  actorUserId    String?
+  status         String   @default("PENDING")
+  attemptCount   Int      @default(0)
+  nextRetryAt    DateTime?
+  errorCode      String?
+  errorMessage   String?  @db.Text
+  lastAttemptAt  DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([companyId, projectId, status, nextRetryAt])
+  @@index([findingId, decisionId])
+  @@map("knowledge_integration_jobs")
 }
 
 model GeneralExpense {
@@ -3569,6 +3660,7 @@ model ReviewEvidence {
   documentVersion   DocumentVersion @relation(fields: [documentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
   entityLinks       EntityLink[]
   findings          ReviewFinding[]
+  knowledgeEvidenceLinks KnowledgeReviewEvidenceLink[]
 
   @@unique([documentVersionId, sourceHash])
   @@index([companyId, projectId, evidenceType])

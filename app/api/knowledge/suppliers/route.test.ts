@@ -19,4 +19,11 @@ describe("knowledge suppliers route", () => {
     const response = await POST(new Request("http://localhost/api/knowledge/suppliers", { method: "POST", body: JSON.stringify({ name: "Proveedor" }) }));
     expect(response.status).toBe(403);
   });
+
+  it("requires knowledge management capability for writes", async () => {
+    requireAdminSession.mockResolvedValueOnce({ user: { id: "admin" } });
+    createKnowledgeSupplier.mockResolvedValueOnce({ id: "s1" });
+    await POST(new Request("http://localhost/api/knowledge/suppliers", { method: "POST", body: JSON.stringify({ name: "Proveedor" }) }));
+    expect(requireAdminSession).toHaveBeenCalledWith("knowledge.manage", expect.any(Request));
+  });
 });

@@ -1,0 +1,10 @@
+ALTER TABLE "knowledge_assertions" ADD COLUMN "idempotencyKey" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "sourceId" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "evidenceId" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "reviewFindingId" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "reviewDecisionId" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "createdById" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "updatedById" TEXT;
+ALTER TABLE "knowledge_assertions" ADD COLUMN "rejectionReason" TEXT;
+CREATE UNIQUE INDEX "knowledge_assertions_idempotencyKey_key" ON "knowledge_assertions"("idempotencyKey");
+CREATE INDEX "knowledge_assertions_companyId_projectId_status_idx" ON "knowledge_assertions"("companyId", "projectId", "status");

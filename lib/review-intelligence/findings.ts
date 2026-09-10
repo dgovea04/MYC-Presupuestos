@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import type { FindingResolution, FindingStatus } from "./types";
 import { getReviewDocumentStorage } from "./documents";
 import type { ReviewDocumentStorage } from "./storage";
-import { recordReviewDecisionKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { createKnowledgeEvidenceFromReview } from "@/lib/knowledge/provenance-bridge";
+import { recordPersistedReviewDecisionKnowledgeEvents } from "@/lib/knowledge/review-learning-events";
+import { processPersistedReviewLearning } from "@/lib/knowledge/learning-bridge";
 
 type Client = Pick<PrismaClient, "reviewRun" | "reviewFinding" | "findingDecision" | "reviewAuditEvent" | "entityLink" | "reviewEvidence" | "budget" | "budgetVersionSnapshot"> & {
   $transaction<T>(callback: (transaction: Client) => Promise<T>): Promise<T>;
@@ -178,10 +180,12 @@ export async function getReviewEvidence(evidenceId: string, companyId: string, c
 export async function recordFindingDecision(input: FindingDecisionInput, client: Client = prisma): Promise<FindingDecisionRecord> {
   if (input.resolution === "CORRECTED" && !input.correctionVersionId) throw new Error("CORRECTED requires a post-correction version reference.");
   let decisionProjectId: string | undefined;
+  let decisionEvidenceId: string | undefined;
   const result = await client.$transaction(async (tx) => {
     const current = await tx.reviewFinding.findFirst({ where: { id: input.findingId, companyId: input.companyId, project: { companyId: input.companyId }, budget: { project: { companyId: input.companyId } } }, select: { id: true, companyId: true, projectId: true, budgetId: true, budgetItemId: true, baseSnapshotId: true, evidenceId: true, reviewRunId: true, status: true, updatedAt: true } });
     if (!current) throw new Error("Finding not found.");
     decisionProjectId = current.projectId;
+    decisionEvidenceId = current.evidenceId;
     const run = await tx.reviewRun.findFirst({ where: { id: current.reviewRunId, companyId: input.companyId, projectId: current.projectId, budgetId: current.budgetId }, select: { id: true, status: true } });
     if (!run) throw new Error("Review run not found.");
     if ((current.status === "STALE" || run.status === "STALE") && !input.reconfirmStale) throw new Error("Finding or review run is stale; reconfirmation required.");
@@ -210,9 +214,19 @@ export async function recordFindingDecision(input: FindingDecisionInput, client:
     return { id: decision.id, findingId: decision.findingId, resolution: decision.resolution as FindingResolution, note: decision.note, expectedUpdatedAt: decision.expectedUpdatedAt.toISOString(), previousStatus: decision.previousStatus, newStatus: decision.newStatus, correctionVersionId: decision.correctionVersionId, createdAt: decision.createdAt.toISOString() };
   });
   try {
-    await recordReviewDecisionKnowledgeEvent({ userId: input.userId, companyId: input.companyId, projectId: decisionProjectId ?? "", findingId: result.findingId, resolution: result.resolution });
+    await createKnowledgeEvidenceFromReview({ reviewEvidenceId: decisionEvidenceId ?? "", actorUserId: input.userId, companyId: input.companyId, projectId: decisionProjectId ?? "" });
+  } catch (error) {
+    console.warn("Knowledge review evidence was not bridged", error);
+  }
+  try {
+    await recordPersistedReviewDecisionKnowledgeEvents({ decisionId: result.id, actorUserId: input.userId, correlationId: input.correlationId });
   } catch (error) {
     console.warn("Knowledge review event was not recorded", error);
+  }
+  try {
+    await processPersistedReviewLearning({ decisionId: result.id, actorUserId: input.userId, correlationId: input.correlationId });
+  } catch (error) {
+    console.warn("Knowledge review learning was not processed", error);
   }
   return result;
 }

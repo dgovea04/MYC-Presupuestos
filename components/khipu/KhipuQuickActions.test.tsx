@@ -124,9 +124,10 @@ describe("KhipuQuickActions", () => {
     const container = await render({ className: "my-grid" });
     const outerDiv = container.firstElementChild as HTMLElement;
     expect(outerDiv.className).toContain("my-grid");
-    // Grid classes still present
+    // The quick-start cards must stay in a single column at every breakpoint.
     expect(outerDiv.className).toContain("grid");
-    expect(outerDiv.className).toContain("sm:grid-cols-2");
+    expect(outerDiv.className).toContain("grid-cols-1");
+    expect(outerDiv.className).not.toContain("sm:grid-cols-2");
   });
 
   it("provides focus-visible styles via className on buttons", async () => {

@@ -25,6 +25,35 @@ const baseInput = (): ReviewRuleInput => ({
 });
 
 describe("evaluateFindingRules", () => {
+  it("detects a Decimal unit price mismatch only when explicitly enabled", () => {
+    const input = baseInput();
+    const findings = evaluateFindingRules({
+      ...input,
+      evidence: { ...input.evidence, unit: "m3", unitPrice: new Decimal("28.05") },
+      tolerance: new Decimal("1"),
+      ruleTypes: ["PRICE_MISMATCH"],
+    });
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      type: "PRICE_MISMATCH",
+      humanReviewRequired: true,
+      automaticBudgetMutation: false,
+      comparison: {
+        documentValue: "28.05",
+        budgetValue: "25.5",
+        difference: "2.55",
+        percentage: "10",
+        details: { documentUnitPrice: "28.05", budgetUnitPrice: "25.5" },
+      },
+    });
+  });
+
+  it("does not infer a price mismatch when persisted evidence has no unit price", () => {
+    const findings = evaluateFindingRules({ ...baseInput(), ruleTypes: ["PRICE_MISMATCH"] });
+    expect(findings).toEqual([]);
+  });
+
   it("detects comparable Decimal yields beyond tolerance with deterministic review details", () => {
     const input = baseInput();
     const findings = evaluateFindingRules({

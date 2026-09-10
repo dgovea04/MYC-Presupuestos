@@ -6,6 +6,7 @@ export interface NormalizedEvidenceMetadata {
   code?: string;
   description?: string;
   quantity?: Decimal;
+  unitPrice?: Decimal;
   unit?: string;
   technicalSpecification?: string;
   discipline?: string;
@@ -19,6 +20,7 @@ const aliases = {
   code: ["code", "codigo"],
   description: ["description", "descripcion"],
   quantity: ["quantity", "cantidad", "metrado", "qty"],
+  unitPrice: ["unitprice", "precio", "preciounitario", "precio_unitario"],
   unit: ["unit", "unidad"],
   technicalSpecification: ["technicalspecification", "technicalspec", "spec", "especificacion"],
   discipline: ["discipline", "disciplina"],
@@ -90,6 +92,7 @@ function evidenceTypeValue(value: unknown): EvidenceType | undefined {
 
 export function normalizeEvidenceMetadata(metadata: Record<string, unknown>): NormalizedEvidenceMetadata {
   const quantity = parseDecimalText(firstValue(metadata, aliases.quantity));
+  const unitPrice = parseDecimalText(firstValue(metadata, aliases.unitPrice));
   const yieldValue = parseDecimalText(firstValue(metadata, aliases.yield));
   const rawUnit = textValue(firstValue(metadata, aliases.unit));
   const normalizedUnit = rawUnit === undefined ? undefined : normalizeUnit(rawUnit);
@@ -98,6 +101,7 @@ export function normalizeEvidenceMetadata(metadata: Record<string, unknown>): No
     code: textValue(firstValue(metadata, aliases.code)),
     description: textValue(firstValue(metadata, aliases.description)),
     quantity,
+    unitPrice,
     unit: normalizedUnit === undefined ? undefined : normalizedUnit.dimension === "unknown" ? rawUnit : normalizedUnit.canonical,
     technicalSpecification,
     discipline: textValue(firstValue(metadata, aliases.discipline)),

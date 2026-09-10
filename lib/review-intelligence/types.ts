@@ -21,6 +21,7 @@ export const reviewFindingTypes = [
   "TECHNICAL_SPEC_MISMATCH",
   "MISSING_DOCUMENTATION",
   "INCOMPLETE_APU",
+  "PRICE_MISMATCH",
 ] as const;
 
 export type ReviewFindingType = (typeof reviewFindingTypes)[number];

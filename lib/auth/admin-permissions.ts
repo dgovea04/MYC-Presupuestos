@@ -21,7 +21,8 @@ export type AdminCapability =
   | "audit.manage_retention"
   | "security.manage"
   | "resource_prices.manage"
-  | "ai_usage.read";
+  | "ai_usage.read"
+  | "knowledge.manage";
 
 export type AdminProfile = "SUPER_ADMIN" | "ADMIN" | "SUPPORT" | "BILLING_ADMIN" | "AUDITOR";
 
@@ -50,6 +51,7 @@ const administratorCapabilities = new Set<AdminCapability>([
   "audit.read",
   "resource_prices.manage",
   "ai_usage.read",
+  "knowledge.manage",
 ]);
 
 const profileCapabilities: Record<Exclude<AdminProfile, "SUPER_ADMIN">, ReadonlySet<AdminCapability>> = {
