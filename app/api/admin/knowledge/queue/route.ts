@@ -22,8 +22,8 @@ export async function GET(request: Request) {
     }
     throw error;
   }
-  if (!isKnowledgeFeatureEnabled("retrievalV1", { companyId, projectId })) {
-    return NextResponse.json({ error: "Knowledge retrieval disabled", feature: "retrievalV1" }, { status: 503 });
+  if (!isKnowledgeFeatureEnabled("adminReviewQueue", { companyId, projectId })) {
+    return NextResponse.json({ error: "Knowledge admin queue disabled", feature: "adminReviewQueue" }, { status: 503 });
   }
   try {
     return NextResponse.json(await getKnowledgeAdminQueue({ companyId, projectId, status }));

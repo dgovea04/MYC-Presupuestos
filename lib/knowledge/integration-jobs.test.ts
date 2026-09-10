@@ -32,6 +32,7 @@ describe("knowledge integration jobs", () => {
   });
 
   it("requeues only retryable jobs", async () => {
+    job.findFirst.mockResolvedValueOnce({ id: "job-1" });
     job.update.mockResolvedValueOnce({ id: "job-1", status: "PENDING" });
     await retryKnowledgeIntegrationJob("job-1");
     expect(job.update).toHaveBeenCalledWith({ where: { id: "job-1" }, data: { status: "PENDING", nextRetryAt: expect.any(Date), errorCode: null, errorMessage: null } });

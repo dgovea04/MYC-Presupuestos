@@ -13,6 +13,7 @@ describe("review enrichment", () => {
 
   it("adds deterministic provenance without changing the baseline", async () => {
     vi.stubEnv("MC_KNOWLEDGE_REVIEW_ENRICHMENT", "true");
+    vi.stubEnv("MC_KNOWLEDGE_RETRIEVAL_V1", "true");
     const result = await enrichReviewResult(baseline, { companyId: "c1", projectId: "p1", query: "cemento" }, async () => ({ items: [{ id: "i1", scope: "PROJECT", confidence: "HIGH", evidenceId: "ke1", observedAt: "2026-09-09" }], resources: [], prices: [], yields: [], apuVersions: [], assertions: [] }));
     expect(result.baseline).toEqual(baseline);
     expect(result.knowledge).toEqual([{ id: "i1", scope: "PROJECT", confidence: "HIGH", observedAt: "2026-09-09", evidenceId: "ke1" }]);
@@ -21,6 +22,7 @@ describe("review enrichment", () => {
 
   it("falls back to the unchanged baseline when retrieval fails or exceeds the timeout", async () => {
     vi.stubEnv("MC_KNOWLEDGE_REVIEW_ENRICHMENT", "true");
+    vi.stubEnv("MC_KNOWLEDGE_RETRIEVAL_V1", "true");
     const result = await enrichReviewResult(baseline, { companyId: "c1", projectId: "p1", query: "cemento" }, async () => { throw new Error("retrieval unavailable"); });
     expect(result.baseline).toEqual(baseline);
     expect(result.knowledge).toEqual([]);

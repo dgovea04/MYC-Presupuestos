@@ -26,7 +26,7 @@ describe("admin knowledge queue route", () => {
     const response = await GET(new Request("http://localhost/api/admin/knowledge/queue?companyId=c1&projectId=p1&status=RETRYABLE_FAILED"));
     expect(response.status).toBe(200);
     expect(assertKnowledgeReadAccess).toHaveBeenCalledWith({ actorUserId: "admin-1", companyId: "c1", projectId: "p1", scope: "PROJECT" });
-    expect(isKnowledgeFeatureEnabled).toHaveBeenCalledWith("retrievalV1", { companyId: "c1", projectId: "p1" });
+    expect(isKnowledgeFeatureEnabled).toHaveBeenCalledWith("adminReviewQueue", { companyId: "c1", projectId: "p1" });
     expect(getKnowledgeAdminQueue).toHaveBeenCalledWith({ companyId: "c1", projectId: "p1", status: "RETRYABLE_FAILED" });
   });
 
@@ -37,7 +37,7 @@ describe("admin knowledge queue route", () => {
     const response = await GET(new Request("http://localhost/api/admin/knowledge/queue?companyId=c1&projectId=p1"));
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ error: "Knowledge retrieval disabled", feature: "retrievalV1" });
+    await expect(response.json()).resolves.toEqual({ error: "Knowledge admin queue disabled", feature: "adminReviewQueue" });
     expect(assertKnowledgeReadAccess).toHaveBeenCalledWith({ actorUserId: "admin-1", companyId: "c1", projectId: "p1", scope: "PROJECT" });
     expect(getKnowledgeAdminQueue).not.toHaveBeenCalled();
   });

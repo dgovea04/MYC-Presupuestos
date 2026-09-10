@@ -292,7 +292,7 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
     expect(await knowledgeCounts(fixture)).toEqual(before);
     expect(report.dryRun).toBe(true);
     expect(report.candidates.items).toBe(4);
-    expect(report.skipped.apuResources).toBe(4);
+    expect(report.skipped.apuResources).toBe(2);
     expect(report.created).toMatchObject({ items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 });
     expect(report.resolutionConflicts).toEqual(expect.arrayContaining([
       { domain: "apu-resource", apuId: expect.any(String), resourceId: fixture.noMatchResourceId, reason: "NO_MATCH" },
@@ -311,8 +311,8 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
 
     expect(firstReport.created).toMatchObject({ items: 4, resources: 1, apus: 3, apuResources: 1, prices: 1, sources: 2, evidence: 10 });
     expect(firstReport.skipped.apuResources).toBe(2);
-    expect(firstReport.errors).toEqual(expect.arrayContaining([
-      { domain: "apu", id: fixture.conflictingApuId, message: expect.any(String) },
+    expect(firstReport.resolutionConflicts).toEqual(expect.arrayContaining([
+      { domain: "apu", apuId: fixture.conflictingApuId, resourceId: null, reason: "CONTENT_CHANGED" },
     ]));
     expect((await prisma.knowledgeApuVersion.findUnique({ where: { idempotencyKey: `backfill:apu:${fixture.normalApuId}` } }))?.scope).toBe("PROJECT");
     expect(await prisma.canonicalItem.findFirst({ where: { companyId: fixture.companyId } })).toMatchObject({ status: "OBSERVED" });
@@ -362,9 +362,9 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
 
     expect(await knowledgeCounts(fixture)).toEqual(countsAfterFirstRun);
     expect(replayReport.created).toMatchObject({ items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 });
-    expect(replayReport.skipped.apuResources).toBe(3);
-    expect(replayReport.errors).toEqual(expect.arrayContaining([
-      { domain: "apu", id: fixture.conflictingApuId, message: expect.any(String) },
+    expect(replayReport.skipped.apuResources).toBe(2);
+    expect(replayReport.resolutionConflicts).toEqual(expect.arrayContaining([
+      { domain: "apu", apuId: fixture.conflictingApuId, resourceId: null, reason: "CONTENT_CHANGED" },
     ]));
   });
 });

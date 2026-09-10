@@ -10,10 +10,10 @@ const ENRICHMENT_TIMEOUT_MS = 1500;
 
 export async function enrichReviewResult(baseline: ReviewBaseline, input: RetrievalV1Input, retrieve: Retrieval = retrieveKnowledgeV1, onTelemetry: (telemetry: EnrichmentTelemetry) => void = (telemetry) => console.info("review_knowledge_enrichment", telemetry)): Promise<{ baseline: ReviewBaseline; knowledge: KnowledgeSignal[]; telemetry: EnrichmentTelemetry }> {
   const startedAt = performance.now();
-  if (!isKnowledgeFeatureEnabled("reviewEnrichment")) {
+  if (!isKnowledgeFeatureEnabled("reviewEnrichment") || !isKnowledgeFeatureEnabled("retrievalV1", input)) {
     const telemetry = { enabled: false, fallback: false, latencyMs: Math.round(performance.now() - startedAt) };
     onTelemetry(telemetry);
-    logKnowledgeOperation({ stage: "enrichment", outcome: "skip", correlationId: input.correlationId ?? `review-enrichment:${input.companyId}:${input.projectId ?? "none"}`, companyId: input.companyId, projectId: input.projectId, durationMs: telemetry.latencyMs, metadata: { reason: "FEATURE_DISABLED" } });
+    logKnowledgeOperation({ stage: "enrichment", outcome: "skip", correlationId: input.correlationId ?? `review-enrichment:${input.companyId}:${input.projectId ?? "none"}`, companyId: input.companyId, projectId: input.projectId, durationMs: telemetry.latencyMs, metadata: { reason: !isKnowledgeFeatureEnabled("reviewEnrichment") ? "FEATURE_DISABLED" : "RETRIEVAL_DISABLED" } });
     return { baseline, knowledge: [], telemetry };
   }
   let timeout: ReturnType<typeof setTimeout> | undefined;

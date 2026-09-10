@@ -143,11 +143,11 @@ async function removeRetryFailureTrigger(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS public.${KNOWLEDGE_RETRY_CONTROL_TABLE}`);
 }
 
-async function runKnowledgeWorker(): Promise<void> {
+async function runKnowledgeWorker(jobId: string): Promise<void> {
   await execFileAsync(
     process.execPath,
     ["./node_modules/tsx/dist/cli.mjs", "scripts/process-knowledge-integration-jobs.ts"],
-    { cwd: process.cwd(), env: knowledgeE2EEnvironment, timeout: 60_000 },
+    { cwd: process.cwd(), env: { ...knowledgeE2EEnvironment, KNOWLEDGE_WORKER_JOB_ID: jobId }, timeout: 60_000 },
   );
 }
 
@@ -345,17 +345,17 @@ test.describe("Knowledge bridge retry", () => {
 
       // This is a real PostgreSQL trigger scoped to the isolated fixture. The
       // first worker execution must observe a transient write failure itself.
-      await runKnowledgeWorker();
+      await runKnowledgeWorker(retryJob!.id);
       await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("RETRYABLE_FAILED");
       const retryJob = await currentJob();
       expect(retryJob).toBeTruthy();
 
       await removeRetryFailureTrigger(prisma);
-      const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${retryJob!.id}/retry`);
+      const retryResponse = await page.request.post(`/api/admin/knowledge/jobs/${retryJob!.id}/retry?companyId=${encodeURIComponent(REVIEW_BRIDGE_COMPANY_ID!)}&projectId=${encodeURIComponent(REVIEW_BRIDGE_PROJECT_ID!)}`);
       expect(retryResponse.status(), await retryResponse.text()).toBe(200);
       await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("PENDING");
 
-      await runKnowledgeWorker();
+      await runKnowledgeWorker(retryJob!.id);
       await expect.poll(async () => (await currentJob())?.status, { timeout: 30_000 }).toBe("SUCCEEDED");
 
       const decisionYieldKey = `review-yield:${decision.id}`;
@@ -371,7 +371,7 @@ test.describe("Knowledge bridge retry", () => {
       };
 
       expect(await retryYieldCount()).toBe(1);
-      await runKnowledgeWorker();
+      await runKnowledgeWorker(retryJob!.id);
       expect(await retryYieldCount()).toBe(1);
     } finally {
       await removeRetryFailureTrigger(prisma).catch(() => undefined);

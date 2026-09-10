@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
 
-export async function getKnowledgeEvidenceProvenance(evidenceId: string) {
+export async function getKnowledgeEvidenceProvenance(evidenceId: string, scope?: { companyId: string; projectId?: string }) {
   const evidence = await prisma.knowledgeEvidence.findUnique({
-    where: { id: evidenceId },
+    where: { id: evidenceId, ...(scope ? { companyId: scope.companyId, ...(scope.projectId ? { projectId: scope.projectId } : {}) } : {}) },
     select: {
       id: true,
       companyId: true,

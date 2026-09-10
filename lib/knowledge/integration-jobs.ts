@@ -18,8 +18,10 @@ export async function markKnowledgeIntegrationJobRetryable(jobId: string, errorM
   return prisma.knowledgeIntegrationJob.update({ where: { id: jobId }, data: { status: "RETRYABLE_FAILED", errorMessage, nextRetryAt, attemptCount: { increment: 1 } } });
 }
 
-export async function retryKnowledgeIntegrationJob(jobId: string) {
-  return prisma.knowledgeIntegrationJob.update({ where: { id: jobId }, data: { status: "PENDING", nextRetryAt: new Date(), errorCode: null, errorMessage: null } });
+export async function retryKnowledgeIntegrationJob(jobId: string, scope?: { companyId: string; projectId?: string }) {
+  const job = await prisma.knowledgeIntegrationJob.findFirst({ where: { id: jobId, ...(scope ? { companyId: scope.companyId, ...(scope.projectId ? { projectId: scope.projectId } : {}) } : {}) }, select: { id: true } });
+  if (!job) throw new Error("Knowledge job not found");
+  return prisma.knowledgeIntegrationJob.update({ where: { id: job.id }, data: { status: "PENDING", nextRetryAt: new Date(), errorCode: null, errorMessage: null } });
 }
 
 async function claimKnowledgeIntegrationJob(jobId: string, now: Date) {
@@ -60,9 +62,9 @@ async function markJobFailure(job: { id: string; attemptCount: number; companyId
   return { status: decision.retryable ? "RETRYABLE_FAILED" as const : "DEAD_LETTER" as const, jobId: job.id, job: terminal };
 }
 
-export async function processDueKnowledgeIntegrationJobs(options: { now?: Date; limit?: number } = {}) {
+export async function processDueKnowledgeIntegrationJobs(options: { now?: Date; limit?: number; jobId?: string } = {}) {
   const now = options.now ?? new Date();
-  const jobs = await prisma.knowledgeIntegrationJob.findMany({ where: { status: { in: [...ACTIVE_STATUSES] }, attemptCount: { lt: MAX_ATTEMPTS }, OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }] }, orderBy: [{ nextRetryAt: "asc" }, { createdAt: "asc" }], take: options.limit ?? 10 });
+  const jobs = await prisma.knowledgeIntegrationJob.findMany({ where: { ...(options.jobId ? { id: options.jobId } : {}), status: { in: [...ACTIVE_STATUSES] }, attemptCount: { lt: MAX_ATTEMPTS }, OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }] }, orderBy: [{ nextRetryAt: "asc" }, { createdAt: "asc" }], take: options.jobId ? 1 : options.limit ?? 10 });
   return Promise.all(jobs.map((job) => processKnowledgeIntegrationJob(job.id, { now })));
 }
 

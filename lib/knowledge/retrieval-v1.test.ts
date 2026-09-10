@@ -21,6 +21,8 @@ describe("knowledge retrieval v1", () => {
     expect(result.resources[0]?.id).toBe("resource-company");
     expect(prismaMock.canonicalItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scope: "PROJECT", companyId: "c1" }) }));
     expect(prismaMock.canonicalItem.findMany).toHaveBeenCalledTimes(3);
+    expect(prismaMock.priceObservation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scope: "PROJECT", projectId: "p1" }) }));
+    expect(prismaMock.knowledgeApuVersion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scope: "PROJECT", projectId: "p1" }) }));
   });
 
   it("caps each result collection and never queries outside visible scopes", async () => {

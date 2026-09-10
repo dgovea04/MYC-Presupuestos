@@ -23,6 +23,8 @@ export type KnowledgeAccessOptions = {
   userId?: string;
   minimumRole?: WorkspaceRole;
   capability?: AdminCapability;
+  /** Allows tenant knowledge to reference a GLOBAL catalog entity without mutating it. */
+  allowGlobalReference?: boolean;
 };
 
 const KNOWLEDGE_ACCESS_DENIED = "Knowledge tenant access denied";
@@ -132,7 +134,7 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   if (!ownership) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
 
   if (ownership.scope === "GLOBAL") {
-    if (options.capability !== "knowledge.manage") throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
+    if (options.capability !== "knowledge.manage" && !options.allowGlobalReference) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
     return ownership;
   }
 
