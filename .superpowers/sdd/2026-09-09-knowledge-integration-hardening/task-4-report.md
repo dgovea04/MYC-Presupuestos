@@ -64,5 +64,41 @@ Pasó sin errores de whitespace.
 
 ## Concerns
 
+## Fix round 1 — errores server-side de la cola
+
+### Cambios
+
+- `app/api/admin/knowledge/queue/route.ts`: el `catch` de autorización solo convierte `WorkspaceAuthorizationError` en HTTP 403; los errores operativos del servicio responden HTTP 500 con un mensaje seguro.
+- `app/api/admin/knowledge/queue/route.test.ts`: regresión para confirmar que un fallo interno no se clasifica como 403.
+
+### TDD y verificación
+
+RED:
+
+```text
+npm.cmd test -- app/api/admin/knowledge/queue/route.test.ts
+1 prueba falló: un fallo interno recibía 403 en vez de 500.
+```
+
+GREEN y verificaciones:
+
+```text
+npm.cmd test -- lib/knowledge/feature-flags.test.ts app/api/knowledge/retrieval/route.test.ts app/api/admin/knowledge/queue/route.test.ts
+3 archivos pasaron; 12 pruebas pasaron.
+
+npm.cmd run typecheck
+Pasó, exit code 0.
+
+npm.cmd run lint
+Pasó sin errores reportados.
+
+git diff --check
+Pasó sin errores de whitespace.
+```
+
+### Commit
+
+- `06f07b7` — `fix: preserve knowledge queue server errors`
+
 - El registro de flags existente no implementa persistencia ni overrides contextuales por compañía/proyecto; por eso se preserva el fallback de entorno y se propaga el contexto compatible sin inventar un segundo sistema de configuración. Si se requiere precedencia real de overrides, debe definirse primero su fuente y contrato.
 - `presupuesto-ejemplo/pdf escaneado/` continúa como cambio no rastreado preexistente y fue excluido del commit.
