@@ -107,6 +107,13 @@ describe("knowledge provenance bridge", () => {
     expect(prismaMock.knowledgeEvidence.create).not.toHaveBeenCalled();
   });
 
+  it("surfaces non-unique persistence errors for the caller to capture per row", async () => {
+    prismaMock.knowledgeSource.create.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(createMigrationKnowledgeProvenance({ sourceKey: "migration:c1:p1:run-error", domain: "item", sourceRecordId: "i1", companyId: "c1", projectId: "p1", correlationId: "run-error" })).rejects.toThrow("database unavailable");
+    expect(prismaMock.knowledgeEvidence.create).not.toHaveBeenCalled();
+  });
+
   it("reuses migration source and evidence keys on replay", async () => {
     prismaMock.knowledgeSource.create.mockRejectedValueOnce({ code: "P2002" });
     prismaMock.knowledgeSource.findUnique.mockResolvedValueOnce({ id: "source-1" });

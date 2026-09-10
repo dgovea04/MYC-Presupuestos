@@ -43,10 +43,9 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
   for (const row of items) {
     if (!row.description.trim() || !row.budget.project.projectId) { report.skipped.items++; continue; }
     report.candidates.items++;
-    const itemProvenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
-    if (dryRun) continue;
     try {
-      const provenance = itemProvenance;
+      const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
+      if (dryRun) continue;
       const normalizedName = row.description.trim().toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalItem.findFirst({ where: { normalizedName, companyId: row.budget.project.companyId }, select: { id: true } });
       const canonical = existing
@@ -64,11 +63,10 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     if (!candidate) { report.skipped.resources++; continue; }
     report.candidates.resources++;
     if (row.priceObservedAt) report.candidates.prices++;
-    const resourceProvenance = await createProvenance({ domain: "resource", sourceRecordId: row.id, tenantCompanyId: candidate.companyId });
-    const priceProvenance = row.priceObservedAt ? await createProvenance({ domain: "price", sourceRecordId: row.id, tenantCompanyId: candidate.companyId }) : undefined;
-    if (dryRun) continue;
     try {
-      const provenance = resourceProvenance;
+      const provenance = await createProvenance({ domain: "resource", sourceRecordId: row.id, tenantCompanyId: candidate.companyId });
+      const priceProvenance = row.priceObservedAt ? await createProvenance({ domain: "price", sourceRecordId: row.id, tenantCompanyId: candidate.companyId }) : undefined;
+      if (dryRun) continue;
       const normalizedName = candidate.name.toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalResource.findFirst({ where: { normalizedName, companyId: candidate.companyId, scope: "COMPANY" }, select: { id: true } });
       const canonical = existing
@@ -90,10 +88,9 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     const tenant = row.budgetItem.budget.project;
     if ((companyId && tenant.companyId !== companyId) || (projectId && row.budgetItem.budget.projectId !== projectId)) { report.skipped.apus++; continue; }
     report.candidates.apus++;
-    const apuProvenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
-    if (dryRun) continue;
     try {
-      const provenance = apuProvenance;
+      const provenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
+      if (dryRun) continue;
       const snapshot = { apuId: row.id, name: row.name, unit: row.unit, performance: String(row.performance), resources: row.resources.map((resource, index) => ({ resourceId: resource.resourceId, description: resource.resource?.description ?? resource.description, unit: resource.resource?.unit ?? "", quantity: String(resource.quantity), unitPrice: String(resource.unitPrice), resourceType: resource.resourceType, sortOrder: index })) };
       const contentHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
       const existingApu = await prisma.knowledgeApuVersion.findUnique({ where: { idempotencyKey: `backfill:apu:${row.id}` }, select: { id: true } });
