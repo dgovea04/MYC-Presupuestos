@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { prismaMock, assertWorkspaceMembership, assertProjectInWorkspace, createKnowledgeSource, createKnowledgeEvidence } = vi.hoisted(() => ({
   prismaMock: {
     reviewEvidence: { findUnique: vi.fn(), findFirst: vi.fn() },
-    knowledgeEvidence: { findUnique: vi.fn() },
+    knowledgeSource: { findUnique: vi.fn(), upsert: vi.fn() },
+    knowledgeEvidence: { findUnique: vi.fn(), upsert: vi.fn() },
     knowledgeReviewEvidenceLink: { upsert: vi.fn() },
   },
   assertWorkspaceMembership: vi.fn().mockResolvedValue({ companyId: "c1", role: "EDITOR" }),
@@ -16,7 +17,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership, assertProjectInWorkspace }));
 vi.mock("./provenance", () => ({ createKnowledgeSource, createKnowledgeEvidence }));
 
-import { createKnowledgeEvidenceFromReview, linkReviewEvidenceToKnowledge, mapReviewEvidenceToKnowledgeEvidence } from "./provenance-bridge";
+import { createKnowledgeEvidenceFromReview, createMigrationKnowledgeProvenance, linkReviewEvidenceToKnowledge, mapReviewEvidenceToKnowledgeEvidence } from "./provenance-bridge";
 
 describe("knowledge provenance bridge", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -86,5 +87,47 @@ describe("knowledge provenance bridge", () => {
     expect(createKnowledgeSource).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "review-source:c1:p1", projectId: "p1" }));
     expect(createKnowledgeEvidence).toHaveBeenCalledWith(expect.objectContaining({ sourceId: "source-1", idempotencyKey: "review-evidence:re1", page: undefined, sheet: "Metrados", cellRange: "B4:B4" }));
     expect(result.link).toEqual({ id: "link-1", relationType: "DERIVED_FROM" });
+  });
+
+  it("does not write migration provenance during a dry run", async () => {
+    const result = await createMigrationKnowledgeProvenance({
+      sourceKey: "migration:c1:p1:run-1",
+      domain: "resource",
+      sourceRecordId: "r1",
+      companyId: "c1",
+      projectId: "p1",
+      correlationId: "run-1",
+      dryRun: true,
+    });
+
+    expect(result).toEqual({ source: undefined, evidence: undefined, sourceOutcome: "skipped", evidenceOutcome: "skipped" });
+    expect(prismaMock.knowledgeSource.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.knowledgeEvidence.upsert).not.toHaveBeenCalled();
+  });
+
+  it("reuses migration source and evidence keys on replay", async () => {
+    prismaMock.knowledgeSource.findUnique.mockResolvedValueOnce({ id: "source-1" });
+    prismaMock.knowledgeSource.upsert.mockResolvedValueOnce({ id: "source-1" });
+    prismaMock.knowledgeEvidence.findUnique.mockResolvedValueOnce({ id: "evidence-1" });
+    prismaMock.knowledgeEvidence.upsert.mockResolvedValueOnce({ id: "evidence-1" });
+
+    const result = await createMigrationKnowledgeProvenance({
+      sourceKey: "migration:c1:p1:run-1",
+      domain: "resource",
+      sourceRecordId: "r1",
+      companyId: "c1",
+      projectId: "p1",
+      correlationId: "run-1",
+    });
+
+    expect(result).toEqual({ source: { id: "source-1" }, evidence: { id: "evidence-1" }, sourceOutcome: "skipped", evidenceOutcome: "skipped" });
+    expect(prismaMock.knowledgeSource.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { idempotencyKey: "migration:c1:p1:run-1" },
+      create: expect.objectContaining({ sourceType: "MIGRATION", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ script: "scripts/backfill-knowledge.ts", correlationId: "run-1" }) }),
+    }));
+    expect(prismaMock.knowledgeEvidence.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { idempotencyKey: "migration:c1:p1:run-1:evidence:resource:r1" },
+      create: expect.objectContaining({ sourceId: "source-1", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ domain: "resource", sourceRecordId: "r1", correlationId: "run-1" }) }),
+    }));
   });
 });

@@ -2810,6 +2810,8 @@ model KnowledgeSource {
   priceObservations PriceObservation[]
   yieldObservations YieldObservation[]
   suppliers   KnowledgeSupplier[]
+  canonicalItems CanonicalItem[] @relation("CanonicalItemSource")
+  canonicalResources CanonicalResource[] @relation("CanonicalResourceSource")
 
   @@index([sourceType, createdAt(sort: Desc)])
   @@index([companyId, projectId, createdAt(sort: Desc)])
@@ -2838,6 +2840,8 @@ model KnowledgeEvidence {
   priceObservations PriceObservation[]
   yieldObservations YieldObservation[]
   reviewEvidenceLinks KnowledgeReviewEvidenceLink[]
+  canonicalItems CanonicalItem[] @relation("CanonicalItemEvidence")
+  canonicalResources CanonicalResource[] @relation("CanonicalResourceEvidence")
 
   @@index([sourceId, createdAt(sort: Desc)])
   @@index([checksum])
@@ -2882,12 +2886,18 @@ model CanonicalItem {
   scope           KnowledgeScope  @default(GLOBAL)
   companyId       String?
   status          KnowledgeStatus @default(OBSERVED)
+  sourceId        String?
+  evidenceId      String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   aliases         CanonicalItemAlias[]
+  source          KnowledgeSource? @relation("CanonicalItemSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence? @relation("CanonicalItemEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([normalizedName])
   @@index([scope, companyId, normalizedName])
+  @@index([sourceId])
+  @@index([evidenceId])
   @@map("knowledge_canonical_items")
 }
 
@@ -2913,12 +2923,18 @@ model CanonicalResource {
   scope           KnowledgeScope  @default(GLOBAL)
   companyId       String?
   status          KnowledgeStatus @default(OBSERVED)
+  sourceId        String?
+  evidenceId      String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   aliases         CanonicalResourceAlias[]
+  source          KnowledgeSource? @relation("CanonicalResourceSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence? @relation("CanonicalResourceEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([normalizedName])
   @@index([scope, companyId, normalizedName])
+  @@index([sourceId])
+  @@index([evidenceId])
   @@map("knowledge_canonical_resources")
 }
 

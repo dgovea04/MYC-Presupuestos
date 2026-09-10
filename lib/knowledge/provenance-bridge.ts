@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { assertWorkspaceMembership, assertProjectInWorkspace } from "@/lib/workspace/access";
+import { buildMigrationEvidenceKey } from "./backfill";
 import { createKnowledgeEvidence, createKnowledgeSource } from "./provenance";
 import type { KnowledgeEvidenceInput } from "./provenance";
 
@@ -34,6 +35,52 @@ type ReviewEvidenceSnapshot = {
     projectDocument: { name: string };
   };
 };
+
+type MigrationProvenanceInput = {
+  sourceKey: string;
+  domain: "item" | "resource" | "price" | "apu";
+  sourceRecordId: string;
+  companyId: string;
+  projectId?: string;
+  correlationId: string;
+  dryRun?: boolean;
+};
+
+export async function createMigrationKnowledgeProvenance(input: MigrationProvenanceInput) {
+  if (input.dryRun) return { source: undefined, evidence: undefined, sourceOutcome: "skipped" as const, evidenceOutcome: "skipped" as const };
+
+  const sourceExisting = await prisma.knowledgeSource.findUnique({ where: { idempotencyKey: input.sourceKey }, select: { id: true } });
+  const source = await prisma.knowledgeSource.upsert({
+    where: { idempotencyKey: input.sourceKey },
+    create: {
+      idempotencyKey: input.sourceKey,
+      sourceType: "MIGRATION",
+      label: "Knowledge backfill",
+      privacy: "PRIVATE",
+      companyId: input.companyId,
+      projectId: input.projectId,
+      createdById: "migration",
+      metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId },
+    },
+    update: {},
+  });
+  const evidenceKey = buildMigrationEvidenceKey({ sourceKey: input.sourceKey, domain: input.domain, sourceRecordId: input.sourceRecordId });
+  const evidenceExisting = await prisma.knowledgeEvidence.findUnique({ where: { idempotencyKey: evidenceKey }, select: { id: true } });
+  const evidence = await prisma.knowledgeEvidence.upsert({
+    where: { idempotencyKey: evidenceKey },
+    create: {
+      idempotencyKey: evidenceKey,
+      sourceId: source.id,
+      quote: `Migrated ${input.domain} record ${input.sourceRecordId}`,
+      companyId: input.companyId,
+      projectId: input.projectId,
+      createdById: "migration",
+      metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId, domain: input.domain, sourceRecordId: input.sourceRecordId },
+    },
+    update: {},
+  });
+  return { source, evidence, sourceOutcome: sourceExisting ? "skipped" as const : "created" as const, evidenceOutcome: evidenceExisting ? "skipped" as const : "created" as const };
+}
 
 function jsonRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
