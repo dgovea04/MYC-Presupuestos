@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { prisma } from "@/lib/db/prisma";
 import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome, resolveBackfillCanonicalResource, summarizeBackfillApuResourceResolutions } from "@/lib/knowledge/backfill";
 import { buildCanonicalResourceLookupIndex } from "@/lib/knowledge/canonical-resources";
@@ -7,23 +9,58 @@ import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import { logKnowledgeOperation } from "@/lib/knowledge/observability";
 import { createMigrationKnowledgeProvenance, linkMigrationKnowledgeEntity } from "@/lib/knowledge/provenance-bridge";
 
-const args = new Set(process.argv.slice(2));
-const companyId = process.argv.slice(2).find((value) => value.startsWith("--company="))?.slice("--company=".length);
-const projectId = process.argv.slice(2).find((value) => value.startsWith("--project="))?.slice("--project=".length);
-const dryRun = args.has("--dry-run");
-const correlationId = process.argv.slice(2).find((value) => value.startsWith("--correlation-id="))?.slice("--correlation-id=".length) ?? `knowledge-backfill:${companyId ?? "all"}:${projectId ?? "all"}`;
+type KnowledgeBackfillCounters = {
+  items: number;
+  resources: number;
+  apus: number;
+  apuResources: number;
+  prices: number;
+  sources: number;
+  evidence: number;
+};
 
-if (!dryRun && !isKnowledgeFeatureEnabled("backfill")) {
-  console.error(JSON.stringify({ event: "knowledge_backfill", outcome: "skip", reason: "FEATURE_DISABLED", correlationId }));
-  process.exitCode = 1;
-} else {
+export type KnowledgeBackfillReport = {
+  dryRun: boolean;
+  correlationId: string;
+  companyId: string | null;
+  projectId: string | null;
+  candidates: KnowledgeBackfillCounters;
+  created: KnowledgeBackfillCounters;
+  skipped: KnowledgeBackfillCounters;
+  resolutionConflicts: Array<{ domain: "apu-resource"; apuId: string; resourceId: string | null; reason: "NO_MATCH" | "AMBIGUOUS" }>;
+  errors: Array<{ domain: string; id: string; message: string }>;
+};
+
+export type KnowledgeBackfillOptions = {
+  companyId?: string;
+  projectId?: string;
+  dryRun?: boolean;
+  correlationId?: string;
+};
+
+class KnowledgeBackfillDisabledError extends Error {
+  constructor(readonly correlationId: string) {
+    super("Knowledge backfill feature is disabled");
+  }
+}
+
+export async function runKnowledgeBackfill(options: KnowledgeBackfillOptions = {}): Promise<KnowledgeBackfillReport> {
+  const companyId = options.companyId;
+  const projectId = options.projectId;
+  const dryRun = options.dryRun ?? false;
+  const correlationId = options.correlationId ?? `knowledge-backfill:${companyId ?? "all"}:${projectId ?? "all"}`;
+
+  if (!dryRun && !isKnowledgeFeatureEnabled("backfill")) {
+    throw new KnowledgeBackfillDisabledError(correlationId);
+  }
+
 const budgetFilter = projectId ? { projectId } : companyId ? { project: { companyId } } : undefined;
   const [resources, items, apus] = await Promise.all([
     prisma.resource.findMany({ where: companyId ? { companyId } : undefined, select: { id: true, description: true, unit: true, companyId: true, currency: true, unitPrice: true, priceObservedAt: true }, take: 10_000 }),
     prisma.budgetItem.findMany({ where: budgetFilter ? { budget: budgetFilter } : undefined, select: { id: true, description: true, unit: true, budget: { select: { projectId: true, project: { select: { companyId: true } } } } }, take: 10_000 }),
-    prisma.apu.findMany({ where: budgetFilter ? { budgetItem: { budget: budgetFilter } } : undefined, select: { id: true, name: true, unit: true, performance: true, budgetItem: { select: { budget: { select: { projectId: true, project: { select: { companyId: true } } } } } }, resources: { select: { resourceId: true, description: true, quantity: true, unitPrice: true, resourceType: true, resource: { select: { description: true, unit: true } } } } }, take: 10_000 }),
+    prisma.apu.findMany({ where: budgetFilter ? { budgetItem: { budget: budgetFilter } } : undefined, select: { id: true, name: true, unit: true, performance: true, budgetItem: { select: { budget: { select: { projectId: true, project: { select: { companyId: true } } } } } }, resources: { select: { resourceId: true, quantity: true, unitPrice: true, resourceType: true, resource: { select: { description: true, unit: true } } } } }, take: 10_000 }),
   ]);
-  const report = { dryRun, correlationId, companyId: companyId ?? null, projectId: projectId ?? null, candidates: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, resolutionConflicts: [] as Array<{ domain: "apu-resource"; apuId: string; resourceId: string | null; reason: "NO_MATCH" | "AMBIGUOUS" }>, errors: [] as Array<{ domain: string; id: string; message: string }> };
+  const report: KnowledgeBackfillReport = { dryRun, correlationId, companyId: companyId ?? null, projectId: projectId ?? null, candidates: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, apuResources: 0, prices: 0, sources: 0, evidence: 0 }, resolutionConflicts: [], errors: [] };
 
   async function createProvenance(input: { domain: "item" | "resource" | "price" | "apu"; sourceRecordId: string; tenantCompanyId: string; tenantProjectId?: string }) {
     const sourceKey = buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId });
@@ -42,7 +79,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
   }
 
   for (const row of items) {
-    if (!row.description.trim() || !row.budget.project.projectId) { report.skipped.items++; continue; }
+    if (!row.description.trim() || !row.budget.projectId) { report.skipped.items++; continue; }
     report.candidates.items++;
     try {
       const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
@@ -97,7 +134,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       });
       const canonicalResourceIndex = buildCanonicalResourceLookupIndex(canonicalResources);
       const resolvedResources = row.resources.map((resource, index) => {
-        const description = resource.resource?.description ?? resource.description;
+        const description = resource.resource?.description ?? "";
         const unit = resource.resource?.unit ?? "";
         const resolution = resolveBackfillCanonicalResource({ resourceId: resource.resourceId, description, unit, companyId: tenant.companyId }, canonicalResourceIndex);
         return { sourceResourceId: resource.resourceId, canonicalResourceId: resolution.kind === "matched" ? resolution.canonicalResourceId : null, resolution, description, unit, quantity: String(resource.quantity), unitPrice: String(resource.unitPrice), resourceType: resource.resourceType, sortOrder: index };
@@ -118,5 +155,36 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     } catch (error) { report.errors.push({ domain: "apu", id: row.id, message: error instanceof Error ? error.message : "unknown" }); }
   }
   logKnowledgeOperation({ stage: "backfill", outcome: report.errors.length ? "failure" : "success", correlationId, companyId, projectId, metadata: report });
-  console.log(JSON.stringify(report, null, 2));
+  return report;
+}
+
+function parseCliOptions(argv: readonly string[]): KnowledgeBackfillOptions {
+  const args = new Set(argv);
+  const companyId = argv.find((value) => value.startsWith("--company="))?.slice("--company=".length);
+  const projectId = argv.find((value) => value.startsWith("--project="))?.slice("--project=".length);
+  const correlationId = argv.find((value) => value.startsWith("--correlation-id="))?.slice("--correlation-id=".length);
+  return { companyId, projectId, correlationId, dryRun: args.has("--dry-run") };
+}
+
+async function runCli(): Promise<void> {
+  const options = parseCliOptions(process.argv.slice(2));
+  const correlationId = options.correlationId ?? `knowledge-backfill:${options.companyId ?? "all"}:${options.projectId ?? "all"}`;
+  try {
+    const report = await runKnowledgeBackfill(options);
+    console.log(JSON.stringify(report, null, 2));
+  } catch (error) {
+    if (error instanceof KnowledgeBackfillDisabledError) {
+      console.error(JSON.stringify({ event: "knowledge_backfill", outcome: "skip", reason: "FEATURE_DISABLED", correlationId: error.correlationId }));
+    } else {
+      console.error(error);
+    }
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+const invokedPath = process.argv[1];
+if (invokedPath && path.resolve(invokedPath) === fileURLToPath(import.meta.url)) {
+  void runCli();
 }

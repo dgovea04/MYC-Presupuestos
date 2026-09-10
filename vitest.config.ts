@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
+const postgresIntegrationTest = "scripts/backfill-knowledge.integration.test.ts";
+
 export default defineConfig({
   test: {
     environment: "node",
@@ -12,6 +14,7 @@ export default defineConfig({
       "tests/e2e/**",
       "playwright-report/**",
       "test-results/**",
+      ...(process.env.DATABASE_URL ? [] : [postgresIntegrationTest]),
     ],
     setupFiles: ["./vitest.setup.ts"],
   },
