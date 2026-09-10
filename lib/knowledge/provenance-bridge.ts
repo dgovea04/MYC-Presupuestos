@@ -63,7 +63,7 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
   let source;
   let sourceOutcome: "created" | "skipped";
   try {
-    source = await prisma.knowledgeSource.create({
+    source = await prisma.knowledgeSource.create({ data: {
       idempotencyKey: input.sourceKey,
       sourceType: "MIGRATION",
       label: "Knowledge backfill",
@@ -72,7 +72,7 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
       projectId: input.projectId,
       createdById: "migration",
       metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId },
-    });
+    } });
     sourceOutcome = "created";
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
@@ -84,7 +84,7 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
   let evidence;
   let evidenceOutcome: "created" | "skipped";
   try {
-    evidence = await prisma.knowledgeEvidence.create({
+    evidence = await prisma.knowledgeEvidence.create({ data: {
       idempotencyKey: evidenceKey,
       sourceId: source.id,
       quote: `Migrated ${input.domain} record ${input.sourceRecordId}`,
@@ -92,7 +92,7 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
       projectId: input.projectId,
       createdById: "migration",
       metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId, domain: input.domain, sourceRecordId: input.sourceRecordId },
-    });
+    } });
     evidenceOutcome = "created";
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;

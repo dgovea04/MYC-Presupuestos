@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey } from "@/lib/knowledge/backfill";
+import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome } from "@/lib/knowledge/backfill";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import { logKnowledgeOperation } from "@/lib/knowledge/observability";
 import { createMigrationKnowledgeProvenance, linkMigrationKnowledgeEntity } from "@/lib/knowledge/provenance-bridge";
@@ -25,8 +25,6 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
   const report = { dryRun, companyId: companyId ?? null, projectId: projectId ?? null, correlationId, candidates: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, created: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, skipped: { items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 }, errors: [] as Array<{ domain: string; id: string; message: string }> };
 
   async function createProvenance(input: { domain: "item" | "resource" | "price" | "apu"; sourceRecordId: string; tenantCompanyId: string; tenantProjectId?: string }) {
-    report.candidates.sources++;
-    report.candidates.evidence++;
     const sourceKey = buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId });
     const provenance = await createMigrationKnowledgeProvenance({
       sourceKey,
@@ -35,19 +33,20 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       companyId: input.tenantCompanyId,
       projectId: input.tenantProjectId,
       correlationId,
+      dryRun,
     });
-    report[provenance.sourceOutcome].sources++;
-    report[provenance.evidenceOutcome].evidence++;
-    if (!provenance.source || !provenance.evidence) throw new Error("Migration provenance was not persisted");
+    recordMigrationProvenanceOutcome(report, { source: provenance.sourceOutcome, evidence: provenance.evidenceOutcome });
+    if (!dryRun && (!provenance.source || !provenance.evidence)) throw new Error("Migration provenance was not persisted");
     return { ...provenance, evidenceKey: buildMigrationEvidenceKey({ sourceKey, domain: input.domain, sourceRecordId: input.sourceRecordId }) };
   }
 
   for (const row of items) {
     if (!row.description.trim() || !row.budget.project.projectId) { report.skipped.items++; continue; }
     report.candidates.items++;
+    const itemProvenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
     if (dryRun) continue;
     try {
-      const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
+      const provenance = itemProvenance;
       const normalizedName = row.description.trim().toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalItem.findFirst({ where: { normalizedName, companyId: row.budget.project.companyId }, select: { id: true } });
       const canonical = existing
@@ -61,12 +60,15 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
   for (const row of resources) {
     const plan = buildKnowledgeBackfillPlan([row], { companyId, dryRun });
     if (plan.length === 0) { report.skipped.resources++; continue; }
+    const candidate = plan[0];
+    if (!candidate) { report.skipped.resources++; continue; }
     report.candidates.resources++;
     if (row.priceObservedAt) report.candidates.prices++;
+    const resourceProvenance = await createProvenance({ domain: "resource", sourceRecordId: row.id, tenantCompanyId: candidate.companyId });
+    const priceProvenance = row.priceObservedAt ? await createProvenance({ domain: "price", sourceRecordId: row.id, tenantCompanyId: candidate.companyId }) : undefined;
     if (dryRun) continue;
     try {
-      const candidate = plan[0];
-      const provenance = await createProvenance({ domain: "resource", sourceRecordId: row.id, tenantCompanyId: candidate.companyId });
+      const provenance = resourceProvenance;
       const normalizedName = candidate.name.toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalResource.findFirst({ where: { normalizedName, companyId: candidate.companyId, scope: "COMPANY" }, select: { id: true } });
       const canonical = existing
@@ -76,7 +78,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       if (existing) report.skipped.resources++; else report.created.resources++;
       if (row.priceObservedAt) {
         const priceKey = `backfill:price:${row.id}:${row.priceObservedAt.toISOString()}:${String(row.unitPrice)}`;
-        const priceProvenance = await createProvenance({ domain: "price", sourceRecordId: row.id, tenantCompanyId: candidate.companyId });
+        if (!priceProvenance) throw new Error("Price provenance was not prepared");
         const existingPrice = await prisma.priceObservation.findUnique({ where: { idempotencyKey: priceKey }, select: { id: true } });
         await prisma.priceObservation.upsert({ where: { idempotencyKey: priceKey }, create: { idempotencyKey: priceKey, resourceId: canonical.id, value: row.unitPrice, currency: row.currency, unit: row.unit, companyId: row.companyId, sourceId: priceProvenance.source.id, evidenceId: priceProvenance.evidence.id, observedAt: row.priceObservedAt, scope: "COMPANY", confidence: "MEDIUM", status: "OBSERVED" }, update: { sourceId: priceProvenance.source.id, evidenceId: priceProvenance.evidence.id } });
         if (existingPrice) report.skipped.prices++; else report.created.prices++;
@@ -88,9 +90,10 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     const tenant = row.budgetItem.budget.project;
     if ((companyId && tenant.companyId !== companyId) || (projectId && row.budgetItem.budget.projectId !== projectId)) { report.skipped.apus++; continue; }
     report.candidates.apus++;
+    const apuProvenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
     if (dryRun) continue;
     try {
-      const provenance = await createProvenance({ domain: "apu", sourceRecordId: row.id, tenantCompanyId: tenant.companyId, tenantProjectId: row.budgetItem.budget.projectId });
+      const provenance = apuProvenance;
       const snapshot = { apuId: row.id, name: row.name, unit: row.unit, performance: String(row.performance), resources: row.resources.map((resource, index) => ({ resourceId: resource.resourceId, description: resource.resource?.description ?? resource.description, unit: resource.resource?.unit ?? "", quantity: String(resource.quantity), unitPrice: String(resource.unitPrice), resourceType: resource.resourceType, sortOrder: index })) };
       const contentHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
       const existingApu = await prisma.knowledgeApuVersion.findUnique({ where: { idempotencyKey: `backfill:apu:${row.id}` }, select: { id: true } });

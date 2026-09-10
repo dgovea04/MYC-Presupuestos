@@ -123,14 +123,14 @@ describe("knowledge provenance bridge", () => {
     });
 
     expect(result).toEqual({ source: { id: "source-1" }, evidence: { id: "evidence-1" }, sourceOutcome: "skipped", evidenceOutcome: "skipped" });
-    expect(prismaMock.knowledgeSource.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prismaMock.knowledgeSource.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       idempotencyKey: "migration:c1:p1:run-1",
       sourceType: "MIGRATION", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ script: "scripts/backfill-knowledge.ts", correlationId: "run-1" }),
-    }));
-    expect(prismaMock.knowledgeEvidence.create).toHaveBeenCalledWith(expect.objectContaining({
+    }) }));
+    expect(prismaMock.knowledgeEvidence.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       idempotencyKey: "migration:c1:p1:run-1:evidence:resource:r1",
       sourceId: "source-1", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ domain: "resource", sourceRecordId: "r1", correlationId: "run-1" }),
-    }));
+    }) }));
   });
 
   it("keeps a separate idempotent provenance link for each canonical association", async () => {

@@ -1,5 +1,14 @@
 type BackfillResource = { id: string; description: string; unit: string | null; companyId: string | null };
 export type KnowledgeBackfillCandidate = { idempotencyKey: string; name: string; canonicalUnit?: string; companyId: string; status: "OBSERVED" };
+type MigrationProvenanceCounter = { sources: number; evidence: number };
+export type MigrationProvenanceReport = { candidates: MigrationProvenanceCounter; created: MigrationProvenanceCounter; skipped: MigrationProvenanceCounter };
+
+export function recordMigrationProvenanceOutcome(report: MigrationProvenanceReport, outcome: { source: "created" | "skipped"; evidence: "created" | "skipped" }): void {
+  report.candidates.sources++;
+  report.candidates.evidence++;
+  report[outcome.source].sources++;
+  report[outcome.evidence].evidence++;
+}
 
 export function buildMigrationSourceKey(input: { companyId: string; projectId?: string; correlationId: string }): string {
   return `migration:${input.companyId}:${input.projectId ?? "company"}:${input.correlationId}`;

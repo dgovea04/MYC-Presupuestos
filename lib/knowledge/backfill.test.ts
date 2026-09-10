@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey } from "./backfill";
+import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome } from "./backfill";
 
 describe("knowledge backfill planner", () => {
   it("creates observed, deterministic candidates without inventing provenance", () => {
@@ -17,5 +17,14 @@ describe("knowledge backfill planner", () => {
 
     expect(sourceKey).toBe("migration:c1:p1:knowledge-backfill:c1:p1");
     expect(buildMigrationEvidenceKey({ sourceKey, domain: "resource", sourceRecordId: "r1" })).toBe("migration:c1:p1:knowledge-backfill:c1:p1:evidence:resource:r1");
+  });
+
+  it("counts dry-run provenance candidates as skipped without writes", () => {
+    const report = { candidates: { sources: 0, evidence: 0 }, created: { sources: 0, evidence: 0 }, skipped: { sources: 0, evidence: 0 } };
+
+    recordMigrationProvenanceOutcome(report, { source: "skipped", evidence: "skipped" });
+    recordMigrationProvenanceOutcome(report, { source: "skipped", evidence: "skipped" });
+
+    expect(report).toEqual({ candidates: { sources: 2, evidence: 2 }, created: { sources: 0, evidence: 0 }, skipped: { sources: 2, evidence: 2 } });
   });
 });
