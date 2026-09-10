@@ -628,7 +628,6 @@ function parseCostSections(text: string, pattern: RegExp) {
 
 function parseCostRows(parentId: string, fileName: string, body: string, confidence: number, sourcePage: number): PdfImportedApuRow[] {
   const number = "-?\\d[\\d,]*(?:\\.\\d+)?";
-  const unit = "[A-Za-zÁÉÍÓÚÑáéíóúñ%][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ%/.'´‘’-]*";
   const cleanBody = body.replace(/(?:Mano de obra|Materiales|Equipos|Sub Partidas|Subcontratos):\s*-?\d[\d,]*(?:\.\d+)?/gi, " ");
   const headerIndex = cleanBody.search(/\bParcial\b/i);
   const rowBody = headerIndex >= 0 ? cleanBody.slice(headerIndex + "Parcial".length) : cleanBody;

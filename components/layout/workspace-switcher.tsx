@@ -342,7 +342,7 @@ export function WorkspaceSwitcher({ activeWorkspaceId, canManageWorkspace = true
         setOptimisticWorkspaceId(null);
       }
     },
-    [router, canManageWorkspace],
+    [canManageWorkspace],
   );
 
   const loadMembers = useCallback(async () => {

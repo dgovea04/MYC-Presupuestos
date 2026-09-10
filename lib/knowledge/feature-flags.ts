@@ -13,6 +13,8 @@ const environmentKeys: Record<KnowledgeFeature, string> = {
   retrievalV1: "MC_KNOWLEDGE_RETRIEVAL_V1",
 };
 
-export function isKnowledgeFeatureEnabled(feature: KnowledgeFeature, _context?: KnowledgeFeatureContext): boolean {
+export function isKnowledgeFeatureEnabled(feature: KnowledgeFeature, context?: KnowledgeFeatureContext): boolean {
+  // Callers provide the authorized scope now; environment flags remain global until scoped overrides are introduced.
+  void context;
   return process.env[environmentKeys[feature]] === "true";
 }

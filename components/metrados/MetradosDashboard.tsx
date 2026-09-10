@@ -207,6 +207,7 @@ export function MetradosDashboard({
   const isHydrated = useRef(false);
   const saveRef = useRef<((isAutosave?: boolean) => Promise<boolean>) | null>(null);
   const lastSavedPayload = useRef("");
+  const handledInitialPartidaIdRef = useRef<string | null>(null);
 
   const template = useMemo(
     () => templates.find((entry) => entry.type === templateType) ?? templates[0],
@@ -387,7 +388,7 @@ export function MetradosDashboard({
     return () => window.clearInterval(interval);
   }, [lastSavedAt]);
 
-  function applyPartidaDefaults(partida: MetradoPartidaOption) {
+  const applyPartidaDefaults = useCallback((partida: MetradoPartidaOption) => {
     const partidaUnit = resolvePartidaUnit(partida.unit, template.defaultUnit);
     const matchingTemplate = findMatchingTemplate(partida.description, partidaUnit, templates);
     const matchingFormula = matchingTemplate?.formulas.find((formula) => formula.resultUnit === partidaUnit);
@@ -416,32 +417,7 @@ export function MetradosDashboard({
       return;
     }
     setSheetName(buildDefaultMetradoSheetName({ templateName: template.name, partidaCode: partida.code }));
-  }
-
-  function openPartidaSheet(partida: MetradoPartidaOption) {
-    const existingSheet = selectLatestActiveSheet(sheets, partida.id);
-    setPartidaId(partida.id);
-    if (existingSheet) {
-      setOpenedPartidaId(partida.id);
-      setConfigurationOpen(false);
-      loadSheetIntoEditor(existingSheet);
-    } else {
-      startNewSheet();
-      setPartidaId(partida.id);
-      applyPartidaDefaults(partida);
-      setConfigurationOpen(true);
-    }
-  }
-
-  useEffect(() => {
-    if (!initialContext?.itemId || selectedSheetId) return;
-    const partida = partidas.find((candidate) => candidate.id === initialContext.itemId);
-    if (!partida) return;
-
-    window.setTimeout(() => {
-      openPartidaSheet(partida);
-    }, 0);
-  }, [activeSheetByPartidaId, initialContext?.itemId, partidas, selectedSheetId]);
+  }, [customFormulas, template, templates]);
 
   function selectSheet(sheetId: string) {
     if (!sheetId) {
@@ -527,6 +503,34 @@ export function MetradosDashboard({
     setFeedback("Configura la hoja y presiona Crear hoja.");
     setError("");
   }, [budgetId, budgets, projectId, projects, resetRows, templates]);
+
+  const openPartidaSheet = useCallback((partida: MetradoPartidaOption) => {
+    const existingSheet = selectLatestActiveSheet(sheets, partida.id);
+    setPartidaId(partida.id);
+    if (existingSheet) {
+      setOpenedPartidaId(partida.id);
+      setConfigurationOpen(false);
+      loadSheetIntoEditor(existingSheet);
+    } else {
+      startNewSheet();
+      setPartidaId(partida.id);
+      applyPartidaDefaults(partida);
+      setConfigurationOpen(true);
+    }
+  }, [applyPartidaDefaults, loadSheetIntoEditor, sheets, startNewSheet]);
+
+  useEffect(() => {
+    if (!initialContext?.itemId || selectedSheetId) return;
+    if (handledInitialPartidaIdRef.current === initialContext.itemId) return;
+    const partida = partidas.find((candidate) => candidate.id === initialContext.itemId);
+    if (!partida) return;
+
+    const timeout = window.setTimeout(() => {
+      handledInitialPartidaIdRef.current = partida.id;
+      openPartidaSheet(partida);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [initialContext?.itemId, openPartidaSheet, partidas, selectedSheetId]);
 
   function requestDeleteSelectedSheet() {
     if (!selectedSheet) {

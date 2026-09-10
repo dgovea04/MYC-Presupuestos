@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Bot, CloudCog, FileScan, HardDrive, Loader2, PanelTop, Save, Settings2, Trash2, type LucideIcon } from "lucide-react";
+import { Bot, CloudCog, FileScan, HardDrive, Loader2, PanelTop, Save, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CompanyProfileCard } from "@/components/settings/company-profile-card";
 import { LocalAiSettingsCard } from "@/components/settings/local-ai-settings-card";
