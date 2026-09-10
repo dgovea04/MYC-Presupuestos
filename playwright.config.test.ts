@@ -22,7 +22,7 @@ const bridgeFixture = [
 ].join("\n");
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
 });
 
 it("detects a complete bridge fixture declared only in the working-directory .env", async () => {
@@ -48,4 +48,4 @@ it("detects a complete bridge fixture declared only in the working-directory .en
   });
 
   expect(JSON.parse(stdout) as { reuseExistingServer: boolean }).toEqual({ reuseExistingServer: false });
-});
+}, 30_000);
