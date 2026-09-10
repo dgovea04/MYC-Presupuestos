@@ -17,6 +17,10 @@ export async function getKnowledgeEvidenceProvenance(evidenceId: string) {
       checksum: true,
       createdAt: true,
       source: { select: { id: true, label: true, sourceType: true, companyId: true, projectId: true, createdById: true } },
+      canonicalItemLinks: { select: { canonicalItemId: true, canonicalItem: { select: { id: true, name: true } } } },
+      canonicalResourceLinks: { select: { canonicalResourceId: true, canonicalResource: { select: { id: true, name: true } } } },
+      priceObservations: { select: { id: true, resourceId: true } },
+      apuVersions: { select: { id: true, apuId: true } },
       reviewEvidenceLinks: {
         select: {
           reviewEvidenceId: true,
@@ -61,6 +65,10 @@ export async function getKnowledgeEvidenceProvenance(evidenceId: string) {
       findingTypes: reviewEvidence.flatMap((row) => row.findings.map((finding) => finding.findingType)),
       locations: reviewEvidence.map((row) => row.locationJson),
       reviewEvidenceIds: reviewEvidence.map((row) => row.id),
+      canonicalItemIds: evidence.canonicalItemLinks.map((link) => link.canonicalItemId),
+      canonicalResourceIds: evidence.canonicalResourceLinks.map((link) => link.canonicalResourceId),
+      priceObservationIds: evidence.priceObservations.map((row) => row.id),
+      apuVersionIds: evidence.apuVersions.map((row) => row.id),
     },
   };
 }

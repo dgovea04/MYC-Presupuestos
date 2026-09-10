@@ -2812,6 +2812,9 @@ model KnowledgeSource {
   suppliers   KnowledgeSupplier[]
   canonicalItems CanonicalItem[] @relation("CanonicalItemSource")
   canonicalResources CanonicalResource[] @relation("CanonicalResourceSource")
+  canonicalItemProvenanceLinks KnowledgeCanonicalItemProvenance[]
+  canonicalResourceProvenanceLinks KnowledgeCanonicalResourceProvenance[]
+  apuVersions KnowledgeApuVersion[] @relation("ApuVersionSource")
 
   @@index([sourceType, createdAt(sort: Desc)])
   @@index([companyId, projectId, createdAt(sort: Desc)])
@@ -2842,6 +2845,9 @@ model KnowledgeEvidence {
   reviewEvidenceLinks KnowledgeReviewEvidenceLink[]
   canonicalItems CanonicalItem[] @relation("CanonicalItemEvidence")
   canonicalResources CanonicalResource[] @relation("CanonicalResourceEvidence")
+  canonicalItemProvenanceLinks KnowledgeCanonicalItemProvenance[]
+  canonicalResourceProvenanceLinks KnowledgeCanonicalResourceProvenance[]
+  apuVersions KnowledgeApuVersion[] @relation("ApuVersionEvidence")
 
   @@index([sourceId, createdAt(sort: Desc)])
   @@index([checksum])
@@ -2893,6 +2899,7 @@ model CanonicalItem {
   aliases         CanonicalItemAlias[]
   source          KnowledgeSource? @relation("CanonicalItemSource", fields: [sourceId], references: [id], onDelete: SetNull)
   evidence        KnowledgeEvidence? @relation("CanonicalItemEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+  provenanceLinks KnowledgeCanonicalItemProvenance[]
 
   @@index([normalizedName])
   @@index([scope, companyId, normalizedName])
@@ -2930,6 +2937,7 @@ model CanonicalResource {
   aliases         CanonicalResourceAlias[]
   source          KnowledgeSource? @relation("CanonicalResourceSource", fields: [sourceId], references: [id], onDelete: SetNull)
   evidence        KnowledgeEvidence? @relation("CanonicalResourceEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+  provenanceLinks KnowledgeCanonicalResourceProvenance[]
 
   @@index([normalizedName])
   @@index([scope, companyId, normalizedName])
@@ -2949,6 +2957,40 @@ model CanonicalResourceAlias {
   @@unique([canonicalResourceId, normalizedAlias])
   @@index([normalizedAlias])
   @@map("knowledge_canonical_resource_aliases")
+}
+
+model KnowledgeCanonicalItemProvenance {
+  id              String          @id @default(cuid())
+  canonicalItemId String
+  sourceId        String
+  evidenceId      String
+  idempotencyKey  String          @unique
+  createdAt       DateTime        @default(now())
+  canonicalItem   CanonicalItem   @relation(fields: [canonicalItemId], references: [id], onDelete: Cascade)
+  source          KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  evidence        KnowledgeEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalItemId, evidenceId])
+  @@index([sourceId])
+  @@index([evidenceId])
+  @@map("knowledge_canonical_item_provenance")
+}
+
+model KnowledgeCanonicalResourceProvenance {
+  id                 String             @id @default(cuid())
+  canonicalResourceId String
+  sourceId           String
+  evidenceId         String
+  idempotencyKey     String             @unique
+  createdAt          DateTime           @default(now())
+  canonicalResource  CanonicalResource  @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
+  source             KnowledgeSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  evidence           KnowledgeEvidence  @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalResourceId, evidenceId])
+  @@index([sourceId])
+  @@index([evidenceId])
+  @@map("knowledge_canonical_resource_provenance")
 }
 
 model KnowledgeApuVersion {
@@ -2972,6 +3014,8 @@ model KnowledgeApuVersion {
   afterSnapshot   Json?
   createdAt       DateTime        @default(now())
   resources       KnowledgeApuResource[]
+  source          KnowledgeSource? @relation("ApuVersionSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence? @relation("ApuVersionEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@unique([apuId, versionNumber])
   @@index([apuId, createdAt(sort: Desc)])

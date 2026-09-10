@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { buildKnowledgeBackfillPlan, buildMigrationSourceKey } from "@/lib/knowledge/backfill";
+import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey } from "@/lib/knowledge/backfill";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import { logKnowledgeOperation } from "@/lib/knowledge/observability";
-import { createMigrationKnowledgeProvenance } from "@/lib/knowledge/provenance-bridge";
+import { createMigrationKnowledgeProvenance, linkMigrationKnowledgeEntity } from "@/lib/knowledge/provenance-bridge";
 
 const args = new Set(process.argv.slice(2));
 const companyId = process.argv.slice(2).find((value) => value.startsWith("--company="))?.slice("--company=".length);
@@ -27,8 +27,9 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
   async function createProvenance(input: { domain: "item" | "resource" | "price" | "apu"; sourceRecordId: string; tenantCompanyId: string; tenantProjectId?: string }) {
     report.candidates.sources++;
     report.candidates.evidence++;
+    const sourceKey = buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId });
     const provenance = await createMigrationKnowledgeProvenance({
-      sourceKey: buildMigrationSourceKey({ companyId: input.tenantCompanyId, projectId: input.tenantProjectId, correlationId }),
+      sourceKey,
       domain: input.domain,
       sourceRecordId: input.sourceRecordId,
       companyId: input.tenantCompanyId,
@@ -38,7 +39,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
     report[provenance.sourceOutcome].sources++;
     report[provenance.evidenceOutcome].evidence++;
     if (!provenance.source || !provenance.evidence) throw new Error("Migration provenance was not persisted");
-    return provenance;
+    return { ...provenance, evidenceKey: buildMigrationEvidenceKey({ sourceKey, domain: input.domain, sourceRecordId: input.sourceRecordId }) };
   }
 
   for (const row of items) {
@@ -49,12 +50,11 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       const provenance = await createProvenance({ domain: "item", sourceRecordId: row.id, tenantCompanyId: row.budget.project.companyId, tenantProjectId: row.budget.project.projectId });
       const normalizedName = row.description.trim().toLocaleLowerCase("es-PE");
       const existing = await prisma.canonicalItem.findFirst({ where: { normalizedName, companyId: row.budget.project.companyId }, select: { id: true } });
-      if (existing) {
-        await prisma.canonicalItem.update({ where: { id: existing.id }, data: { sourceId: provenance.source.id, evidenceId: provenance.evidence.id } });
-        report.skipped.items++;
-        continue;
-      }
-      await prisma.canonicalItem.create({ data: { name: row.description.trim(), normalizedName, canonicalUnit: row.unit, scope: "COMPANY", companyId: row.budget.project.companyId, status: "OBSERVED", sourceId: provenance.source.id, evidenceId: provenance.evidence.id } }); report.created.items++;
+      const canonical = existing
+        ? await prisma.canonicalItem.update({ where: { id: existing.id }, data: { sourceId: provenance.source.id, evidenceId: provenance.evidence.id }, select: { id: true } })
+        : await prisma.canonicalItem.create({ data: { name: row.description.trim(), normalizedName, canonicalUnit: row.unit, scope: "COMPANY", companyId: row.budget.project.companyId, status: "OBSERVED", sourceId: provenance.source.id, evidenceId: provenance.evidence.id }, select: { id: true } });
+      await linkMigrationKnowledgeEntity({ domain: "item", entityId: canonical.id, sourceId: provenance.source.id, evidenceId: provenance.evidence.id, idempotencyKey: provenance.evidenceKey });
+      if (existing) report.skipped.items++; else report.created.items++;
     } catch (error) { report.errors.push({ domain: "item", id: row.id, message: error instanceof Error ? error.message : "unknown" }); }
   }
 
@@ -72,6 +72,7 @@ const budgetFilter = projectId ? { projectId } : companyId ? { project: { compan
       const canonical = existing
         ? await prisma.canonicalResource.update({ where: { id: existing.id }, data: { sourceId: provenance.source.id, evidenceId: provenance.evidence.id }, select: { id: true } })
         : await prisma.canonicalResource.create({ data: { name: candidate.name, normalizedName, category: "BACKFILL", canonicalUnit: candidate.canonicalUnit, scope: "COMPANY", companyId: candidate.companyId, status: "OBSERVED", sourceId: provenance.source.id, evidenceId: provenance.evidence.id }, select: { id: true } });
+      await linkMigrationKnowledgeEntity({ domain: "resource", entityId: canonical.id, sourceId: provenance.source.id, evidenceId: provenance.evidence.id, idempotencyKey: provenance.evidenceKey });
       if (existing) report.skipped.resources++; else report.created.resources++;
       if (row.priceObservedAt) {
         const priceKey = `backfill:price:${row.id}:${row.priceObservedAt.toISOString()}:${String(row.unitPrice)}`;

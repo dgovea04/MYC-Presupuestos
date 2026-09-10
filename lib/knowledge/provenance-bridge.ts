@@ -46,13 +46,24 @@ type MigrationProvenanceInput = {
   dryRun?: boolean;
 };
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+export async function linkMigrationKnowledgeEntity(input: { domain: "item" | "resource"; entityId: string; sourceId: string; evidenceId: string; idempotencyKey: string }) {
+  if (input.domain === "item") {
+    return prisma.knowledgeCanonicalItemProvenance.upsert({ where: { idempotencyKey: input.idempotencyKey }, create: { canonicalItemId: input.entityId, sourceId: input.sourceId, evidenceId: input.evidenceId, idempotencyKey: input.idempotencyKey }, update: {} });
+  }
+  return prisma.knowledgeCanonicalResourceProvenance.upsert({ where: { idempotencyKey: input.idempotencyKey }, create: { canonicalResourceId: input.entityId, sourceId: input.sourceId, evidenceId: input.evidenceId, idempotencyKey: input.idempotencyKey }, update: {} });
+}
+
 export async function createMigrationKnowledgeProvenance(input: MigrationProvenanceInput) {
   if (input.dryRun) return { source: undefined, evidence: undefined, sourceOutcome: "skipped" as const, evidenceOutcome: "skipped" as const };
 
-  const sourceExisting = await prisma.knowledgeSource.findUnique({ where: { idempotencyKey: input.sourceKey }, select: { id: true } });
-  const source = await prisma.knowledgeSource.upsert({
-    where: { idempotencyKey: input.sourceKey },
-    create: {
+  let source;
+  let sourceOutcome: "created" | "skipped";
+  try {
+    source = await prisma.knowledgeSource.create({
       idempotencyKey: input.sourceKey,
       sourceType: "MIGRATION",
       label: "Knowledge backfill",
@@ -61,14 +72,19 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
       projectId: input.projectId,
       createdById: "migration",
       metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId },
-    },
-    update: {},
-  });
+    });
+    sourceOutcome = "created";
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    source = await prisma.knowledgeSource.findUnique({ where: { idempotencyKey: input.sourceKey } });
+    if (!source) throw new Error("Migration source disappeared after unique conflict");
+    sourceOutcome = "skipped";
+  }
   const evidenceKey = buildMigrationEvidenceKey({ sourceKey: input.sourceKey, domain: input.domain, sourceRecordId: input.sourceRecordId });
-  const evidenceExisting = await prisma.knowledgeEvidence.findUnique({ where: { idempotencyKey: evidenceKey }, select: { id: true } });
-  const evidence = await prisma.knowledgeEvidence.upsert({
-    where: { idempotencyKey: evidenceKey },
-    create: {
+  let evidence;
+  let evidenceOutcome: "created" | "skipped";
+  try {
+    evidence = await prisma.knowledgeEvidence.create({
       idempotencyKey: evidenceKey,
       sourceId: source.id,
       quote: `Migrated ${input.domain} record ${input.sourceRecordId}`,
@@ -76,10 +92,15 @@ export async function createMigrationKnowledgeProvenance(input: MigrationProvena
       projectId: input.projectId,
       createdById: "migration",
       metadata: { actor: "migration", script: "scripts/backfill-knowledge.ts", correlationId: input.correlationId, domain: input.domain, sourceRecordId: input.sourceRecordId },
-    },
-    update: {},
-  });
-  return { source, evidence, sourceOutcome: sourceExisting ? "skipped" as const : "created" as const, evidenceOutcome: evidenceExisting ? "skipped" as const : "created" as const };
+    });
+    evidenceOutcome = "created";
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    evidence = await prisma.knowledgeEvidence.findUnique({ where: { idempotencyKey: evidenceKey } });
+    if (!evidence) throw new Error("Migration evidence disappeared after unique conflict");
+    evidenceOutcome = "skipped";
+  }
+  return { source, evidence, sourceOutcome, evidenceOutcome };
 }
 
 function jsonRecord(value: unknown): Record<string, unknown> {

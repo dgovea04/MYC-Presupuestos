@@ -44,4 +44,15 @@ describe("knowledge retrieval v1", () => {
     expect(result.resources).toEqual([]);
     expect(result.prices[0]?.provenance).toMatchObject({ sourceId: "source-1", evidenceId: "evidence-1", regionId: "r1", supplierId: "sup-1", source: { label: "Lista" }, evidence: { page: "2", cellRange: "B4" } });
   });
+
+  it("retrieves all canonical provenance associations", async () => {
+    prismaMock.canonicalItem.findMany.mockResolvedValue([{ id: "item-1", scope: "COMPANY", companyId: "c1", normalizedName: "cemento", aliases: [], provenanceLinks: [{ sourceId: "s1", evidenceId: "e1", source: { id: "s1" }, evidence: { id: "e1" } }, { sourceId: "s2", evidenceId: "e2", source: { id: "s2" }, evidence: { id: "e2" } }] }]);
+    prismaMock.canonicalResource.findMany.mockResolvedValue([{ id: "resource-1", scope: "COMPANY", companyId: "c1", normalizedName: "cemento", aliases: [], provenanceLinks: [{ sourceId: "s3", evidenceId: "e3", source: { id: "s3" }, evidence: { id: "e3" } }] }]);
+
+    const result = await retrieveKnowledgeV1({ companyId: "c1", query: "cemento", limit: 5 });
+
+    expect(result.items[0]?.provenance).toMatchObject({ sourceIds: ["s1", "s2"], evidenceIds: ["e1", "e2"] });
+    expect(result.resources[0]?.provenance).toMatchObject({ sourceIds: ["s3"], evidenceIds: ["e3"] });
+    expect(prismaMock.canonicalItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ include: expect.objectContaining({ provenanceLinks: expect.objectContaining({ include: expect.any(Object) }) }) }));
+  });
 });

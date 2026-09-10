@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { prismaMock, assertWorkspaceMembership, assertProjectInWorkspace, createKnowledgeSource, createKnowledgeEvidence } = vi.hoisted(() => ({
   prismaMock: {
     reviewEvidence: { findUnique: vi.fn(), findFirst: vi.fn() },
-    knowledgeSource: { findUnique: vi.fn(), upsert: vi.fn() },
-    knowledgeEvidence: { findUnique: vi.fn(), upsert: vi.fn() },
+    knowledgeSource: { findUnique: vi.fn(), upsert: vi.fn(), create: vi.fn() },
+    knowledgeEvidence: { findUnique: vi.fn(), upsert: vi.fn(), create: vi.fn() },
+    knowledgeCanonicalItemProvenance: { upsert: vi.fn() },
+    knowledgeCanonicalResourceProvenance: { upsert: vi.fn() },
     knowledgeReviewEvidenceLink: { upsert: vi.fn() },
   },
   assertWorkspaceMembership: vi.fn().mockResolvedValue({ companyId: "c1", role: "EDITOR" }),
@@ -17,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership, assertProjectInWorkspace }));
 vi.mock("./provenance", () => ({ createKnowledgeSource, createKnowledgeEvidence }));
 
-import { createKnowledgeEvidenceFromReview, createMigrationKnowledgeProvenance, linkReviewEvidenceToKnowledge, mapReviewEvidenceToKnowledgeEvidence } from "./provenance-bridge";
+import { createKnowledgeEvidenceFromReview, createMigrationKnowledgeProvenance, linkMigrationKnowledgeEntity, linkReviewEvidenceToKnowledge, mapReviewEvidenceToKnowledgeEvidence } from "./provenance-bridge";
 
 describe("knowledge provenance bridge", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -101,15 +103,15 @@ describe("knowledge provenance bridge", () => {
     });
 
     expect(result).toEqual({ source: undefined, evidence: undefined, sourceOutcome: "skipped", evidenceOutcome: "skipped" });
-    expect(prismaMock.knowledgeSource.upsert).not.toHaveBeenCalled();
-    expect(prismaMock.knowledgeEvidence.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.knowledgeSource.create).not.toHaveBeenCalled();
+    expect(prismaMock.knowledgeEvidence.create).not.toHaveBeenCalled();
   });
 
   it("reuses migration source and evidence keys on replay", async () => {
+    prismaMock.knowledgeSource.create.mockRejectedValueOnce({ code: "P2002" });
     prismaMock.knowledgeSource.findUnique.mockResolvedValueOnce({ id: "source-1" });
-    prismaMock.knowledgeSource.upsert.mockResolvedValueOnce({ id: "source-1" });
+    prismaMock.knowledgeEvidence.create.mockRejectedValueOnce({ code: "P2002" });
     prismaMock.knowledgeEvidence.findUnique.mockResolvedValueOnce({ id: "evidence-1" });
-    prismaMock.knowledgeEvidence.upsert.mockResolvedValueOnce({ id: "evidence-1" });
 
     const result = await createMigrationKnowledgeProvenance({
       sourceKey: "migration:c1:p1:run-1",
@@ -121,13 +123,20 @@ describe("knowledge provenance bridge", () => {
     });
 
     expect(result).toEqual({ source: { id: "source-1" }, evidence: { id: "evidence-1" }, sourceOutcome: "skipped", evidenceOutcome: "skipped" });
-    expect(prismaMock.knowledgeSource.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { idempotencyKey: "migration:c1:p1:run-1" },
-      create: expect.objectContaining({ sourceType: "MIGRATION", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ script: "scripts/backfill-knowledge.ts", correlationId: "run-1" }) }),
+    expect(prismaMock.knowledgeSource.create).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: "migration:c1:p1:run-1",
+      sourceType: "MIGRATION", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ script: "scripts/backfill-knowledge.ts", correlationId: "run-1" }),
     }));
-    expect(prismaMock.knowledgeEvidence.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { idempotencyKey: "migration:c1:p1:run-1:evidence:resource:r1" },
-      create: expect.objectContaining({ sourceId: "source-1", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ domain: "resource", sourceRecordId: "r1", correlationId: "run-1" }) }),
+    expect(prismaMock.knowledgeEvidence.create).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: "migration:c1:p1:run-1:evidence:resource:r1",
+      sourceId: "source-1", createdById: "migration", companyId: "c1", projectId: "p1", metadata: expect.objectContaining({ domain: "resource", sourceRecordId: "r1", correlationId: "run-1" }),
     }));
+  });
+
+  it("keeps a separate idempotent provenance link for each canonical association", async () => {
+    prismaMock.knowledgeCanonicalItemProvenance.upsert.mockResolvedValueOnce({ id: "item-link-1" });
+
+    await expect(linkMigrationKnowledgeEntity({ domain: "item", entityId: "item-1", sourceId: "source-1", evidenceId: "evidence-1", idempotencyKey: "evidence-key-1" })).resolves.toEqual({ id: "item-link-1" });
+    expect(prismaMock.knowledgeCanonicalItemProvenance.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { idempotencyKey: "evidence-key-1" }, create: expect.objectContaining({ canonicalItemId: "item-1", sourceId: "source-1", evidenceId: "evidence-1" }) }));
   });
 });
