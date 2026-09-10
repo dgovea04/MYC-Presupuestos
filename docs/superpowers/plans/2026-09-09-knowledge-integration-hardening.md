@@ -24,6 +24,8 @@
 
 ### Task 1: Formalizar la frontera de autorización Knowledge
 
+Status: VERIFIED — implementation, route tests, and scoped review complete.
+
 **Files:**
 - Modify: `lib/knowledge/api-access.ts`
 - Test: `lib/knowledge/api-access.test.ts`
@@ -71,6 +73,8 @@ git commit -m "feat: centralize knowledge authorization"
 
 ### Task 2: Hacer idempotente y navegable la provenance de backfill
 
+Status: VERIFIED — implementation, migration, replay/dry-run tests, and scoped review complete.
+
 **Files:**
 - Modify: `scripts/backfill-knowledge.ts`
 - Modify: `lib/knowledge/backfill.ts`
@@ -105,6 +109,8 @@ git commit -m "feat: add migration provenance to knowledge backfill"
 ```
 
 ### Task 3: Corregir resolución APU → canonical resources
+
+Status: VERIFIED — resolver, persistence mapping, tests, and scoped review complete.
 
 **Files:**
 - Modify: `scripts/backfill-knowledge.ts`
@@ -148,6 +154,8 @@ git commit -m "fix: map backfilled apu resources canonically"
 
 ### Task 4: Añadir y aplicar `knowledge_retrieval_v1`
 
+Status: VERIFIED — flag precedence, API contracts, tests, and scoped review complete.
+
 **Files:**
 - Modify: `lib/knowledge/feature-flags.ts`
 - Test: `lib/knowledge/feature-flags.test.ts`
@@ -184,6 +192,8 @@ git commit -m "feat: gate knowledge retrieval by rollout flag"
 
 ### Task 5: Crear replay/dry-run real contra PostgreSQL local
 
+Status: VERIFIED — real local PostgreSQL replay/dry-run integration and scoped review complete.
+
 **Files:**
 - Modify: `scripts/backfill-knowledge.ts` to export a callable `runKnowledgeBackfill(options)` while preserving CLI behavior
 - Create: `scripts/backfill-knowledge.integration.test.ts`
@@ -216,6 +226,8 @@ git commit -m "test: verify knowledge backfill replay against postgres"
 ```
 
 ### Task 6: Ejecutar suite y corregir el lint preexistente
+
+Status: VERIFIED — full suite, typecheck, lint, build, and scoped review complete.
 
 **Files:**
 - Modify: `components/imports/pdf-importer-page-content.tsx`
@@ -253,6 +265,8 @@ git commit -m "fix: stabilize pdf importer render timestamp"
 
 ### Task 7: Prueba E2E Review → bridge → Knowledge → retry
 
+Status: IMPLEMENTED / ENVIRONMENT BLOCKED — fixture validation and safeguards verified; real isolated PostgreSQL E2E assertions await `E2E_REVIEW_BRIDGE_*`.
+
 **Files:**
 - Modify: `tests/e2e/review-intelligence.spec.ts`
 - Modify: `playwright.config.ts` only if the existing app server/env cannot expose the required local flags
@@ -278,6 +292,8 @@ git commit -m "test: cover review knowledge retry flow"
 ```
 
 ### Task 8: Verificación final y handoff
+
+Status: PARTIAL — suite/typecheck/lint/build and repository checks verified; final E2E remains environment-blocked.
 
 **Files:**
 - Review: `docs/superpowers/specs/2026-09-09-knowledge-integration-hardening-design.md`
