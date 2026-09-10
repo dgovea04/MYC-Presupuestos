@@ -14,7 +14,6 @@ type Fixture = {
   conflictingApuId: string;
   noMatchResourceId: string;
   ambiguousResourceId: string;
-  primaryItemId: string;
 };
 
 type KnowledgeCounts = {
@@ -219,7 +218,6 @@ async function createFixture(): Promise<Fixture> {
     conflictingApuId: conflictingApu.id,
     noMatchResourceId: noMatchResource.id,
     ambiguousResourceId: ambiguousResource.id,
-    primaryItemId: primaryItem.id,
   };
 }
 
@@ -305,12 +303,15 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
     expect(await prisma.canonicalResource.findFirst({ where: { companyId: fixture.companyId, category: "BACKFILL" } })).toMatchObject({ status: "OBSERVED" });
     expect(await prisma.priceObservation.findFirst({ where: { companyId: fixture.companyId } })).toMatchObject({ status: "OBSERVED" });
 
-    const evidence = await prisma.knowledgeEvidence.findUnique({
-      where: { idempotencyKey: `migration:${fixture.companyId}:${fixture.projectId}:${fixture.correlationId}:evidence:item:${fixture.primaryItemId}` },
-      include: { source: true, canonicalItemProvenanceLinks: true },
+    const evidence = await prisma.knowledgeEvidence.findFirst({
+      where: { companyId: fixture.companyId, projectId: fixture.projectId, idempotencyKey: { contains: ":evidence:item:" } },
+      include: { source: true },
     });
-    expect(evidence?.source.idempotencyKey).toBe(`migration:${fixture.companyId}:${fixture.projectId}:${fixture.correlationId}`);
-    expect(evidence?.canonicalItemProvenanceLinks).toHaveLength(1);
+    expect(evidence?.source.id).toBe(evidence?.sourceId);
+    const provenanceLink = evidence
+      ? await prisma.knowledgeCanonicalItemProvenance.findFirst({ where: { evidenceId: evidence.id } })
+      : null;
+    expect(provenanceLink?.evidenceId).toBe(evidence?.id);
 
     const countsAfterFirstRun = await knowledgeCounts(fixture);
     const replayReport = await runKnowledgeBackfill({

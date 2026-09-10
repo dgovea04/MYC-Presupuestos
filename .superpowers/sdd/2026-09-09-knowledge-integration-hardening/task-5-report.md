@@ -2,7 +2,7 @@
 
 ## Estado
 
-BLOCKED para la corrida persistente contra la base local. `DATABASE_URL` está configurada y PostgreSQL responde, pero la base no tiene las tablas de provenance añadidas por Task 2 (`knowledge_canonical_item_provenance` y `knowledge_canonical_resource_provenance`). No se aplicaron migraciones ni se modificó ningún dato fuera de los fixtures de prueba.
+Completado en `main`. La corrección de Fix round 1 permite descubrir la integración cuando se invoca explícitamente, aunque `DATABASE_URL` no esté presente durante la evaluación inicial de `vitest.config.ts`. La base local está migrada y PostgreSQL respondió correctamente.
 
 ## Cambios
 
@@ -17,22 +17,23 @@ BLOCKED para la corrida persistente contra la base local. `DATABASE_URL` está c
   - Crea y limpia fixtures tenant-scoped con IDs aleatorios.
 - `vitest.config.ts`
   - Excluye la integración de la suite ordinaria cuando `DATABASE_URL` no está exportada en la shell.
+  - Conserva la integración cuando el archivo se solicita explícitamente con Vitest.
 - `README.md`
   - Documenta el comando explícito, flags, alcance y limpieza.
 
 ## TDD y verificación
 
-- RED inicial: la prueba falló porque `runKnowledgeBackfill` no existía; además el primer intento reveló que las tablas de provenance no existen en la base local.
-- Verificación PostgreSQL ejecutada:
-  - 1 prueba pasó: dry-run real, sin mutaciones, reportando no-match/ambiguous.
-  - 1 prueba quedó bloqueada/falló en persistencia por el esquema ausente; el error exacto fue `The table public.knowledge_canonical_item_provenance does not exist in the current database`.
-  - La misma corrida confirmó que el conflicto natural `apuId/versionNumber` se reporta por fila y no aborta las otras APUs.
+- RED inicial: `npm.cmd test -- scripts/backfill-knowledge.integration.test.ts` terminó en `No test files found` porque el archivo estaba excluido.
+- GREEN PostgreSQL real: `1` archivo, `2` tests pasaron.
+  - Dry-run sin cambios de conteo.
+  - Primera corrida: `items=4`, `resources=1`, `apus=3`, `prices=1`, `sources=2`, `evidence=10`.
+  - Replay: contadores `created=0` y conteos persistidos sin duplicados.
+  - No-match/ambiguous reportados; conflicto `apuId/versionNumber` aislado sin abortar filas independientes.
+  - Provenance consultada directamente por `evidenceId` en PostgreSQL.
 - El test ordinario no requiere PostgreSQL cuando `DATABASE_URL` no se exporta.
 - `git diff --check`: verificado sin errores antes del commit.
 
-## Ejecución pendiente
-
-Después de aplicar las migraciones existentes en una base local de prueba, ejecutar:
+## Comando verificado
 
 ```powershell
 $env:DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/myc_presupuestos?schema=public"
@@ -42,9 +43,8 @@ npm.cmd test -- scripts/backfill-knowledge.integration.test.ts
 
 ## Commit
 
-`test: verify knowledge backfill replay against postgres`
+`fix: enable postgres backfill integration test`
 
 ## Concerns
 
-- La integración persistente no puede declararse verde hasta que la base local tenga aplicadas las migraciones de Task 2 y provenance posteriores.
 - El directorio preexistente `presupuesto-ejemplo/pdf escaneado/` permaneció intacto y no se incluyó.
