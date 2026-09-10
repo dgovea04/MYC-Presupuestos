@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prisma } from "@/lib/db/prisma";
 import { buildKnowledgeBackfillPlan, buildMigrationEvidenceKey, buildMigrationSourceKey, recordMigrationProvenanceOutcome, resolveBackfillCanonicalResource, summarizeBackfillApuResourceResolutions } from "@/lib/knowledge/backfill";
-import { buildCanonicalResourceLookupIndex, deduplicateCanonicalResourceLookupCandidates, type CanonicalResourceLookupCandidateInput } from "@/lib/knowledge/canonical-resources";
+import { buildCanonicalResourceLookupIndex, mergeCanonicalResourceLookupCandidates, type CanonicalResourceLookupCandidateInput } from "@/lib/knowledge/canonical-resources";
 import { normalizeKnowledgeText, normalizeKnowledgeUnit } from "@/lib/knowledge/normalization";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 import { logKnowledgeOperation } from "@/lib/knowledge/observability";
@@ -143,7 +143,9 @@ const [resources, items, apus] = await Promise.all([
         companyId: candidate.companyId,
         aliases: [],
       }));
-      const canonicalResourceIndex = buildCanonicalResourceLookupIndex([...canonicalResources, ...(dryRun ? deduplicateCanonicalResourceLookupCandidates(plannedCanonicalResources) : [])]);
+      const canonicalResourceIndex = buildCanonicalResourceLookupIndex(dryRun
+        ? mergeCanonicalResourceLookupCandidates(canonicalResources, plannedCanonicalResources)
+        : canonicalResources);
       const resolvedResources = row.resources.map((resource, index) => {
         const description = resource.resource?.description ?? "";
         const unit = resource.resource?.unit ?? "";

@@ -27,8 +27,8 @@ export async function requireKnowledgeAdminSession(capability: Parameters<typeof
 }
 
 export function knowledgeRouteErrorResponse(error: unknown, fallback: string): NextResponse {
-  if (error instanceof ZodError || error instanceof KnowledgeRequestValidationError) {
-    return NextResponse.json({ error: error instanceof ZodError ? "Payload inválido" : error.message }, { status: 400 });
+  if (error instanceof SyntaxError || error instanceof ZodError || error instanceof KnowledgeRequestValidationError) {
+    return NextResponse.json({ error: error instanceof KnowledgeRequestValidationError ? error.message : "Payload inválido" }, { status: 400 });
   }
   if (error instanceof WorkspaceAuthorizationError) {
     return NextResponse.json({ error: error.message }, { status: 403 });

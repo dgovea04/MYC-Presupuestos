@@ -2,6 +2,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/prisma";
+import { normalizeKnowledgeText, normalizeKnowledgeUnit } from "@/lib/knowledge/normalization";
 import { runKnowledgeBackfill } from "./backfill-knowledge";
 
 type Fixture = {
@@ -105,6 +106,15 @@ async function createFixture(): Promise<Fixture> {
         normalizedName: ambiguousNormalizedName,
         category: "FIXTURE",
         canonicalUnit: "und",
+        scope: "COMPANY",
+        companyId: company.id,
+        status: "OBSERVED",
+      },
+      {
+        name: matchedResource.description,
+        normalizedName: normalizeKnowledgeText(matchedResource.description),
+        category: "BACKFILL",
+        canonicalUnit: normalizeKnowledgeUnit("bolsa"),
         scope: "COMPANY",
         companyId: company.id,
         status: "OBSERVED",
@@ -293,6 +303,7 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
     expect(report.dryRun).toBe(true);
     expect(report.candidates.items).toBe(4);
     expect(report.skipped.apuResources).toBe(2);
+    expect(report.resolutionConflicts).toHaveLength(2);
     expect(report.created).toMatchObject({ items: 0, resources: 0, apus: 0, prices: 0, sources: 0, evidence: 0 });
     expect(report.resolutionConflicts).toEqual(expect.arrayContaining([
       { domain: "apu-resource", apuId: expect.any(String), resourceId: fixture.noMatchResourceId, reason: "NO_MATCH" },
@@ -309,7 +320,8 @@ databaseDescribe("runKnowledgeBackfill PostgreSQL integration", () => {
       correlationId: fixture.correlationId,
     });
 
-    expect(firstReport.created).toMatchObject({ items: 4, resources: 1, apus: 3, apuResources: 1, prices: 1, sources: 2, evidence: 10 });
+    expect(firstReport.created).toMatchObject({ items: 4, resources: 0, apus: 3, apuResources: 1, prices: 1, sources: 2, evidence: 10 });
+    expect(firstReport.skipped.resources).toBe(1);
     expect(firstReport.skipped.apuResources).toBe(2);
     expect(firstReport.resolutionConflicts).toEqual(expect.arrayContaining([
       { domain: "apu", apuId: fixture.conflictingApuId, resourceId: null, reason: "CONTENT_CHANGED" },

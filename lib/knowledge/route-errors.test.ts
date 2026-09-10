@@ -9,6 +9,12 @@ describe("knowledge route error responses", () => {
     await expect(response.json()).resolves.toEqual({ error: "companyId es requerido" });
   });
 
+  it("classifies malformed JSON SyntaxError as a safe 400 response", async () => {
+    const response = knowledgeRouteErrorResponse(new SyntaxError("Unexpected token < in JSON"), "internal details");
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Payload inválido" });
+  });
+
   it("classifies authorization as 403", async () => {
     const response = knowledgeRouteErrorResponse(new WorkspaceAuthorizationError("No tienes acceso"), "internal");
     expect(response.status).toBe(403);

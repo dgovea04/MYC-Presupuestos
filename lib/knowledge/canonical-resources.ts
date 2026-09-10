@@ -18,15 +18,31 @@ export type CanonicalResourceLookupCandidateInput = Omit<CanonicalResourceLookup
 
 export type CanonicalResourceLookupIndex = ReadonlyMap<string, readonly CanonicalResourceLookupCandidate[]>;
 
+function canonicalResourceLookupKey(candidate: CanonicalResourceLookupCandidateInput): string {
+  const normalizedName = normalizeKnowledgeText(candidate.normalizedName);
+  const canonicalUnit = candidate.canonicalUnit ? normalizeKnowledgeUnit(candidate.canonicalUnit) : null;
+  return [candidate.scope, candidate.companyId ?? "global", normalizedName, canonicalUnit ?? ""].join("|");
+}
+
 export function deduplicateCanonicalResourceLookupCandidates(candidates: readonly CanonicalResourceLookupCandidateInput[]): CanonicalResourceLookupCandidateInput[] {
   const unique = new Map<string, CanonicalResourceLookupCandidateInput>();
   for (const candidate of candidates) {
     const normalizedName = normalizeKnowledgeText(candidate.normalizedName);
     const canonicalUnit = candidate.canonicalUnit ? normalizeKnowledgeUnit(candidate.canonicalUnit) : null;
-    const key = [candidate.scope, candidate.companyId ?? "global", normalizedName, canonicalUnit ?? ""].join("|");
+    const key = canonicalResourceLookupKey(candidate);
     if (!unique.has(key)) unique.set(key, { ...candidate, normalizedName, canonicalUnit });
   }
   return [...unique.values()];
+}
+
+export function mergeCanonicalResourceLookupCandidates(
+  persisted: readonly CanonicalResourceLookupCandidateInput[],
+  planned: readonly CanonicalResourceLookupCandidateInput[],
+): CanonicalResourceLookupCandidateInput[] {
+  const persistedKeys = new Set(persisted.map(canonicalResourceLookupKey));
+  const plannedCandidates = deduplicateCanonicalResourceLookupCandidates(planned)
+    .filter((candidate) => !persistedKeys.has(canonicalResourceLookupKey(candidate)));
+  return [...persisted, ...plannedCandidates];
 }
 
 export function buildCanonicalResourceLookupIndex(candidates: readonly CanonicalResourceLookupCandidateInput[]): CanonicalResourceLookupIndex {
