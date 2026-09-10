@@ -34,10 +34,18 @@ const workspaceRoleRank: Record<WorkspaceRole, number> = {
   VIEWER: 1,
 };
 
-function authorizationError(error: unknown): WorkspaceAuthorizationError {
-  return error instanceof WorkspaceAuthorizationError
-    ? error
-    : new WorkspaceAuthorizationError(error instanceof Error ? error.message : KNOWLEDGE_ACCESS_DENIED);
+const workspaceAuthorizationMessages = new Set([
+  "Workspace no disponible",
+  "No tienes el rol necesario en este workspace",
+  "El proyecto no pertenece a este workspace",
+]);
+
+function authorizationError(error: unknown): WorkspaceAuthorizationError | null {
+  if (error instanceof WorkspaceAuthorizationError) return error;
+  if (error instanceof Error && workspaceAuthorizationMessages.has(error.message)) {
+    return new WorkspaceAuthorizationError(error.message);
+  }
+  return null;
 }
 
 export async function assertKnowledgeApiScopeAccess(options: {
@@ -95,7 +103,9 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
     try {
       await assertWorkspaceMembership({ userId: options.actorUserId, companyId: options.companyId, minimumRole });
     } catch (error) {
-      throw authorizationError(error);
+      const authorizationFailure = authorizationError(error);
+      if (authorizationFailure) throw authorizationFailure;
+      throw error;
     }
   }
 
@@ -104,7 +114,9 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
     try {
       await assertProjectInWorkspace({ companyId: options.companyId, projectId: options.projectId });
     } catch (error) {
-      throw authorizationError(error);
+      const authorizationFailure = authorizationError(error);
+      if (authorizationFailure) throw authorizationFailure;
+      throw error;
     }
   }
 

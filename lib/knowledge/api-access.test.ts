@@ -119,6 +119,29 @@ describe("knowledge API scope access", () => {
     })).rejects.toBeInstanceOf(WorkspaceAuthorizationError);
   });
 
+  it("does not classify operational membership failures as authorization denials", async () => {
+    const failure = new Error("database connection refused");
+    assertWorkspaceMembership.mockRejectedValueOnce(failure);
+
+    await expect(assertKnowledgeWriteAccess({
+      actorUserId: "u1",
+      companyId: "company-a",
+      scope: "COMPANY",
+    })).rejects.toBe(failure);
+  });
+
+  it("does not classify operational project failures as authorization denials", async () => {
+    const failure = new Error("project query timed out");
+    assertProjectInWorkspace.mockRejectedValueOnce(failure);
+
+    await expect(assertKnowledgeReadAccess({
+      actorUserId: "u1",
+      companyId: "company-a",
+      projectId: "project-a",
+      scope: "PROJECT",
+    })).rejects.toBe(failure);
+  });
+
   it("allows a user scope only for the authenticated user", async () => {
     await expect(assertKnowledgeApiScopeAccess({ actorUserId: "u1", scope: "USER", userId: "u1" })).resolves.toBeUndefined();
     await expect(assertKnowledgeApiScopeAccess({ actorUserId: "u1", scope: "USER", userId: "u2" })).rejects.toThrow("otro usuario");
