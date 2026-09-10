@@ -3,6 +3,7 @@ import { requireAdminSession } from "@/lib/auth/session";
 import { getKnowledgeAdminQueue } from "@/lib/knowledge/admin-queue";
 import { assertKnowledgeReadAccess } from "@/lib/knowledge/api-access";
 import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
+import { WorkspaceAuthorizationError } from "@/lib/workspace/authorization";
 
 export async function GET(request: Request) {
   const session = await requireAdminSession("audit.read");
@@ -15,11 +16,18 @@ export async function GET(request: Request) {
   if (status && !["OBSERVED", "PENDING", "PROCESSING", "RETRYABLE_FAILED", "SUCCEEDED", "DEAD_LETTER"].includes(status)) return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
   try {
     await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, projectId, scope: projectId ? "PROJECT" : "COMPANY" });
-    if (!isKnowledgeFeatureEnabled("retrievalV1", { companyId, projectId })) {
-      return NextResponse.json({ error: "Knowledge retrieval disabled", feature: "retrievalV1" }, { status: 503 });
-    }
-    return NextResponse.json(await getKnowledgeAdminQueue({ companyId, projectId, status }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "No autorizado" }, { status: 403 });
+    if (error instanceof WorkspaceAuthorizationError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
+  if (!isKnowledgeFeatureEnabled("retrievalV1", { companyId, projectId })) {
+    return NextResponse.json({ error: "Knowledge retrieval disabled", feature: "retrievalV1" }, { status: 503 });
+  }
+  try {
+    return NextResponse.json(await getKnowledgeAdminQueue({ companyId, projectId, status }));
+  } catch {
+    return NextResponse.json({ error: "No se pudo cargar la cola de conocimiento" }, { status: 500 });
   }
 }

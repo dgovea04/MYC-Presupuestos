@@ -50,4 +50,14 @@ describe("admin knowledge queue route", () => {
     expect(assertKnowledgeReadAccess).not.toHaveBeenCalled();
     expect(getKnowledgeAdminQueue).not.toHaveBeenCalled();
   });
+
+  it("does not turn an internal queue failure into a forbidden response", async () => {
+    requireAdminSession.mockResolvedValueOnce({ user: { id: "admin-1" } });
+    getKnowledgeAdminQueue.mockRejectedValueOnce(new Error("database unavailable"));
+
+    const response = await GET(new Request("http://localhost/api/admin/knowledge/queue?companyId=c1"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "No se pudo cargar la cola de conocimiento" });
+  });
 });
