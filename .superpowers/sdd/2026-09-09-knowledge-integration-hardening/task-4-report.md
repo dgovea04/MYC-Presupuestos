@@ -64,6 +64,33 @@ Pasó sin errores de whitespace.
 
 ## Concerns
 
+## Fix round 2 — denegación explícita de autorización de la cola
+
+### Cambios
+
+- `app/api/admin/knowledge/queue/route.test.ts`: añadida una prueba donde `assertKnowledgeReadAccess` rechaza con `WorkspaceAuthorizationError`; `GET` responde 403, no evalúa el flag y no consulta la cola.
+- Se conservaron las pruebas de retrieval deshabilitado (503) y fallo interno de la cola (500 seguro).
+
+### Verificación
+
+```text
+npm.cmd test -- app/api/admin/knowledge/queue/route.test.ts
+1 archivo pasó; 6 pruebas pasaron.
+
+npm.cmd test -- lib/knowledge/feature-flags.test.ts app/api/knowledge/retrieval/route.test.ts app/api/admin/knowledge/queue/route.test.ts
+3 archivos pasaron; 13 pruebas pasaron.
+
+npm.cmd run typecheck
+Pasó, exit code 0.
+
+git diff --check
+Pasó sin errores de whitespace.
+```
+
+### Commit
+
+- `eef0836` — `test: cover knowledge queue authorization denial`
+
 ## Fix round 1 — errores server-side de la cola
 
 ### Cambios
