@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { retrieveKnowledgeV1 } from "@/lib/knowledge/retrieval-v1";
 import { assertKnowledgeReadAccess } from "@/lib/knowledge/api-access";
+import { isKnowledgeFeatureEnabled } from "@/lib/knowledge/feature-flags";
 
 export async function GET(request: Request) {
   const session = await getAuthSession();
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
   try {
     const projectId = url.searchParams.get("projectId") ?? undefined;
     await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, projectId, scope: projectId ? "PROJECT" : "COMPANY" });
+    if (!isKnowledgeFeatureEnabled("retrievalV1", { companyId, projectId })) {
+      return NextResponse.json({ error: "Knowledge retrieval disabled", feature: "retrievalV1" }, { status: 503 });
+    }
     const statusValue = url.searchParams.get("status") ?? undefined;
     const confidenceValue = url.searchParams.get("confidence") ?? undefined;
     const regionId = url.searchParams.get("regionId") ?? undefined;

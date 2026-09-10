@@ -15,4 +15,12 @@ describe("knowledge feature flags", () => {
     expect(isKnowledgeFeatureEnabled("reviewEnrichment")).toBe(false);
     vi.unstubAllEnvs();
   });
+
+  it("uses the environment fallback when retrieval is evaluated for a company and project", () => {
+    vi.stubEnv("MC_KNOWLEDGE_RETRIEVAL_V1", "true");
+
+    expect(isKnowledgeFeatureEnabled("retrievalV1", { companyId: "company-1", projectId: "project-1" })).toBe(true);
+
+    vi.unstubAllEnvs();
+  });
 });
