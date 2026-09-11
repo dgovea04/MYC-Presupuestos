@@ -7,6 +7,8 @@ import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
 import { importProjectPackageToMyc } from "@/lib/mcp/import-persistence";
 import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
+import { buildMcpImportLearningBatch } from "@/lib/knowledge/import-learning-extraction";
 
 const maxMcpUploadBytes = 40 * 1024 * 1024;
 
@@ -50,6 +52,7 @@ export async function POST(request: Request) {
       },
     );
     await safelyRecordKnowledgeImport({ userId: session.user.id, companyId: input.companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "MCP_IMPORT" });
+    await safelyRecordImportLearning({ manifest: analysis.manifest, readModule, sourceLabel: "MCP project package", userId: session.user.id, companyId: input.companyId, projectId: result.projectId });
 
     await safelyTrackImportCompleted({
       userId: session.user.id,
@@ -85,6 +88,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+async function safelyRecordImportLearning(input: { manifest: Parameters<typeof buildMcpImportLearningBatch>[0]["manifest"]; readModule: (path: string) => unknown; sourceLabel: string; userId: string; companyId: string; projectId: string }) {
+  try { await recordImportLearningBestEffort(buildMcpImportLearningBatch({ manifest: input.manifest, readModule: input.readModule, sourceLabel: input.sourceLabel, createdById: input.userId, companyId: input.companyId, projectId: input.projectId })); } catch (error) { console.warn("Knowledge import learning was not recorded", error); }
 }
 
 async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {

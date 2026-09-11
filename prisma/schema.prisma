@@ -250,6 +250,7 @@ enum KnowledgeScope {
 
 enum KnowledgeStatus {
   OBSERVED
+  REVIEW_REQUIRED
   CONFIRMED
   VERIFIED
   CANONICAL
@@ -624,80 +625,80 @@ model User {
   membershipPlanId       String?
   aiTokenExtraMonthly    Int           @default(0)
 
-  passwordHash                  String?
-  createdAt                     DateTime                      @default(now())
-  updatedAt                     DateTime                      @updatedAt
-  companies                     Company[]
-  companyMemberships            CompanyMembership[]
-  settings                      UserSettings?
-  activityEvents                ActivityEvent[]
-  marketingEvents               MarketingEvent[]
-  membershipPlan                MembershipPlan?               @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
-  aiUsagePeriods                AiUsagePeriod[]
-  aiUserWorkspaceUsagePeriods   AiUserWorkspaceUsagePeriod[]
-  aiTokenLedger                 AiTokenLedger[]               @relation("AiTokenLedgerUser")
-  aiTokenAdjustments            AiTokenLedger[]               @relation("AiTokenLedgerAdmin")
-  aiCredentials                 AiCredential[]                @relation("AiCredentialUser")
-  aiCredentialsCreated          AiCredential[]                @relation("AiCredentialCreator")
-  aiCredentialAuditEvents       AiCredentialAuditEvent[]      @relation("AiCredentialAuditActor")
-  aiProjectHistoryEntries       AiProjectHistoryEntry[]
-  aiSuggestionFeedbackEvents    AiSuggestionFeedbackEvent[]
-  aiSessionFeedbackEvents       AiSessionFeedbackEvent[]
-  billingSubscriptions          BillingSubscription[]
-  betaCampaignsCreated          BetaCampaign[]                @relation("BetaCampaignCreatedBy")
-  betaGrants                    BetaGrant[]                   @relation("BetaGrantUser")
-  betaGrantsAssigned            BetaGrant[]                   @relation("BetaGrantAssignedBy")
-  betaGrantsRevoked             BetaGrant[]                   @relation("BetaGrantRevokedBy")
-  betaApplicationsReviewed      BetaApplication[]             @relation("BetaApplicationReviewer")
-  noteTasks                     NoteTask[]
-  generatedPartidas             GeneratedPartida[]
-  metradoSheets                 MetradoSheet[]
-  customMetradoFormulas         CustomMetradoFormula[]
-  budgetTemplates               BudgetTemplate[]
-  emailVerificationTokens       EmailVerificationToken[]
-  passwordResetTokens           PasswordResetToken[]
-  adminMfaRecoveryCodes         AdminMfaRecoveryCode[]
-  adminAuditLogs                AdminAuditLog[]               @relation("AdminAuditActor")
-  deletionApprovalsRequested    AdminDeletionApproval[]       @relation("DeletionApprovalRequester")
-  deletionApprovalsApproved     AdminDeletionApproval[]       @relation("DeletionApprovalApprover")
-  deletionApprovalTargets       AdminDeletionApproval[]       @relation("DeletionApprovalTarget")
-  collaborationPresences        CollaborationPresence[]
-  collaborationEditSessions     CollaborationEditSession[]
-  collaborationCommentsCreated  CollaborationComment[]        @relation("CommentCreatedBy")
-  collaborationCommentsResolved CollaborationComment[]        @relation("CommentResolvedBy")
-  changeEvents                  BudgetChangeEvent[]
-  versionSnapshots              BudgetVersionSnapshot[]
-  integrationSessionsCreated    IntegrationSession[] @relation("IntegrationSessionCreator")
-  privateLearningExamplesCreated PrivateLearningExample[] @relation("PrivateLearningExampleCreator")
-  invitedMemberships            CompanyMembership[]           @relation("MembershipInviter")
-  agentExecutions               AgentExecution[]
-  delegationsGiven              AgentDelegation[]             @relation("AgentDelegationDelegator")
-  delegationsReceived           AgentDelegation[]             @relation("AgentDelegationDelegatee")
-  delegationsRevoked            AgentDelegation[]             @relation("AgentDelegationRevoker")
-  resourcePriceRequests         ResourcePriceUpdateRequest[]  @relation("ResourcePriceRequestCreator")
-  resourcePriceAppliedItems     ResourcePriceUpdateItem[]     @relation("ResourcePriceItemApplier")
-  resourcePriceConfigUpdates    ResourcePriceProviderConfig[] @relation("ResourcePriceConfigUpdater")
-  localPriceBatchesCreated      LocalResourcePriceBatch[]     @relation("LocalPriceBatchCreatedBy")
-  localPriceBatchesPublished    LocalResourcePriceBatch[]     @relation("LocalPriceBatchPublishedBy")
-  localPriceBatchesRolledBack   LocalResourcePriceBatch[]     @relation("LocalPriceBatchRolledBackBy")
-  localPriceHistoryEntries      LocalResourcePriceHistory[]   @relation("LocalPriceHistoryChangedBy")
-  agentDecidedApprovals         AgentApproval[]               @relation("AgentApprovalDecidedBy")
-  agentRollbacks                AgentRollback[]               @relation("AgentRollbackCreatedBy")
-  storedProjectPackages         StoredProjectPackage[]
-  projectAttachments            ProjectAttachment[]
-  riskScenarios                 RiskScenario[]
-  workspaceAuditEvents          WorkspaceAuditEvent[]         @relation("WorkspaceAuditActor")
-  workspaceInviteLinksCreated   WorkspaceInviteLink[]         @relation("WorkspaceInviteLinkCreator")
-  workspaceInviteLinkUses       WorkspaceInviteLinkUse[]      @relation("WorkspaceInviteLinkUser")
-  riskSimulationRuns            RiskSimulationRun[]
-  projectMemberships            ProjectMembership[]
-  teamMemberships               WorkspaceTeamMember[]
-  reviewRunsCreated             ReviewRun[]                    @relation("ReviewRunCreatedBy")
-  findingDecisions              FindingDecision[]
-  assignedReviewFindings        ReviewFinding[]                @relation("ReviewFindingAssignee")
-  reviewAuditEvents             ReviewAuditEvent[]
-  projectDocumentsCreated      ProjectDocument[]
-  entityLinksValidated         EntityLink[]                 @relation("EntityLinkValidator")
+  passwordHash                   String?
+  createdAt                      DateTime                      @default(now())
+  updatedAt                      DateTime                      @updatedAt
+  companies                      Company[]
+  companyMemberships             CompanyMembership[]
+  settings                       UserSettings?
+  activityEvents                 ActivityEvent[]
+  marketingEvents                MarketingEvent[]
+  membershipPlan                 MembershipPlan?               @relation(fields: [membershipPlanId], references: [id], onDelete: SetNull)
+  aiUsagePeriods                 AiUsagePeriod[]
+  aiUserWorkspaceUsagePeriods    AiUserWorkspaceUsagePeriod[]
+  aiTokenLedger                  AiTokenLedger[]               @relation("AiTokenLedgerUser")
+  aiTokenAdjustments             AiTokenLedger[]               @relation("AiTokenLedgerAdmin")
+  aiCredentials                  AiCredential[]                @relation("AiCredentialUser")
+  aiCredentialsCreated           AiCredential[]                @relation("AiCredentialCreator")
+  aiCredentialAuditEvents        AiCredentialAuditEvent[]      @relation("AiCredentialAuditActor")
+  aiProjectHistoryEntries        AiProjectHistoryEntry[]
+  aiSuggestionFeedbackEvents     AiSuggestionFeedbackEvent[]
+  aiSessionFeedbackEvents        AiSessionFeedbackEvent[]
+  billingSubscriptions           BillingSubscription[]
+  betaCampaignsCreated           BetaCampaign[]                @relation("BetaCampaignCreatedBy")
+  betaGrants                     BetaGrant[]                   @relation("BetaGrantUser")
+  betaGrantsAssigned             BetaGrant[]                   @relation("BetaGrantAssignedBy")
+  betaGrantsRevoked              BetaGrant[]                   @relation("BetaGrantRevokedBy")
+  betaApplicationsReviewed       BetaApplication[]             @relation("BetaApplicationReviewer")
+  noteTasks                      NoteTask[]
+  generatedPartidas              GeneratedPartida[]
+  metradoSheets                  MetradoSheet[]
+  customMetradoFormulas          CustomMetradoFormula[]
+  budgetTemplates                BudgetTemplate[]
+  emailVerificationTokens        EmailVerificationToken[]
+  passwordResetTokens            PasswordResetToken[]
+  adminMfaRecoveryCodes          AdminMfaRecoveryCode[]
+  adminAuditLogs                 AdminAuditLog[]               @relation("AdminAuditActor")
+  deletionApprovalsRequested     AdminDeletionApproval[]       @relation("DeletionApprovalRequester")
+  deletionApprovalsApproved      AdminDeletionApproval[]       @relation("DeletionApprovalApprover")
+  deletionApprovalTargets        AdminDeletionApproval[]       @relation("DeletionApprovalTarget")
+  collaborationPresences         CollaborationPresence[]
+  collaborationEditSessions      CollaborationEditSession[]
+  collaborationCommentsCreated   CollaborationComment[]        @relation("CommentCreatedBy")
+  collaborationCommentsResolved  CollaborationComment[]        @relation("CommentResolvedBy")
+  changeEvents                   BudgetChangeEvent[]
+  versionSnapshots               BudgetVersionSnapshot[]
+  integrationSessionsCreated     IntegrationSession[]          @relation("IntegrationSessionCreator")
+  privateLearningExamplesCreated PrivateLearningExample[]      @relation("PrivateLearningExampleCreator")
+  invitedMemberships             CompanyMembership[]           @relation("MembershipInviter")
+  agentExecutions                AgentExecution[]
+  delegationsGiven               AgentDelegation[]             @relation("AgentDelegationDelegator")
+  delegationsReceived            AgentDelegation[]             @relation("AgentDelegationDelegatee")
+  delegationsRevoked             AgentDelegation[]             @relation("AgentDelegationRevoker")
+  resourcePriceRequests          ResourcePriceUpdateRequest[]  @relation("ResourcePriceRequestCreator")
+  resourcePriceAppliedItems      ResourcePriceUpdateItem[]     @relation("ResourcePriceItemApplier")
+  resourcePriceConfigUpdates     ResourcePriceProviderConfig[] @relation("ResourcePriceConfigUpdater")
+  localPriceBatchesCreated       LocalResourcePriceBatch[]     @relation("LocalPriceBatchCreatedBy")
+  localPriceBatchesPublished     LocalResourcePriceBatch[]     @relation("LocalPriceBatchPublishedBy")
+  localPriceBatchesRolledBack    LocalResourcePriceBatch[]     @relation("LocalPriceBatchRolledBackBy")
+  localPriceHistoryEntries       LocalResourcePriceHistory[]   @relation("LocalPriceHistoryChangedBy")
+  agentDecidedApprovals          AgentApproval[]               @relation("AgentApprovalDecidedBy")
+  agentRollbacks                 AgentRollback[]               @relation("AgentRollbackCreatedBy")
+  storedProjectPackages          StoredProjectPackage[]
+  projectAttachments             ProjectAttachment[]
+  riskScenarios                  RiskScenario[]
+  workspaceAuditEvents           WorkspaceAuditEvent[]         @relation("WorkspaceAuditActor")
+  workspaceInviteLinksCreated    WorkspaceInviteLink[]         @relation("WorkspaceInviteLinkCreator")
+  workspaceInviteLinkUses        WorkspaceInviteLinkUse[]      @relation("WorkspaceInviteLinkUser")
+  riskSimulationRuns             RiskSimulationRun[]
+  projectMemberships             ProjectMembership[]
+  teamMemberships                WorkspaceTeamMember[]
+  reviewRunsCreated              ReviewRun[]                   @relation("ReviewRunCreatedBy")
+  findingDecisions               FindingDecision[]
+  assignedReviewFindings         ReviewFinding[]               @relation("ReviewFindingAssignee")
+  reviewAuditEvents              ReviewAuditEvent[]
+  projectDocumentsCreated        ProjectDocument[]
+  entityLinksValidated           EntityLink[]                  @relation("EntityLinkValidator")
 
   @@index([role])
   @@index([status])
@@ -1689,11 +1690,11 @@ model Budget {
   collaborationComments          CollaborationComment[]
   budgetChangeEvents             BudgetChangeEvent[]
   budgetVersionSnapshots         BudgetVersionSnapshot[]
-  reviewRuns                      ReviewRun[]
-  reviewLinks                     EntityLink[]
-  reviewFindings                  ReviewFinding[]
-  integrationSessions              IntegrationSession[]
-  privateLearningUsages           PrivateLearningUsage[]
+  reviewRuns                     ReviewRun[]
+  reviewLinks                    EntityLink[]
+  reviewFindings                 ReviewFinding[]
+  integrationSessions            IntegrationSession[]
+  privateLearningUsages          PrivateLearningUsage[]
 
   @@unique([id, projectId])
   @@index([projectId])
@@ -1831,22 +1832,22 @@ model BudgetChangeEvent {
 }
 
 model BudgetVersionSnapshot {
-  id            String   @id @default(cuid())
-  budgetId      String
-  projectId     String
-  companyId     String
-  versionNumber Int
-  label         String?
-  reason        String?
-  snapshot      Json
-  createdById   String
-  createdAt     DateTime @default(now())
-  budget        Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  id                  String            @id @default(cuid())
+  budgetId            String
+  projectId           String
+  companyId           String
+  versionNumber       Int
+  label               String?
+  reason              String?
+  snapshot            Json
+  createdById         String
+  createdAt           DateTime          @default(now())
+  budget              Budget            @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company             Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy           User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
   correctionDecisions FindingDecision[] @relation("FindingDecisionCorrectionVersion")
-  baseFindings      ReviewFinding[]   @relation("ReviewFindingBaseSnapshot")
+  baseFindings        ReviewFinding[]   @relation("ReviewFindingBaseSnapshot")
 
   @@unique([budgetId, versionNumber])
   @@index([budgetId, createdAt(sort: Desc)])
@@ -1855,33 +1856,33 @@ model BudgetVersionSnapshot {
 }
 
 model IntegrationSession {
-  id                 String                  @id @default(cuid())
-  companyId          String
-  projectId          String
-  budgetId           String
-  createdById        String
-  adapter            String
-  contractVersion    String
-  status             IntegrationSessionStatus @default(DRAFT)
-  payloadHash        String
-  stagedPayload      Json?
-  confirmationToken  String?
-  expectedVersion    Int?
-  counts             Json?
-  preview            Json?
-  result             Json?
-  requestId          String
-  snapshotId         String?
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  appliedAt          DateTime?
-  rolledBackAt       DateTime?
-  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  budget             Budget                  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  createdBy          User                    @relation("IntegrationSessionCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  conflicts          IntegrationConflict[]
-  mappings           IntegrationMapping[]
+  id                String                   @id @default(cuid())
+  companyId         String
+  projectId         String
+  budgetId          String
+  createdById       String
+  adapter           String
+  contractVersion   String
+  status            IntegrationSessionStatus @default(DRAFT)
+  payloadHash       String
+  stagedPayload     Json?
+  confirmationToken String?
+  expectedVersion   Int?
+  counts            Json?
+  preview           Json?
+  result            Json?
+  requestId         String
+  snapshotId        String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  appliedAt         DateTime?
+  rolledBackAt      DateTime?
+  company           Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budget            Budget                   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  createdBy         User                     @relation("IntegrationSessionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  conflicts         IntegrationConflict[]
+  mappings          IntegrationMapping[]
 
   @@unique([companyId, requestId])
   @@index([budgetId, status, updatedAt])
@@ -1919,24 +1920,24 @@ model IntegrationMapping {
 }
 
 model PrivateLearningExample {
-  id          String                       @id @default(cuid())
-  companyId   String
-  sourceType  String
-  sourceId    String
-  signalType  String
-  inputJson   Json
-  resultJson  Json
-  contentHash String
+  id            String                       @id @default(cuid())
+  companyId     String
+  sourceType    String
+  sourceId      String
+  signalType    String
+  inputJson     Json
+  resultJson    Json
+  contentHash   String
   schemaVersion String
-  status      PrivateLearningExampleStatus @default(ACTIVE)
-  expiresAt   DateTime
-  createdById String
-  createdAt   DateTime                     @default(now())
-  updatedAt   DateTime                     @updatedAt
-  revokedAt   DateTime?
-  company     Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy   User                         @relation("PrivateLearningExampleCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  usages      PrivateLearningUsage[]
+  status        PrivateLearningExampleStatus @default(ACTIVE)
+  expiresAt     DateTime
+  createdById   String
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  revokedAt     DateTime?
+  company       Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     User                         @relation("PrivateLearningExampleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  usages        PrivateLearningUsage[]
 
   @@unique([companyId, contentHash, schemaVersion])
   @@index([companyId, status, expiresAt])
@@ -1958,15 +1959,15 @@ model PrivateLearningPolicy {
 }
 
 model PrivateLearningUsage {
-  id        String                  @id @default(cuid())
+  id        String                 @id @default(cuid())
   companyId String
   exampleId String
   budgetId  String?
   requestId String
-  createdAt DateTime                @default(now())
-  company  Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  example  PrivateLearningExample  @relation(fields: [exampleId], references: [id], onDelete: Cascade)
-  budget   Budget?                 @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  createdAt DateTime               @default(now())
+  company   Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  example   PrivateLearningExample @relation(fields: [exampleId], references: [id], onDelete: Cascade)
+  budget    Budget?                @relation(fields: [budgetId], references: [id], onDelete: SetNull)
 
   @@unique([exampleId, requestId])
   @@index([companyId, createdAt(sort: Desc)])
@@ -2793,28 +2794,28 @@ model ApuResource {
 }
 
 model KnowledgeSource {
-  id          String   @id @default(cuid())
-  idempotencyKey String? @unique
-  sourceType  String
-  label       String
-  privacy     String   @default("PRIVATE")
-  companyId   String?
-  projectId   String?
-  createdById String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  idempotencyKey String?  @unique
+  sourceType     String
+  label          String
+  privacy        String   @default("PRIVATE")
+  companyId      String?
+  projectId      String?
+  createdById    String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  evidences   KnowledgeEvidence[]
-  events      KnowledgeEvent[]
-  priceObservations PriceObservation[]
-  yieldObservations YieldObservation[]
-  suppliers   KnowledgeSupplier[]
-  canonicalItems CanonicalItem[] @relation("CanonicalItemSource")
-  canonicalResources CanonicalResource[] @relation("CanonicalResourceSource")
-  canonicalItemProvenanceLinks KnowledgeCanonicalItemProvenance[]
+  evidences                        KnowledgeEvidence[]
+  events                           KnowledgeEvent[]
+  priceObservations                PriceObservation[]
+  yieldObservations                YieldObservation[]
+  suppliers                        KnowledgeSupplier[]
+  canonicalItems                   CanonicalItem[]                        @relation("CanonicalItemSource")
+  canonicalResources               CanonicalResource[]                    @relation("CanonicalResourceSource")
+  canonicalItemProvenanceLinks     KnowledgeCanonicalItemProvenance[]
   canonicalResourceProvenanceLinks KnowledgeCanonicalResourceProvenance[]
-  apuVersions KnowledgeApuVersion[] @relation("ApuVersionSource")
+  apuVersions                      KnowledgeApuVersion[]                  @relation("ApuVersionSource")
 
   @@index([sourceType, createdAt(sort: Desc)])
   @@index([companyId, projectId, createdAt(sort: Desc)])
@@ -2822,32 +2823,32 @@ model KnowledgeSource {
 }
 
 model KnowledgeEvidence {
-  id          String   @id @default(cuid())
-  idempotencyKey String? @unique
-  sourceId    String
-  documentId  String?
-  fileName    String?
-  page        String?
-  sheet       String?
-  cellRange   String?
-  url         String?
-  quote       String?  @db.Text
-  checksum    String?
-  companyId   String?
-  projectId   String?
-  createdById String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  source      KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  events      KnowledgeEvent[]
-  priceObservations PriceObservation[]
-  yieldObservations YieldObservation[]
-  reviewEvidenceLinks KnowledgeReviewEvidenceLink[]
-  canonicalItems CanonicalItem[] @relation("CanonicalItemEvidence")
-  canonicalResources CanonicalResource[] @relation("CanonicalResourceEvidence")
-  canonicalItemProvenanceLinks KnowledgeCanonicalItemProvenance[]
+  id                               String                                 @id @default(cuid())
+  idempotencyKey                   String?                                @unique
+  sourceId                         String
+  documentId                       String?
+  fileName                         String?
+  page                             String?
+  sheet                            String?
+  cellRange                        String?
+  url                              String?
+  quote                            String?                                @db.Text
+  checksum                         String?
+  companyId                        String?
+  projectId                        String?
+  createdById                      String?
+  metadata                         Json?
+  createdAt                        DateTime                               @default(now())
+  source                           KnowledgeSource                        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  events                           KnowledgeEvent[]
+  priceObservations                PriceObservation[]
+  yieldObservations                YieldObservation[]
+  reviewEvidenceLinks              KnowledgeReviewEvidenceLink[]
+  canonicalItems                   CanonicalItem[]                        @relation("CanonicalItemEvidence")
+  canonicalResources               CanonicalResource[]                    @relation("CanonicalResourceEvidence")
+  canonicalItemProvenanceLinks     KnowledgeCanonicalItemProvenance[]
   canonicalResourceProvenanceLinks KnowledgeCanonicalResourceProvenance[]
-  apuVersions KnowledgeApuVersion[] @relation("ApuVersionEvidence")
+  apuVersions                      KnowledgeApuVersion[]                  @relation("ApuVersionEvidence")
 
   @@index([sourceId, createdAt(sort: Desc)])
   @@index([checksum])
@@ -2856,25 +2857,25 @@ model KnowledgeEvidence {
 }
 
 model KnowledgeEvent {
-  id              String          @id @default(cuid())
-  eventType       String
-  scope           KnowledgeScope
-  companyId       String?
-  projectId       String?
-  userId          String?
-  entityType      String
-  entityId        String
-  previousValue   Json?
-  newValue        Json?
-  sourceType      String
-  sourceId        String?
-  evidenceId      String?
-  metadata        Json?
-  idempotencyKey  String          @unique
-  payloadHash     String
-  createdAt       DateTime        @default(now())
-  source          KnowledgeSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence        KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  id             String             @id @default(cuid())
+  eventType      String
+  scope          KnowledgeScope
+  companyId      String?
+  projectId      String?
+  userId         String?
+  entityType     String
+  entityId       String
+  previousValue  Json?
+  newValue       Json?
+  sourceType     String
+  sourceId       String?
+  evidenceId     String?
+  metadata       Json?
+  idempotencyKey String             @unique
+  payloadHash    String
+  createdAt      DateTime           @default(now())
+  source         KnowledgeSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence       KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId, createdAt(sort: Desc)])
   @@index([scope, companyId, projectId, createdAt(sort: Desc)])
@@ -2883,22 +2884,22 @@ model KnowledgeEvent {
 }
 
 model CanonicalItem {
-  id              String          @id @default(cuid())
+  id              String                             @id @default(cuid())
   name            String
   normalizedName  String
   canonicalUnit   String?
   classification  String?
   specialty       String?
-  scope           KnowledgeScope  @default(GLOBAL)
+  scope           KnowledgeScope                     @default(GLOBAL)
   companyId       String?
-  status          KnowledgeStatus @default(OBSERVED)
+  status          KnowledgeStatus                    @default(OBSERVED)
   sourceId        String?
   evidenceId      String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime                           @default(now())
+  updatedAt       DateTime                           @updatedAt
   aliases         CanonicalItemAlias[]
-  source          KnowledgeSource? @relation("CanonicalItemSource", fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence        KnowledgeEvidence? @relation("CanonicalItemEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+  source          KnowledgeSource?                   @relation("CanonicalItemSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence?                 @relation("CanonicalItemEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
   provenanceLinks KnowledgeCanonicalItemProvenance[]
 
   @@index([normalizedName])
@@ -2922,21 +2923,21 @@ model CanonicalItemAlias {
 }
 
 model CanonicalResource {
-  id              String          @id @default(cuid())
+  id              String                                 @id @default(cuid())
   name            String
   normalizedName  String
   category        String
   canonicalUnit   String?
-  scope           KnowledgeScope  @default(GLOBAL)
+  scope           KnowledgeScope                         @default(GLOBAL)
   companyId       String?
-  status          KnowledgeStatus @default(OBSERVED)
+  status          KnowledgeStatus                        @default(OBSERVED)
   sourceId        String?
   evidenceId      String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime                               @default(now())
+  updatedAt       DateTime                               @updatedAt
   aliases         CanonicalResourceAlias[]
-  source          KnowledgeSource? @relation("CanonicalResourceSource", fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence        KnowledgeEvidence? @relation("CanonicalResourceEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+  source          KnowledgeSource?                       @relation("CanonicalResourceSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence?                     @relation("CanonicalResourceEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
   provenanceLinks KnowledgeCanonicalResourceProvenance[]
 
   @@index([normalizedName])
@@ -2947,12 +2948,12 @@ model CanonicalResource {
 }
 
 model CanonicalResourceAlias {
-  id                 String             @id @default(cuid())
+  id                  String            @id @default(cuid())
   canonicalResourceId String
-  alias              String
-  normalizedAlias    String
-  confirmed          Boolean            @default(false)
-  canonicalResource  CanonicalResource  @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
+  alias               String
+  normalizedAlias     String
+  confirmed           Boolean           @default(false)
+  canonicalResource   CanonicalResource @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
 
   @@unique([canonicalResourceId, normalizedAlias])
   @@index([normalizedAlias])
@@ -2960,14 +2961,14 @@ model CanonicalResourceAlias {
 }
 
 model KnowledgeCanonicalItemProvenance {
-  id              String          @id @default(cuid())
+  id              String            @id @default(cuid())
   canonicalItemId String
   sourceId        String
   evidenceId      String
-  idempotencyKey  String          @unique
-  createdAt       DateTime        @default(now())
-  canonicalItem   CanonicalItem   @relation(fields: [canonicalItemId], references: [id], onDelete: Cascade)
-  source          KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  idempotencyKey  String            @unique
+  createdAt       DateTime          @default(now())
+  canonicalItem   CanonicalItem     @relation(fields: [canonicalItemId], references: [id], onDelete: Cascade)
+  source          KnowledgeSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   evidence        KnowledgeEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
 
   @@unique([canonicalItemId, evidenceId])
@@ -2977,15 +2978,15 @@ model KnowledgeCanonicalItemProvenance {
 }
 
 model KnowledgeCanonicalResourceProvenance {
-  id                 String             @id @default(cuid())
+  id                  String            @id @default(cuid())
   canonicalResourceId String
-  sourceId           String
-  evidenceId         String
-  idempotencyKey     String             @unique
-  createdAt          DateTime           @default(now())
-  canonicalResource  CanonicalResource  @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
-  source             KnowledgeSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  evidence           KnowledgeEvidence  @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  sourceId            String
+  evidenceId          String
+  idempotencyKey      String            @unique
+  createdAt           DateTime          @default(now())
+  canonicalResource   CanonicalResource @relation(fields: [canonicalResourceId], references: [id], onDelete: Cascade)
+  source              KnowledgeSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  evidence            KnowledgeEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
 
   @@unique([canonicalResourceId, evidenceId])
   @@index([sourceId])
@@ -2994,28 +2995,28 @@ model KnowledgeCanonicalResourceProvenance {
 }
 
 model KnowledgeApuVersion {
-  id              String          @id @default(cuid())
-  idempotencyKey  String?         @unique
-  apuId           String
-  versionNumber   Int
-  name            String
-  unit            String
-  performance     Decimal         @db.Decimal(18, 4)
-  contentHash     String
-  scope           KnowledgeScope
-  companyId       String?
-  projectId       String?
-  sourceId        String?
-  evidenceId      String?
-  reviewFindingId String?
+  id               String                 @id @default(cuid())
+  idempotencyKey   String?                @unique
+  apuId            String
+  versionNumber    Int
+  name             String
+  unit             String
+  performance      Decimal                @db.Decimal(18, 4)
+  contentHash      String
+  scope            KnowledgeScope
+  companyId        String?
+  projectId        String?
+  sourceId         String?
+  evidenceId       String?
+  reviewFindingId  String?
   reviewDecisionId String?
-  createdById     String?
-  beforeSnapshot  Json?
-  afterSnapshot   Json?
-  createdAt       DateTime        @default(now())
-  resources       KnowledgeApuResource[]
-  source          KnowledgeSource? @relation("ApuVersionSource", fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence        KnowledgeEvidence? @relation("ApuVersionEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+  createdById      String?
+  beforeSnapshot   Json?
+  afterSnapshot    Json?
+  createdAt        DateTime               @default(now())
+  resources        KnowledgeApuResource[]
+  source           KnowledgeSource?       @relation("ApuVersionSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence         KnowledgeEvidence?     @relation("ApuVersionEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@unique([apuId, versionNumber])
   @@index([apuId, createdAt(sort: Desc)])
@@ -3024,16 +3025,16 @@ model KnowledgeApuVersion {
 }
 
 model KnowledgeApuResource {
-  id            String            @id @default(cuid())
-  apuVersionId  String
-  resourceId    String?
-  description   String
-  unit          String
-  quantity      Decimal           @db.Decimal(18, 4)
-  unitPrice     Decimal           @db.Decimal(18, 4)
-  resourceType  String
-  sortOrder     Int               @default(0)
-  apuVersion    KnowledgeApuVersion @relation(fields: [apuVersionId], references: [id], onDelete: Cascade)
+  id           String              @id @default(cuid())
+  apuVersionId String
+  resourceId   String?
+  description  String
+  unit         String
+  quantity     Decimal             @db.Decimal(18, 4)
+  unitPrice    Decimal             @db.Decimal(18, 4)
+  resourceType String
+  sortOrder    Int                 @default(0)
+  apuVersion   KnowledgeApuVersion @relation(fields: [apuVersionId], references: [id], onDelete: Cascade)
 
   @@index([apuVersionId, sortOrder])
   @@index([resourceId])
@@ -3041,14 +3042,14 @@ model KnowledgeApuResource {
 }
 
 model KnowledgeRegion {
-  id          String   @id @default(cuid())
-  level       String
-  name        String
+  id             String            @id @default(cuid())
+  level          String
+  name           String
   normalizedName String
-  parentId    String?
-  createdAt   DateTime @default(now())
-  parent      KnowledgeRegion? @relation("KnowledgeRegionTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    KnowledgeRegion[] @relation("KnowledgeRegionTree")
+  parentId       String?
+  createdAt      DateTime          @default(now())
+  parent         KnowledgeRegion?  @relation("KnowledgeRegionTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       KnowledgeRegion[] @relation("KnowledgeRegionTree")
 
   @@unique([level, normalizedName, parentId])
   @@index([parentId])
@@ -3056,19 +3057,19 @@ model KnowledgeRegion {
 }
 
 model KnowledgeSupplier {
-  id          String   @id @default(cuid())
-  name        String
-  legalName   String?
-  ruc         String?
-  regionId    String?
-  sourceId    String?
-  website     String?
-  phone       String?
-  email       String?
-  status      String   @default("ACTIVE")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  source      KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  id        String           @id @default(cuid())
+  name      String
+  legalName String?
+  ruc       String?
+  regionId  String?
+  sourceId  String?
+  website   String?
+  phone     String?
+  email     String?
+  status    String           @default("ACTIVE")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  source    KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
 
   @@index([ruc])
   @@index([regionId])
@@ -3077,25 +3078,25 @@ model KnowledgeSupplier {
 }
 
 model PriceObservation {
-  id          String          @id @default(cuid())
-  idempotencyKey String?       @unique
-  resourceId  String
-  value       Decimal         @db.Decimal(18, 6)
-  currency    String
-  unit        String
-  regionId    String?
-  supplierId  String?
-  companyId   String?
-  projectId   String?
-  sourceId    String?
-  evidenceId  String?
-  observedAt  DateTime
-  scope       KnowledgeScope
-  status      KnowledgeStatus @default(OBSERVED)
-  confidence  KnowledgeConfidence
-  createdAt   DateTime        @default(now())
-  source      KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence    KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  id             String              @id @default(cuid())
+  idempotencyKey String?             @unique
+  resourceId     String
+  value          Decimal             @db.Decimal(18, 6)
+  currency       String
+  unit           String
+  regionId       String?
+  supplierId     String?
+  companyId      String?
+  projectId      String?
+  sourceId       String?
+  evidenceId     String?
+  observedAt     DateTime
+  scope          KnowledgeScope
+  status         KnowledgeStatus     @default(OBSERVED)
+  confidence     KnowledgeConfidence
+  createdAt      DateTime            @default(now())
+  source         KnowledgeSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence       KnowledgeEvidence?  @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([resourceId, observedAt(sort: Desc)])
   @@index([scope, companyId, projectId, observedAt(sort: Desc)])
@@ -3104,13 +3105,13 @@ model PriceObservation {
 }
 
 model YieldObservation {
-  id              String          @id @default(cuid())
-  idempotencyKey   String?         @unique
+  id              String              @id @default(cuid())
+  idempotencyKey  String?             @unique
   canonicalItemId String
   apuVersionId    String?
-  value           Decimal         @db.Decimal(18, 6)
+  value           Decimal             @db.Decimal(18, 6)
   unit            String
-  crew            Decimal?        @db.Decimal(18, 4)
+  crew            Decimal?            @db.Decimal(18, 4)
   projectType     String?
   regionId        String?
   companyId       String?
@@ -3119,11 +3120,11 @@ model YieldObservation {
   evidenceId      String?
   observedAt      DateTime
   scope           KnowledgeScope
-  status          KnowledgeStatus @default(OBSERVED)
+  status          KnowledgeStatus     @default(OBSERVED)
   confidence      KnowledgeConfidence
-  createdAt       DateTime        @default(now())
-  source          KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  evidence        KnowledgeEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  source          KnowledgeSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  evidence        KnowledgeEvidence?  @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
 
   @@index([canonicalItemId, observedAt(sort: Desc)])
   @@index([scope, companyId, projectId, observedAt(sort: Desc)])
@@ -3131,28 +3132,28 @@ model YieldObservation {
 }
 
 model KnowledgeAssertion {
-  id          String          @id @default(cuid())
-  idempotencyKey String?      @unique
-  subjectType String
-  subjectId   String
-  predicate    String
-  value       Json
-  scope       KnowledgeScope
-  status      KnowledgeStatus
-  confidence  KnowledgeConfidence
-  companyId   String?
-  projectId   String?
-  sourceId    String?
-  evidenceId  String?
-  reviewFindingId String?
+  id               String                       @id @default(cuid())
+  idempotencyKey   String?                      @unique
+  subjectType      String
+  subjectId        String
+  predicate        String
+  value            Json
+  scope            KnowledgeScope
+  status           KnowledgeStatus
+  confidence       KnowledgeConfidence
+  companyId        String?
+  projectId        String?
+  sourceId         String?
+  evidenceId       String?
+  reviewFindingId  String?
   reviewDecisionId String?
-  createdById String?
-  updatedById String?
-  rejectionReason String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  conflicts   KnowledgeAssertionConflict[] @relation("AssertionConflicts")
-  conflictingWith KnowledgeAssertionConflict[] @relation("ConflictingAssertions")
+  createdById      String?
+  updatedById      String?
+  rejectionReason  String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  conflicts        KnowledgeAssertionConflict[] @relation("AssertionConflicts")
+  conflictingWith  KnowledgeAssertionConflict[] @relation("ConflictingAssertions")
 
   @@index([subjectId, predicate])
   @@index([scope, companyId, projectId])
@@ -3160,17 +3161,17 @@ model KnowledgeAssertion {
 }
 
 model KnowledgeAssertionConflict {
-  id                    String   @id @default(cuid())
-  idempotencyKey        String   @unique
-  assertionId           String
+  id                     String             @id @default(cuid())
+  idempotencyKey         String             @unique
+  assertionId            String
   conflictingAssertionId String
-  status                String   @default("OPEN")
-  reason                String   @db.Text
-  resolvedById          String?
-  resolvedAt            DateTime?
-  createdAt             DateTime @default(now())
-  assertion             KnowledgeAssertion @relation("AssertionConflicts", fields: [assertionId], references: [id], onDelete: Cascade)
-  conflictingAssertion  KnowledgeAssertion @relation("ConflictingAssertions", fields: [conflictingAssertionId], references: [id], onDelete: Cascade)
+  status                 String             @default("OPEN")
+  reason                 String             @db.Text
+  resolvedById           String?
+  resolvedAt             DateTime?
+  createdAt              DateTime           @default(now())
+  assertion              KnowledgeAssertion @relation("AssertionConflicts", fields: [assertionId], references: [id], onDelete: Cascade)
+  conflictingAssertion   KnowledgeAssertion @relation("ConflictingAssertions", fields: [conflictingAssertionId], references: [id], onDelete: Cascade)
 
   @@unique([assertionId, conflictingAssertionId])
   @@index([status, createdAt(sort: Desc)])
@@ -3179,16 +3180,16 @@ model KnowledgeAssertionConflict {
 }
 
 model KnowledgeReviewEvidenceLink {
-  id                  String           @id @default(cuid())
+  id                  String            @id @default(cuid())
   reviewEvidenceId    String
   knowledgeEvidenceId String
   companyId           String
   projectId           String
   relationType        String
   createdById         String
-  createdAt           DateTime         @default(now())
+  createdAt           DateTime          @default(now())
   knowledgeEvidence   KnowledgeEvidence @relation(fields: [knowledgeEvidenceId], references: [id], onDelete: Cascade)
-  reviewEvidence      ReviewEvidence   @relation(fields: [reviewEvidenceId], references: [id], onDelete: Cascade)
+  reviewEvidence      ReviewEvidence    @relation(fields: [reviewEvidenceId], references: [id], onDelete: Cascade)
 
   @@unique([reviewEvidenceId, knowledgeEvidenceId])
   @@index([companyId, projectId, createdAt(sort: Desc)])
@@ -3198,25 +3199,28 @@ model KnowledgeReviewEvidenceLink {
 }
 
 model KnowledgeIntegrationJob {
-  id             String   @id @default(cuid())
-  idempotencyKey String   @unique
+  id             String    @id @default(cuid())
+  idempotencyKey String    @unique
+  jobType        String    @default("REVIEW_LEARNING")
   companyId      String
   projectId      String
-  findingId      String
-  decisionId     String
+  findingId      String?
+  decisionId     String?
   actorUserId    String?
-  status         String   @default("PENDING")
-  attemptCount   Int      @default(0)
+  payload        Json?
+  status         String    @default("PENDING")
+  attemptCount   Int       @default(0)
   nextRetryAt    DateTime?
   errorCode      String?
-  errorMessage   String?  @db.Text
+  errorMessage   String?   @db.Text
   lastAttemptAt  DateTime?
   completedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([companyId, projectId, status, nextRetryAt])
   @@index([findingId, decisionId])
+  @@index([jobType, status, nextRetryAt])
   @@map("knowledge_integration_jobs")
 }
 
@@ -3656,39 +3660,39 @@ model ProjectDocument {
   currentVersion   DocumentVersion?       @relation("CurrentDocumentVersion", fields: [currentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
   versions         DocumentVersion[]      @relation("DocumentVersions")
 
+  @@unique([id, companyId, projectId])
+  @@unique([currentVersionId, companyId, projectId])
   @@index([companyId, projectId, status])
   @@index([projectId, createdAt(sort: Desc)])
   @@index([createdById])
-  @@unique([id, companyId, projectId])
-  @@unique([currentVersionId, companyId, projectId])
   @@map("ProjectDocument")
 }
 
 model DocumentVersion {
-  id                 String           @id @default(cuid())
-  companyId          String
-  projectId          String
-  projectDocumentId  String
-  versionNumber      Int
-  storageKey         String
-  storageProvider    ReviewDocumentStorageProvider @default(LOCAL)
-  storageMetadata    Json?
-  originalFileName   String
-  mimeType           String
-  fileSizeBytes      Int
-  sha256             String
-  pageCount          Int?
-  sheetCount         Int?
-  extractionStatus   ExtractionStatus @default(PENDING)
-  extractionMethod   ExtractionMethod?
+  id                   String                        @id @default(cuid())
+  companyId            String
+  projectId            String
+  projectDocumentId    String
+  versionNumber        Int
+  storageKey           String
+  storageProvider      ReviewDocumentStorageProvider @default(LOCAL)
+  storageMetadata      Json?
+  originalFileName     String
+  mimeType             String
+  fileSizeBytes        Int
+  sha256               String
+  pageCount            Int?
+  sheetCount           Int?
+  extractionStatus     ExtractionStatus              @default(PENDING)
+  extractionMethod     ExtractionMethod?
   extractionConfidence ConfidenceLevel?
-  extractionCoverage Json?
-  extractionWarnings Json?
-  createdAt          DateTime         @default(now())
-  projectDocument    ProjectDocument  @relation("DocumentVersions", fields: [projectDocumentId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
-  currentFor         ProjectDocument? @relation("CurrentDocumentVersion")
-  evidence           ReviewEvidence[]
-  reviewRunVersions  ReviewRunDocumentVersion[]
+  extractionCoverage   Json?
+  extractionWarnings   Json?
+  createdAt            DateTime                      @default(now())
+  projectDocument      ProjectDocument               @relation("DocumentVersions", fields: [projectDocumentId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  currentFor           ProjectDocument?              @relation("CurrentDocumentVersion")
+  evidence             ReviewEvidence[]
+  reviewRunVersions    ReviewRunDocumentVersion[]
 
   @@unique([projectDocumentId, versionNumber])
   @@unique([projectDocumentId, sha256])
@@ -3700,99 +3704,99 @@ model DocumentVersion {
 }
 
 model ReviewEvidence {
-  id                String          @id @default(cuid())
-  companyId         String
-  projectId         String
-  documentVersionId String
-  evidenceType      EvidenceType
-  originalText      String          @db.Text
-  normalizedText    String?         @db.Text
-  locationJson      Json
-  value             Decimal?        @db.Decimal(18, 6)
-  unit              String?
-  extractionMethod  String
-  confidence        ConfidenceLevel
-  sourceHash        String
-  metadataJson      Json?
-  createdAt         DateTime        @default(now())
-  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project           Project         @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  documentVersion   DocumentVersion @relation(fields: [documentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
-  entityLinks       EntityLink[]
-  findings          ReviewFinding[]
+  id                     String                        @id @default(cuid())
+  companyId              String
+  projectId              String
+  documentVersionId      String
+  evidenceType           EvidenceType
+  originalText           String                        @db.Text
+  normalizedText         String?                       @db.Text
+  locationJson           Json
+  value                  Decimal?                      @db.Decimal(18, 6)
+  unit                   String?
+  extractionMethod       String
+  confidence             ConfidenceLevel
+  sourceHash             String
+  metadataJson           Json?
+  createdAt              DateTime                      @default(now())
+  company                Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project                Project                       @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  documentVersion        DocumentVersion               @relation(fields: [documentVersionId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  entityLinks            EntityLink[]
+  findings               ReviewFinding[]
   knowledgeEvidenceLinks KnowledgeReviewEvidenceLink[]
 
   @@unique([documentVersionId, sourceHash])
+  @@unique([id, companyId, projectId])
   @@index([companyId, projectId, evidenceType])
   @@index([documentVersionId, createdAt(sort: Desc)])
   @@index([confidence])
-  @@unique([id, companyId, projectId])
   @@map("ReviewEvidence")
 }
 
 model EntityLink {
-  id               String                    @id @default(cuid())
+  id               String                     @id @default(cuid())
   companyId        String
   projectId        String
   budgetId         String
   budgetItemId     String
   evidenceId       String
   signalsJson      Json
-  score            Decimal                   @db.Decimal(8, 6)
+  score            Decimal                    @db.Decimal(8, 6)
   confidence       ConfidenceLevel
   validationStatus EntityLinkValidationStatus @default(PENDING)
   validatedById    String?
   validatedAt      DateTime?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
-  company          Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project          Project                   @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  budget           Budget                    @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
-  budgetItem       BudgetItem                @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: Cascade)
-  evidence         ReviewEvidence            @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
-  validatedBy      User?                     @relation("EntityLinkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  company          Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project          Project                    @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  budget           Budget                     @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  budgetItem       BudgetItem                 @relation(fields: [budgetItemId, budgetId], references: [id, budgetId], onDelete: Cascade)
+  evidence         ReviewEvidence             @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  validatedBy      User?                      @relation("EntityLinkValidator", fields: [validatedById], references: [id], onDelete: SetNull)
   findings         ReviewFinding[]
 
   @@unique([budgetItemId, evidenceId])
+  @@unique([id, companyId, projectId])
   @@index([companyId, projectId, validationStatus])
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
-  @@unique([id, companyId, projectId])
   @@map("EntityLink")
 }
 
 model ReviewRun {
-  id                       String            @id @default(cuid())
-  companyId                String
-  projectId                String
-  budgetId                 String
-  createdById              String
-  configurationJson        Json
-  rulesVersion             String
-  status                   ReviewRunStatus   @default(DRAFT)
-  attemptCount             Int               @default(0)
-  nextRetryAt              DateTime?
-  stageDeadlineAt          DateTime?
-  failureCode              String?
-  progressJson             Json?
-  warningsJson             Json?
-  startedAt                DateTime?
-  finishedAt               DateTime?
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
-  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project                  Project           @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  budget                   Budget            @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
-  createdBy                User              @relation("ReviewRunCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  documentVersionLinks     ReviewRunDocumentVersion[]
-  findings                 ReviewFinding[]
-  auditEvents              ReviewAuditEvent[]
+  id                   String                     @id @default(cuid())
+  companyId            String
+  projectId            String
+  budgetId             String
+  createdById          String
+  configurationJson    Json
+  rulesVersion         String
+  status               ReviewRunStatus            @default(DRAFT)
+  attemptCount         Int                        @default(0)
+  nextRetryAt          DateTime?
+  stageDeadlineAt      DateTime?
+  failureCode          String?
+  progressJson         Json?
+  warningsJson         Json?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  company              Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project              Project                    @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  budget               Budget                     @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  createdBy            User                       @relation("ReviewRunCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  documentVersionLinks ReviewRunDocumentVersion[]
+  findings             ReviewFinding[]
+  auditEvents          ReviewAuditEvent[]
 
+  @@unique([id, companyId, projectId])
   @@index([companyId, projectId, status])
   @@index([companyId, status, nextRetryAt])
   @@index([budgetId, createdAt(sort: Desc)])
   @@index([createdById])
-  @@unique([id, companyId, projectId])
   @@map("ReviewRun")
 }
 
@@ -3813,7 +3817,7 @@ model ReviewRunDocumentVersion {
 }
 
 model ReviewFinding {
-  id                       String             @id @default(cuid())
+  id                      String                 @id @default(cuid())
   companyId               String
   projectId               String
   budgetId                String
@@ -3825,57 +3829,57 @@ model ReviewFinding {
   baseSnapshotId          String?
   discipline              String?
   findingType             ReviewFindingType
-  status                  FindingStatus      @default(PENDING)
+  status                  FindingStatus          @default(PENDING)
   severity                String
-  priority                Decimal            @db.Decimal(8, 6)
+  priority                Decimal                @db.Decimal(8, 6)
   confidence              ConfidenceLevel
-  score                   Decimal            @db.Decimal(8, 6)
-  potentialImpact         Decimal?           @db.Decimal(18, 6)
+  score                   Decimal                @db.Decimal(8, 6)
+  potentialImpact         Decimal?               @db.Decimal(18, 6)
   ruleKey                 String
   comparisonJson          Json
-  humanReviewRequired     Boolean            @default(true)
-  automaticBudgetMutation Boolean            @default(false)
-  assignedToId             String?
-  assignedAt               DateTime?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-  company                 Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project                 Project            @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  budget                  Budget             @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
-  reviewRun               ReviewRun          @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
-  budgetItem              BudgetItem?        @relation(fields: [budgetItemId, budgetItemBudgetId], references: [id, budgetId], onDelete: SetNull)
-  entityLink              EntityLink?        @relation(fields: [entityLinkId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
-  evidence                ReviewEvidence     @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
-  baseSnapshot           BudgetVersionSnapshot? @relation("ReviewFindingBaseSnapshot", fields: [baseSnapshotId], references: [id], onDelete: Restrict)
+  humanReviewRequired     Boolean                @default(true)
+  automaticBudgetMutation Boolean                @default(false)
+  assignedToId            String?
+  assignedAt              DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  company                 Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project                 Project                @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  budget                  Budget                 @relation(fields: [budgetId, projectId], references: [id, projectId], onDelete: Cascade)
+  reviewRun               ReviewRun              @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  budgetItem              BudgetItem?            @relation(fields: [budgetItemId, budgetItemBudgetId], references: [id, budgetId], onDelete: SetNull)
+  entityLink              EntityLink?            @relation(fields: [entityLinkId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
+  evidence                ReviewEvidence         @relation(fields: [evidenceId, companyId, projectId], references: [id, companyId, projectId], onDelete: Cascade)
+  baseSnapshot            BudgetVersionSnapshot? @relation("ReviewFindingBaseSnapshot", fields: [baseSnapshotId], references: [id], onDelete: Restrict)
   decisions               FindingDecision[]
-  assignedTo              User?              @relation("ReviewFindingAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo              User?                  @relation("ReviewFindingAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
+  @@unique([id, companyId, projectId])
   @@index([companyId, projectId, status])
   @@index([reviewRunId, findingType, priority])
   @@index([budgetId, budgetItemId])
   @@index([evidenceId])
   @@index([entityLinkId])
   @@index([companyId, projectId, assignedToId])
-  @@unique([id, companyId, projectId])
   @@map("ReviewFinding")
 }
 
 model FindingDecision {
-  id                String          @id @default(cuid())
-  companyId         String
-  projectId         String
-  findingId         String
-  userId            String
-  resolution        FindingResolution
-  note              String?         @db.Text
-  expectedUpdatedAt DateTime
-  previousStatus    FindingStatus?
-  newStatus         FindingStatus?
+  id                  String                 @id @default(cuid())
+  companyId           String
+  projectId           String
+  findingId           String
+  userId              String
+  resolution          FindingResolution
+  note                String?                @db.Text
+  expectedUpdatedAt   DateTime
+  previousStatus      FindingStatus?
+  newStatus           FindingStatus?
   correctionVersionId String?
-  createdAt         DateTime        @default(now())
-  finding           ReviewFinding  @relation(fields: [findingId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
-  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  correctionVersion BudgetVersionSnapshot? @relation("FindingDecisionCorrectionVersion", fields: [correctionVersionId], references: [id], onDelete: Restrict)
+  createdAt           DateTime               @default(now())
+  finding             ReviewFinding          @relation(fields: [findingId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  correctionVersion   BudgetVersionSnapshot? @relation("FindingDecisionCorrectionVersion", fields: [correctionVersionId], references: [id], onDelete: Restrict)
 
   @@index([findingId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -3883,7 +3887,7 @@ model FindingDecision {
 }
 
 model ReviewAuditEvent {
-  id            String        @id @default(cuid())
+  id            String     @id @default(cuid())
   companyId     String
   projectId     String
   reviewRunId   String?
@@ -3891,11 +3895,11 @@ model ReviewAuditEvent {
   eventType     String
   correlationId String?
   payloadJson   Json?
-  createdAt     DateTime      @default(now())
-  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project       Project       @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
-  reviewRun     ReviewRun?    @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
-  actor         User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime   @default(now())
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project       Project    @relation(fields: [projectId, companyId], references: [id, companyId], onDelete: Cascade)
+  reviewRun     ReviewRun? @relation(fields: [reviewRunId, companyId, projectId], references: [id, companyId, projectId], onDelete: Restrict)
+  actor         User?      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId, projectId, createdAt(sort: Desc)])
   @@index([reviewRunId, createdAt(sort: Desc)])

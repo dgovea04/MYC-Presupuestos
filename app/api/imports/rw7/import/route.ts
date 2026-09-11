@@ -7,6 +7,9 @@ import { createBillingErrorResponse } from "@/lib/billing/api";
 import { trackServerEvent } from "@/lib/analytics/events";
 import { parseRw7WorkbookToS10Snapshot } from "@/lib/rw7/excel-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
+import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
+import { buildS10ImportLearningBatch } from "@/lib/knowledge/import-learning-extraction";
 
 const maxRw7UploadBytes = 80 * 1024 * 1024;
 
@@ -52,6 +55,8 @@ export async function POST(request: Request) {
       import_source: "rw7",
       format: "xlsx",
     });
+    await safelyRecordKnowledgeImport({ userId: session.user.id, companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "RW7_IMPORT" });
+    await safelyRecordImportLearning({ snapshot, sourceLabel: file.name, userId: session.user.id, companyId, projectId: result.projectId });
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -73,6 +78,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+async function safelyRecordImportLearning(input: { snapshot: Parameters<typeof buildS10ImportLearningBatch>[0]["snapshot"]; sourceLabel: string; userId: string; companyId: string; projectId: string }) {
+  try { await recordImportLearningBestEffort(buildS10ImportLearningBatch({ snapshot: input.snapshot, sourceLabel: input.sourceLabel, sourceType: "RW7_IMPORT", createdById: input.userId, companyId: input.companyId, projectId: input.projectId })); } catch (error) { console.warn("Knowledge import learning was not recorded", error); }
+}
+
+async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {
+  try { await recordImportKnowledgeEvent(input); } catch (error) { console.warn("Knowledge import event was not recorded", error); }
 }
 
 async function safelyTrackImportCompleted(payload: {

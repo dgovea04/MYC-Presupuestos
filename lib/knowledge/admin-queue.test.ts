@@ -9,6 +9,6 @@ describe("knowledge admin queue", () => {
     const result = await getKnowledgeAdminQueue();
     expect(result.pendingAssertions).toEqual([{ id: "a1", status: "OBSERVED" }]);
     expect(result.retryableJobs).toEqual([{ id: "j1", status: "RETRYABLE_FAILED" }]);
-    expect(prismaMock.knowledgeAssertion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: "OBSERVED" } }));
+    expect(prismaMock.knowledgeAssertion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: { in: ["OBSERVED", "REVIEW_REQUIRED"] } } }));
   });
 });

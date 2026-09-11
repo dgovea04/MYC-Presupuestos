@@ -8,6 +8,8 @@ import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
 import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
 import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
+import { buildS10ImportLearningBatch } from "@/lib/knowledge/import-learning-extraction";
 
 const maxSnapshotUploadBytes = 40 * 1024 * 1024;
 
@@ -27,6 +29,7 @@ export async function POST(request: Request) {
       companyId: input.companyId,
     });
     await safelyRecordKnowledgeImport({ userId: session.user.id, companyId: input.companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "S10_IMPORT" });
+    await safelyRecordImportLearning({ snapshot, sourceLabel: "S10 snapshot", sourceType: "S10_IMPORT", userId: session.user.id, companyId: input.companyId, projectId: result.projectId });
 
     await safelyTrackImportCompleted({
       userId: session.user.id,
@@ -60,6 +63,15 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : "No se pudo importar el snapshot S10." },
       { status: 400 },
     );
+  }
+}
+
+async function safelyRecordImportLearning(input: { snapshot: Parameters<typeof buildS10ImportLearningBatch>[0]["snapshot"]; sourceLabel: string; sourceType: "S10_IMPORT"; userId: string; companyId: string; projectId: string }) {
+  try {
+    const batch = buildS10ImportLearningBatch({ snapshot: input.snapshot, sourceLabel: input.sourceLabel, sourceType: input.sourceType, createdById: input.userId, companyId: input.companyId, projectId: input.projectId });
+    await recordImportLearningBestEffort(batch);
+  } catch (error) {
+    console.warn("Knowledge import learning was not recorded", error);
   }
 }
 

@@ -8,6 +8,9 @@ import { parseS10SnapshotValue } from "@/lib/s10/snapshot-contract";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { createDbSnapshot } from "@/lib/db-import/service";
 import { DbUploadError, withTemporaryDbUpload } from "@/lib/db-import/upload";
+import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
+import { buildS10ImportLearningBatch } from "@/lib/knowledge/import-learning-extraction";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +46,8 @@ export async function POST(request: Request) {
       import_source: "db",
       format: "sqlite-db",
     });
+    await safelyRecordKnowledgeImport({ userId: session.user.id, companyId, projectId: importResult.projectId, budgetId: importResult.generalBudgetId, sourceType: "DB_IMPORT" });
+    await safelyRecordImportLearning({ snapshot, sourceLabel: file.name, sourceType: "DB_IMPORT", userId: session.user.id, companyId, projectId: importResult.projectId });
     revalidateImportPaths(importResult.projectId, importResult.generalBudgetId);
 
     return NextResponse.json(importResult, { status: 201 });
@@ -53,6 +58,14 @@ export async function POST(request: Request) {
       { status: error instanceof DbUploadError ? error.status : 400 },
     );
   }
+}
+
+async function safelyRecordImportLearning(input: { snapshot: Parameters<typeof buildS10ImportLearningBatch>[0]["snapshot"]; sourceLabel: string; sourceType: "DB_IMPORT"; userId: string; companyId: string; projectId: string }) {
+  try { await recordImportLearningBestEffort(buildS10ImportLearningBatch({ snapshot: input.snapshot, sourceLabel: input.sourceLabel, sourceType: input.sourceType, createdById: input.userId, companyId: input.companyId, projectId: input.projectId })); } catch (error) { console.warn("Knowledge import learning was not recorded", error); }
+}
+
+async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {
+  try { await recordImportKnowledgeEvent(input); } catch (error) { console.warn("Knowledge import event was not recorded", error); }
 }
 
 function readRequiredString(value: FormDataEntryValue | null, message: string) {

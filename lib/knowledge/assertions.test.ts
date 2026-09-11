@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { assertAssertionTransition } from "./assertions";
 
-const { assertion, conflict, recordKnowledgeEvent } = vi.hoisted(() => ({ assertion: { upsert: vi.fn().mockResolvedValue({ id: "a1", status: "OBSERVED" }), findUnique: vi.fn(), update: vi.fn().mockResolvedValue({ id: "a1", status: "CONFIRMED" }) }, conflict: { upsert: vi.fn().mockResolvedValue({ id: "c1", status: "OPEN" }), findUnique: vi.fn(), update: vi.fn().mockResolvedValue({ id: "c1", status: "RESOLVED" }) }, recordKnowledgeEvent: vi.fn().mockResolvedValue({ event: { id: "event-1" }, created: true }) }));
+const { assertion, conflict, recordKnowledgeEvent } = vi.hoisted(() => ({ assertion: { upsert: vi.fn().mockResolvedValue({ id: "a1", status: "OBSERVED" }), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({ id: "a1", status: "CONFIRMED" }) }, conflict: { upsert: vi.fn().mockResolvedValue({ id: "c1", status: "OPEN" }), findUnique: vi.fn(), update: vi.fn().mockResolvedValue({ id: "c1", status: "RESOLVED" }) }, recordKnowledgeEvent: vi.fn().mockResolvedValue({ event: { id: "event-1" }, created: true }) }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: { knowledgeAssertion: assertion, knowledgeAssertionConflict: conflict } }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: vi.fn().mockResolvedValue({ companyId: "c1", role: "EDITOR" }) }));
 vi.mock("./events", () => ({ recordKnowledgeEvent }));
@@ -52,6 +52,19 @@ describe("knowledge assertion lifecycle", () => {
     assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
     await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-global", allowGlobalPromotion: true });
     expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scope: "GLOBAL", companyId: null, projectId: null }) }));
+  });
+
+  it("requires corroboration from the configured number of distinct projects before VERIFIED", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "CONFIRMED", scope: "PROJECT", companyId: "c1", projectId: "p3", sourceId: "s1", evidenceId: "e1", subjectType: "IMPORT_ITEM", predicate: "import_item" });
+    assertion.findMany.mockResolvedValueOnce([{ projectId: "p1" }, { projectId: "p2" }]);
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "VERIFIED", actorUserId: "u1", companyId: "c1", projectId: "p3", correlationId: "corr-verified" });
+    expect(assertion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: "c1", status: { in: ["CONFIRMED", "VERIFIED"] } }) }));
+  });
+
+  it("supports explicit COMPANY promotion without requiring GLOBAL MFA authorization", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-company", promotionScope: "COMPANY" });
+    expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scope: "COMPANY", companyId: "c1", projectId: null }) }));
   });
 
   it("creates and resolves a scoped conflict with an audit event", async () => {

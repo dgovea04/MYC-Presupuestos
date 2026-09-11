@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const projectId = url.searchParams.get("projectId") ?? undefined;
   if (!companyId) return NextResponse.json({ error: "companyId es requerido" }, { status: 400 });
   const status = url.searchParams.get("status") ?? undefined;
-  if (status && !["OBSERVED", "PENDING", "PROCESSING", "RETRYABLE_FAILED", "SUCCEEDED", "DEAD_LETTER"].includes(status)) return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
+  if (status && !["OBSERVED", "REVIEW_REQUIRED", "PENDING", "PROCESSING", "RETRYABLE_FAILED", "SUCCEEDED", "DEAD_LETTER"].includes(status)) return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
   try {
     await assertKnowledgeReadAccess({ actorUserId: session.user.id, companyId, projectId, scope: projectId ? "PROJECT" : "COMPANY" });
   } catch (error) {

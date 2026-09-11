@@ -8,6 +8,9 @@ import { pdfAiImportDraftSchema } from "@/lib/pdf-import/validation";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { assertWorkspaceFeatureAccess, getWorkspaceFeatureAccessStatus, isWorkspaceFeatureAccessError } from "@/lib/workspace/entitlements";
 import { PdfImportRequestError } from "../request";
+import { recordImportKnowledgeEvent } from "@/lib/knowledge/integrations";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
+import { buildPdfImportLearningBatch } from "@/lib/knowledge/import-learning-extraction";
 
 export async function POST(request: Request) {
   const session = await getAuthSession();
@@ -40,6 +43,8 @@ export async function POST(request: Request) {
       apuCount: result.apuCount,
       resourceCount: result.resourceCount,
     });
+    await safelyRecordKnowledgeImport({ userId: session.user.id, companyId, projectId: result.projectId, budgetId: result.generalBudgetId, sourceType: "PDF_IMPORT" });
+    await safelyRecordImportLearning({ draft, sourceLabel: draft.sourceFiles.map((file) => file.fileName).join(", "), userId: session.user.id, companyId, projectId: result.projectId });
 
     revalidatePath("/dashboard");
     revalidateTag("dashboard-stats", "max");
@@ -66,6 +71,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+async function safelyRecordImportLearning(input: { draft: Parameters<typeof buildPdfImportLearningBatch>[0]["draft"]; sourceLabel: string; userId: string; companyId: string; projectId: string }) {
+  try { await recordImportLearningBestEffort(buildPdfImportLearningBatch({ draft: input.draft, sourceLabel: input.sourceLabel, createdById: input.userId, companyId: input.companyId, projectId: input.projectId })); } catch (error) { console.warn("Knowledge import learning was not recorded", error); }
+}
+
+async function safelyRecordKnowledgeImport(input: Parameters<typeof recordImportKnowledgeEvent>[0]) {
+  try { await recordImportKnowledgeEvent(input); } catch (error) { console.warn("Knowledge import event was not recorded", error); }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
