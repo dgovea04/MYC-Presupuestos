@@ -710,9 +710,13 @@ function readOptionalString(worksheet: ExcelJS.Worksheet, rowNumber: number, col
 }
 
 function readOptionalCode(worksheet: ExcelJS.Worksheet, rowNumber: number, columnNumber: number) {
-  const value = scalarCellValue(worksheet.getRow(rowNumber).getCell(columnNumber).value);
+  const cell = worksheet.getRow(rowNumber).getCell(columnNumber);
+  const value = scalarCellValue(cell.value);
   if (typeof value === "number" && Number.isFinite(value)) {
-    return new Decimal(value).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0);
+    // Excel stores codes such as 2.10 as numbers. Never round them to 2;
+    // preserve the displayed decimal code so 2.1 and 2.10 remain distinct.
+    const displayed = cell.text.trim();
+    return displayed.length > 0 ? displayed : new Decimal(value).toString();
   }
 
   const text = String(value ?? "").trim();

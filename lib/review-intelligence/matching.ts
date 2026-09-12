@@ -24,6 +24,7 @@ export interface BudgetItemMatchInput {
 export interface EvidenceMatchInput {
   id: string;
   primary: boolean;
+  evidenceType?: string;
   code?: string;
   description?: string;
   unit?: string;
@@ -204,6 +205,7 @@ export function matchBudgetItemToEvidence(
     const confidence = codeConflict ? "LOW" : signals.apuComponents === 1 ? "MEDIUM" : confidenceFor(effectiveScore.toNumber(), thresholds);
     const explanation = Object.entries(signals).filter(([, value]) => value > 0).map(([signal, value]) => `${signal}=${value.toFixed(3)}`);
     if (codeConflict) explanation.push("codeConflict=1.000");
-    return { budgetItemId: item.id, evidenceId: entry.id, score: effectiveScore, confidence, eligibleForFindings: !codeConflict && confidence !== "LOW", signals, explanation };
+    const standaloneEvidence = entry.evidenceType !== "QUANTITY" && entry.code === undefined && entry.description === undefined && signals.discipline === 0 && signals.specification === 0 && signals.apuComponents === 0 && signals.confirmedMatch === 0 && signals.yield === 0;
+    return { budgetItemId: item.id, evidenceId: entry.id, score: effectiveScore, confidence, eligibleForFindings: !codeConflict && confidence !== "LOW" && !standaloneEvidence, signals, explanation };
   }).sort((left, right) => right.score.comparedTo(left.score));
 }

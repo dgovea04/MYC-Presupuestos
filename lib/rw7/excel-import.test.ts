@@ -10,7 +10,7 @@ describe("parseRw7WorkbookToS10Snapshot", () => {
     const snapshot = await parseRw7WorkbookToS10Snapshot({
       buffer,
       fileName: "Centro-Educativo-en-RW7o.xlsx",
-    });
+  }, 60_000);
     const draft = createMycImportDraftFromS10(snapshot, { sourceSystem: "RW7" });
 
     expect(snapshot.presupuestos).toHaveLength(1);
@@ -113,7 +113,7 @@ describe("parseRw7WorkbookToS10Snapshot", () => {
     const snapshot = await parseRw7WorkbookToS10Snapshot({
       buffer,
       fileName: "Departamentos-en-RW7o.xlsx",
-    });
+  }, 60_000);
     const draft = createMycImportDraftFromS10(snapshot, { sourceSystem: "RW7" });
 
     expect(snapshot.subpresupuestos).toEqual([

@@ -88,6 +88,16 @@ describe("matchBudgetItemToEvidence", () => {
     ]));
   });
 
+  it("does not make unit-only evidence eligible", () => {
+    const [candidate] = matchBudgetItemToEvidence(item, [evidence({ code: undefined, description: undefined, discipline: undefined, attributes: {}, unit: "m3" })]);
+    expect(candidate.eligibleForFindings).toBe(false);
+  });
+
+  it("keeps quantity evidence eligible when its identifying fields are absent", () => {
+    const [candidate] = matchBudgetItemToEvidence(item, [evidence({ code: undefined, description: undefined, discipline: undefined, attributes: {}, unit: "m3", quantity: new Decimal("12"), evidenceType: "QUANTITY" })]);
+    expect(candidate.eligibleForFindings).toBe(true);
+  });
+
   it("rejects non-finite, out-of-range, and inverted confidence thresholds", () => {
     expect(() => matchBudgetItemToEvidence(item, [evidence()], { highThreshold: Number.NaN })).toThrow();
     expect(() => matchBudgetItemToEvidence(item, [evidence()], { mediumThreshold: -0.1 })).toThrow();
