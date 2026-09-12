@@ -256,7 +256,7 @@ function splitPdfEvidenceLines(line: string): string[] {
 
 function metadataFromPdfLine(line: string): ExtractionItem["metadata"] {
   const codeMatch = line.match(/^([A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)+)\s+/);
-  const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
+  const number = line.match(/(-?\d+(?:[.,]\d+)?)\s*(m3|m²|m2|m|ha|kg|und|unidad|l|lt|glb)\b/i) ?? line.match(/(m3|m²|m2|m|ha|kg|und|unidad|l|lt|glb)\s+(-?\d+(?:[.,]\d+)?)/i);
   const quantity = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[2] : number[1]) : undefined;
   const unit = number ? (number[2] && /^[A-Za-z]/.test(number[1] ?? "") ? number[1] : number[2]) : undefined;
   const explicitUnit = line.match(/\b(?:unidad|und)\s*:\s*([A-Za-z0-9²]+)/i)?.[1];

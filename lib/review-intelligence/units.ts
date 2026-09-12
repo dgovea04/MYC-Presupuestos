@@ -11,6 +11,7 @@ const UNIT_DEFINITIONS: Readonly<Record<string, NormalizedUnit>> = {
   m: { canonical: "m", dimension: "length", comparable: true, comparableTo: ["m"] },
   cm: { canonical: "cm", dimension: "length", comparable: true, comparableTo: ["cm"] },
   mm: { canonical: "mm", dimension: "length", comparable: true, comparableTo: ["mm"] },
+  ha: { canonical: "ha", dimension: "area", comparable: true, comparableTo: ["ha"] },
   "m²": { canonical: "m²", dimension: "area", comparable: true, comparableTo: ["m²"] },
   "m³": { canonical: "m³", dimension: "volume", comparable: true, comparableTo: ["m³"] },
   kg: { canonical: "kg", dimension: "mass", comparable: true, comparableTo: ["kg"] },
