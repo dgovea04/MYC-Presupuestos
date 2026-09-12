@@ -1,13 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { assertAssertionTransition } from "./assertions";
 
-const { assertion, conflict, recordKnowledgeEvent } = vi.hoisted(() => ({ assertion: { upsert: vi.fn().mockResolvedValue({ id: "a1", status: "OBSERVED" }), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({ id: "a1", status: "CONFIRMED" }) }, conflict: { upsert: vi.fn().mockResolvedValue({ id: "c1", status: "OPEN" }), findUnique: vi.fn(), update: vi.fn().mockResolvedValue({ id: "c1", status: "RESOLVED" }) }, recordKnowledgeEvent: vi.fn().mockResolvedValue({ event: { id: "event-1" }, created: true }) }));
-vi.mock("@/lib/db/prisma", () => ({ prisma: { knowledgeAssertion: assertion, knowledgeAssertionConflict: conflict } }));
+const { assertion, conflict, findingDecision, canonicalItem, itemProvenance, recordKnowledgeEvent } = vi.hoisted(() => ({ assertion: { upsert: vi.fn().mockResolvedValue({ id: "a1", status: "OBSERVED" }), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({ id: "a1", status: "CONFIRMED" }) }, conflict: { upsert: vi.fn().mockResolvedValue({ id: "c1", status: "OPEN" }), findUnique: vi.fn(), update: vi.fn().mockResolvedValue({ id: "c1", status: "RESOLVED" }) }, findingDecision: { findUnique: vi.fn() }, canonicalItem: { findMany: vi.fn(), create: vi.fn().mockResolvedValue({ id: "item-1" }) }, itemProvenance: { upsert: vi.fn() }, recordKnowledgeEvent: vi.fn().mockResolvedValue({ event: { id: "event-1" }, created: true }) }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: { knowledgeAssertion: assertion, knowledgeAssertionConflict: conflict, findingDecision, canonicalItem, knowledgeCanonicalItemProvenance: itemProvenance } }));
 vi.mock("@/lib/workspace/access", () => ({ assertWorkspaceMembership: vi.fn().mockResolvedValue({ companyId: "c1", role: "EDITOR" }) }));
 vi.mock("./events", () => ({ recordKnowledgeEvent }));
 import { createKnowledgeAssertion, resolveKnowledgeAssertionConflict, transitionKnowledgeAssertion } from "./assertions";
 
 describe("knowledge assertion lifecycle", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    assertion.findUnique.mockReset();
+    assertion.findMany.mockReset().mockResolvedValue([]);
+    assertion.update.mockReset().mockResolvedValue({ id: "a1", status: "CONFIRMED" });
+    assertion.upsert.mockReset().mockResolvedValue({ id: "a1", status: "OBSERVED" });
+    conflict.findUnique.mockReset();
+    conflict.update.mockReset().mockResolvedValue({ id: "c1", status: "RESOLVED" });
+    findingDecision.findUnique.mockReset();
+    canonicalItem.findMany.mockReset();
+    canonicalItem.create.mockReset().mockResolvedValue({ id: "item-1" });
+    itemProvenance.upsert.mockReset();
+    recordKnowledgeEvent.mockReset().mockResolvedValue({ event: { id: "event-1" }, created: true });
+  });
   it("allows the curated forward lifecycle", () => {
     expect(() => assertAssertionTransition("OBSERVED", "CONFIRMED")).not.toThrow();
     expect(() => assertAssertionTransition("CONFIRMED", "VERIFIED")).not.toThrow();
@@ -48,9 +62,11 @@ describe("knowledge assertion lifecycle", () => {
 
   it("requires explicit superadmin authorization before promoting an assertion to GLOBAL", async () => {
     assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
-    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-global" })).rejects.toThrow("GLOBAL");
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d1", companyId: "c1", projectId: "p1", resolution: "CONFIRMED_ISSUE" });
+    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-global", reviewDecisionId: "d1" })).rejects.toThrow("GLOBAL");
     assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
-    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-global", allowGlobalPromotion: true });
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d1", companyId: "c1", projectId: "p1", resolution: "CONFIRMED_ISSUE" });
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-global", allowGlobalPromotion: true, reviewDecisionId: "d1" });
     expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scope: "GLOBAL", companyId: null, projectId: null }) }));
   });
 
@@ -63,8 +79,35 @@ describe("knowledge assertion lifecycle", () => {
 
   it("supports explicit COMPANY promotion without requiring GLOBAL MFA authorization", async () => {
     assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
-    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-company", promotionScope: "COMPANY" });
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d1", companyId: "c1", projectId: "p1", resolution: "CONFIRMED_ISSUE" });
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-company", promotionScope: "COMPANY", reviewDecisionId: "d1" });
     expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scope: "COMPANY", companyId: "c1", projectId: null }) }));
+  });
+
+  it("requires a confirmed review decision before COMPANY promotion", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
+    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-company", promotionScope: "COMPANY" })).rejects.toThrow("confirmed review decision");
+    expect(assertion.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a review decision from another tenant or with an invalid resolution", async () => {
+    assertion.findUnique.mockResolvedValue({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d-foreign", companyId: "c2", projectId: "p2", resolution: "CONFIRMED_ISSUE" });
+    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-foreign", promotionScope: "COMPANY", reviewDecisionId: "d-foreign" })).rejects.toThrow("confirmed review decision");
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d-invalid", companyId: "c1", projectId: "p1", resolution: "FALSE_POSITIVE" });
+    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-invalid", promotionScope: "COMPANY", reviewDecisionId: "d-invalid" })).rejects.toThrow("confirmed review decision");
+  });
+
+  it("links an IMPORT_ITEM promotion to the canonical catalog and its provenance", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1", subjectType: "IMPORT_ITEM", predicate: "import_item", value: { name: "Cemento", unit: "kg" } });
+    findingDecision.findUnique.mockResolvedValueOnce({ id: "d1", companyId: "c1", projectId: "p1", resolution: "CONFIRMED_ISSUE" });
+    canonicalItem.findMany.mockResolvedValueOnce([]);
+
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "CANONICAL", actorUserId: "u1", companyId: "c1", projectId: "p1", correlationId: "corr-catalog", promotionScope: "COMPANY", reviewDecisionId: "d1" });
+
+    expect(canonicalItem.create).toHaveBeenCalledWith({ data: expect.objectContaining({ normalizedName: "cemento", scope: "COMPANY", companyId: "c1" }) });
+    expect(itemProvenance.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ canonicalItemId: "item-1", sourceId: "s1", evidenceId: "e1" }) }));
+    expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ value: expect.objectContaining({ canonicalEntity: { catalogEntityType: "CanonicalItem", catalogEntityId: "item-1" } }) }) }));
   });
 
   it("creates and resolves a scoped conflict with an audit event", async () => {

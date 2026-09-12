@@ -94,3 +94,37 @@
 - [ ] Ejecutar `npx.cmd tsc --noEmit`.
 - [ ] Ejecutar `node ./node_modules/next/dist/bin/next build`.
 - [ ] Registrar resultados y cualquier bloqueo ambiental en la documentación operativa.
+
+## Estado de cierre — 2026-09-11
+
+La implementación no está completamente cerrada. Se verificó que el núcleo de import-learning, la administración específica, los jobs y el retrieval ya tienen implementación y pruebas focalizadas: la suite dirigida pasó con 5 archivos y 21 pruebas.
+
+### Cerrado o implementado actualmente
+
+- Contrato común de extracción y preservación de valores decimales como texto.
+- Adaptador idempotente con provenance, conflictos y resolución de entidades.
+- Conexión de los seis importadores y comportamiento best-effort.
+- Jobs `IMPORT_LEARNING`, validación inicial del payload, reintentos y `DEAD_LETTER`.
+- Bandeja administrativa específica: filtros principales, paginación por página, corrección con nueva assertion y auditoría before/after.
+- Retrieval con estados, scopes, regiones y todos los niveles de confianza.
+- Feature flags y documentación operativa base.
+
+### Pendientes para declarar el plan totalmente cerrado
+
+- Añadir y ejecutar pruebas de integración para los seis endpoints de importación, incluidos source type, fallo del adaptador y creación de retry job.
+- Completar la matriz de autorización de la bandeja (`VIEWER`, `EDITOR`, `GLOBAL`) y sus pruebas cross-tenant.
+- Formalizar y probar la semántica de éxito parcial, filas omitidas y errores de infraestructura.
+- Completar la promoción basada en una decisión confirmada y la integración explícita con catálogos canónicos.
+- Completar métricas por fila/categoría y definir telemetría persistente o compartida entre instancias.
+- Verificar consistencia de corroboración por valor, unidad, entidad y región.
+- Ejecutar sin bloqueo `npx.cmd tsc --noEmit`, `npm.cmd run lint`, build y la suite completa `npm.cmd run test`; resolver los tres fallos globales reportados en el diagnóstico.
+- Marcar las casillas individuales del plan únicamente después de contar con evidencia de cada requisito.
+
+### Verificación de esta actualización
+
+- Suite dirigida: `5` archivos, `21` pruebas aprobadas.
+- Typecheck: ejecución iniciada, sin resultado disponible por bloqueo de la sesión; queda pendiente repetirlo de forma aislada.
+- Matriz de autorización: verificada con `36` pruebas en 7 suites; se corrigió el intento de mutar conocimiento GLOBAL desde un tenant.
+- Promoción basada en decisión: verificada con `16` pruebas; `CANONICAL` ahora exige `FindingDecision` confirmada, del mismo tenant y con resolución `CONFIRMED_ISSUE` o `CORRECTED`; se conserva MFA para GLOBAL.
+- Métricas operativas: implementada persistencia idempotente en `knowledge_metric_events`, con escritura best-effort, índices por métrica/tenant/fecha y 25 pruebas relacionadas aprobadas.
+- Integración con catálogos canónicos: implementada para `IMPORT_ITEM` y `IMPORT_RESOURCE`, con reutilización/creación por scope y unidad, bloqueo de ambigüedad, provenance idempotente y referencia catalogada en la assertion; 15 pruebas específicas aprobadas.

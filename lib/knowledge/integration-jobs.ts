@@ -2,9 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { processPersistedReviewLearning } from "./learning-bridge";
 import { recordImportLearningBatch } from "./import-learning";
+import { parseImportLearningBatch, type ImportLearningBatch } from "./import-learning-types";
 import { getKnowledgeRetryDecision } from "./retry-policy";
 import { logKnowledgeOperation } from "./observability";
-import type { ImportLearningBatch } from "./import-learning-types";
 
 const MAX_ATTEMPTS = 5;
 const ACTIVE_STATUSES = ["PENDING", "RETRYABLE_FAILED"] as const;
@@ -79,7 +79,7 @@ export async function processKnowledgeIntegrationJob(jobId: string, options: { n
 
 async function processImportLearningJob(job: { payload: unknown }) {
   if (!job.payload || typeof job.payload !== "object" || Array.isArray(job.payload)) throw new Error("IMPORT_LEARNING job payload is missing");
-  const result = await recordImportLearningBatch(job.payload as ImportLearningBatch);
+  const result = await recordImportLearningBatch(parseImportLearningBatch(job.payload));
   if ("status" in result && result.status === "SKIPPED") return { status: "SKIPPED" as const, skipReasons: [result.reason] };
   return { status: "PROCESSED" as const, skipReasons: [] };
 }

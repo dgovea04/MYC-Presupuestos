@@ -24,12 +24,16 @@ vi.mock("@/lib/mcp/import-preview", () => ({
 vi.mock("@/lib/mcp/import-persistence", () => ({
   importProjectPackageToMyc: vi.fn(),
 }));
+vi.mock("@/lib/knowledge/integrations", () => ({ recordImportKnowledgeEvent: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-runner", () => ({ recordImportLearningBestEffort: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-extraction", () => ({ buildMcpImportLearningBatch: vi.fn(() => ({ sourceType: "MCP_IMPORT" })) }));
 
 import { POST } from "@/app/api/imports/mcp/import/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { analyzeProjectPackageBuffer } from "@/lib/mcp/import-preview";
 import { importProjectPackageToMyc } from "@/lib/mcp/import-persistence";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -246,6 +250,7 @@ describe("POST /api/imports/mcp/import", () => {
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.projectId).toBe("project-mcp-1");
+    expect(recordImportLearningBestEffort).toHaveBeenCalledWith(expect.objectContaining({ sourceType: "MCP_IMPORT" }));
     expect(body.projectName).toBe("Proyecto de prueba");
     expect(body.generalBudgetId).toBe("budget-mcp-g");
     expect(body.subBudgetIds).toEqual(["budget-mcp-1"]);

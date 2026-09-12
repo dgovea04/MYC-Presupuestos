@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { job, processPersistedReviewLearning } = vi.hoisted(() => ({
+const { job, processPersistedReviewLearning, recordImportLearningBatch } = vi.hoisted(() => ({
   job: {
     upsert: vi.fn().mockResolvedValue({ id: "job-1", status: "PENDING" }),
     update: vi.fn().mockResolvedValue({ id: "job-1", status: "RETRYABLE_FAILED" }),
@@ -10,9 +10,11 @@ const { job, processPersistedReviewLearning } = vi.hoisted(() => ({
     findMany: vi.fn(),
   },
   processPersistedReviewLearning: vi.fn(),
+  recordImportLearningBatch: vi.fn(),
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: { knowledgeIntegrationJob: job } }));
 vi.mock("./learning-bridge", () => ({ processPersistedReviewLearning }));
+vi.mock("./import-learning", () => ({ recordImportLearningBatch }));
 
 import { createKnowledgeIntegrationJob, listKnowledgeIntegrationJobs, markKnowledgeIntegrationJobRetryable, processDueKnowledgeIntegrationJobs, processKnowledgeIntegrationJob, retryKnowledgeIntegrationJob } from "./integration-jobs";
 
@@ -20,10 +22,28 @@ describe("knowledge integration jobs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     processPersistedReviewLearning.mockResolvedValue({ status: "SKIPPED", observationIds: [], apuVersionIds: [], skipReasons: [] });
+    recordImportLearningBatch.mockResolvedValue({ sourceId: "source-1", observationIds: [], assertionIds: ["assertion-1"], created: 1, skipped: [], conflicts: [] });
   });
+
   it("creates or reuses a job by deterministic key", async () => {
     await createKnowledgeIntegrationJob({ idempotencyKey: "review:d1", companyId: "c1", projectId: "p1", findingId: "f1", decisionId: "d1" });
     expect(job.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { idempotencyKey: "review:d1" }, create: expect.objectContaining({ status: "PENDING" }) }));
+  });
+
+  it("processes an IMPORT_LEARNING job from its validated payload", async () => {
+    job.findFirst.mockResolvedValueOnce({ id: "job-import", status: "PENDING", attemptCount: 0, jobType: "IMPORT_LEARNING", idempotencyKey: "import-learning-job:import-1", companyId: "c1", projectId: "p1", payload: { importId: "import-1", sourceType: "S10_IMPORT", sourceLabel: "obra.json", companyId: "c1", projectId: "p1", createdById: "u1", observations: [] } });
+    job.updateMany.mockResolvedValueOnce({ count: 1 });
+    const result = await processKnowledgeIntegrationJob("job-import", { now: new Date("2026-09-09T12:00:00Z") });
+    expect(result.status).toBe("SUCCEEDED");
+    expect(recordImportLearningBatch).toHaveBeenCalledWith(expect.objectContaining({ importId: "import-1", sourceType: "S10_IMPORT" }));
+  });
+
+  it("moves malformed IMPORT_LEARNING payloads to retryable failure", async () => {
+    job.findFirst.mockResolvedValueOnce({ id: "job-invalid", status: "PENDING", attemptCount: 0, jobType: "IMPORT_LEARNING", companyId: "c1", projectId: "p1", payload: { invalid: true } });
+    job.updateMany.mockResolvedValueOnce({ count: 1 });
+    const result = await processKnowledgeIntegrationJob("job-invalid", { now: new Date("2026-09-09T12:00:00Z") });
+    expect(result.status).toBe("RETRYABLE_FAILED");
+    expect(job.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ errorCode: "WORKER_ERROR" }) }));
   });
 
   it("records a retryable failure without deleting the job", async () => {

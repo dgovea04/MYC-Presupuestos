@@ -24,12 +24,16 @@ vi.mock("@/lib/billing/api", () => ({
 vi.mock("@/lib/s10/import-persistence", () => ({
   importS10SnapshotToMyc: vi.fn(),
 }));
+vi.mock("@/lib/knowledge/integrations", () => ({ recordImportKnowledgeEvent: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-runner", () => ({ recordImportLearningBestEffort: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-extraction", () => ({ buildS10ImportLearningBatch: vi.fn(() => ({ sourceType: "S10_IMPORT" })) }));
 
 import { POST } from "@/app/api/imports/s10/import/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { parseS10ExportSnapshotJson } from "@/lib/s10/import-preview";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
 
 const VALID_SNAPSHOT = { proyectos: [] };
 const VALID_BODY = {
@@ -222,5 +226,28 @@ describe("POST /api/imports/s10/import", () => {
     const body = await response.json();
     expect(body.projectId).toBe("project-1");
     expect(body.generalBudgetId).toBe("budget-1");
+  });
+
+  it("records an S10 learning batch without changing the successful HTTP response", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+    vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
+    vi.mocked(parseS10ExportSnapshotJson).mockReturnValue(VALID_SNAPSHOT as never);
+    vi.mocked(importS10SnapshotToMyc).mockResolvedValue({ projectId: "project-1", generalBudgetId: "budget-1" } as never);
+
+    const response = await POST(new Request("http://localhost/api/imports/s10/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(VALID_BODY) }));
+
+    expect(response.status).toBe(201);
+    expect(recordImportLearningBestEffort).toHaveBeenCalledWith(expect.objectContaining({ sourceType: "S10_IMPORT" }));
+  });
+
+  it("keeps the import successful when learning recording fails", async () => {
+    vi.mocked(getAuthSession).mockResolvedValue(makeSession());
+    vi.mocked(assertWorkspaceMembership).mockResolvedValue(undefined as never);
+    vi.mocked(parseS10ExportSnapshotJson).mockReturnValue(VALID_SNAPSHOT as never);
+    vi.mocked(importS10SnapshotToMyc).mockResolvedValue({ projectId: "project-1", generalBudgetId: "budget-1" } as never);
+    vi.mocked(recordImportLearningBestEffort).mockRejectedValue(new Error("knowledge unavailable"));
+
+    const response = await POST(new Request("http://localhost/api/imports/s10/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(VALID_BODY) }));
+    expect(response.status).toBe(201);
   });
 });

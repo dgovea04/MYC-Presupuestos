@@ -73,14 +73,14 @@ export async function assertKnowledgeApiScopeAccess(options: {
 }
 
 export async function assertKnowledgeReadAccess(options: KnowledgeAccessOptions): Promise<KnowledgeOwnership> {
-  return assertKnowledgeAccess(options, "VIEWER");
+  return assertKnowledgeAccess(options, "VIEWER", true);
 }
 
 export async function assertKnowledgeWriteAccess(options: KnowledgeAccessOptions): Promise<KnowledgeOwnership> {
-  return assertKnowledgeAccess(options, "EDITOR");
+  return assertKnowledgeAccess(options, "EDITOR", false);
 }
 
-async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRole: WorkspaceRole): Promise<KnowledgeOwnership> {
+async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRole: WorkspaceRole, allowGlobalReference: boolean): Promise<KnowledgeOwnership> {
   if ((options.entityType === undefined) !== (options.entityId === undefined)) {
     throw new KnowledgeRequestValidationError("entityType y entityId deben proporcionarse juntos");
   }
@@ -135,7 +135,7 @@ async function assertKnowledgeAccess(options: KnowledgeAccessOptions, defaultRol
   if (!ownership) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
 
   if (ownership.scope === "GLOBAL") {
-    if (options.capability !== "knowledge.manage" && !options.allowGlobalReference) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
+    if (options.capability !== "knowledge.manage" && (!allowGlobalReference || !options.allowGlobalReference)) throw new WorkspaceAuthorizationError(KNOWLEDGE_ACCESS_DENIED);
     return ownership;
   }
 

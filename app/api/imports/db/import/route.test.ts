@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   trackServerEvent: vi.fn(),
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
+  recordImportLearningBestEffort: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
@@ -17,6 +18,9 @@ vi.mock("@/lib/s10/import-persistence", () => ({ importS10SnapshotToMyc: mocks.i
 vi.mock("@/lib/analytics/events", () => ({ trackServerEvent: mocks.trackServerEvent }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath, revalidateTag: mocks.revalidateTag }));
 vi.mock("@/lib/s10/snapshot-contract", () => ({ parseS10SnapshotValue: vi.fn((value: unknown) => ({ snapshot: value })) }));
+vi.mock("@/lib/knowledge/integrations", () => ({ recordImportKnowledgeEvent: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-runner", () => ({ recordImportLearningBestEffort: mocks.recordImportLearningBestEffort }));
+vi.mock("@/lib/knowledge/import-learning-extraction", () => ({ buildS10ImportLearningBatch: vi.fn(() => ({ sourceType: "DB_IMPORT" })) }));
 
 import { POST } from "@/app/api/imports/db/import/route";
 
@@ -44,6 +48,7 @@ describe("POST /api/imports/db/import", () => {
       apuCount: 2,
     });
     mocks.trackServerEvent.mockResolvedValue(undefined);
+    mocks.recordImportLearningBestEffort.mockResolvedValue(undefined);
   });
 
   it("requires authentication", async () => {
@@ -84,6 +89,7 @@ describe("POST /api/imports/db/import", () => {
       format: "sqlite-db",
     }));
     expect((await response.json()).projectId).toBe("project-1");
+    expect(mocks.recordImportLearningBestEffort).toHaveBeenCalledWith(expect.objectContaining({ sourceType: "DB_IMPORT" }));
   });
 
   it("rejects unsupported file extensions", async () => {

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
   trackServerEvent: vi.fn(),
+  recordImportLearningBestEffort: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -39,6 +40,9 @@ vi.mock("@/lib/workspace/entitlements", () => ({
   getWorkspaceFeatureAccessStatus: () => 403,
   isWorkspaceFeatureAccessError: () => false,
 }));
+vi.mock("@/lib/knowledge/integrations", () => ({ recordImportKnowledgeEvent: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-runner", () => ({ recordImportLearningBestEffort: mocks.recordImportLearningBestEffort }));
+vi.mock("@/lib/knowledge/import-learning-extraction", () => ({ buildPdfImportLearningBatch: vi.fn(() => ({ sourceType: "PDF_IMPORT" })) }));
 
 describe("POST /api/imports/pdf/import", () => {
   beforeEach(() => {
@@ -50,6 +54,7 @@ describe("POST /api/imports/pdf/import", () => {
     mocks.revalidatePath.mockReset();
     mocks.revalidateTag.mockReset();
     mocks.trackServerEvent.mockReset();
+    mocks.recordImportLearningBestEffort.mockReset();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
@@ -117,6 +122,7 @@ describe("POST /api/imports/pdf/import", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
+    expect(mocks.recordImportLearningBestEffort).toHaveBeenCalledWith(expect.objectContaining({ sourceType: "PDF_IMPORT" }));
     expect(body.projectId).toBe("project-1");
     expect(mocks.assertWorkspaceMembership).toHaveBeenCalledWith({
       userId: "user-1",
@@ -174,7 +180,6 @@ function createJsonRequest(body: unknown) {
     body: JSON.stringify(body),
   });
 }
-
 function createDraft(): PdfAiImportDraft {
   return {
     source: "PDF_AI",

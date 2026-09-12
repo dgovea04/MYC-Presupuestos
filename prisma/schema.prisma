@@ -2883,6 +2883,29 @@ model KnowledgeEvent {
   @@map("knowledge_events")
 }
 
+model KnowledgeMetricEvent {
+  id             String   @id @default(cuid())
+  metric         String
+  stage          String
+  outcome        String
+  correlationId  String
+  companyId      String?
+  projectId      String?
+  findingId      String?
+  decisionId     String?
+  idempotencyKey String   @unique
+  durationMs     Int?
+  retryCount     Int?
+  errorCode      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([metric, createdAt(sort: Desc)])
+  @@index([companyId, projectId, createdAt(sort: Desc)])
+  @@index([stage, outcome, createdAt(sort: Desc)])
+  @@map("knowledge_metric_events")
+}
+
 model CanonicalItem {
   id              String                             @id @default(cuid())
   name            String

@@ -151,6 +151,10 @@ Una reversión de aplicación suele ser segura porque las columnas nuevas son ad
 
 ### 5. Riesgos y observabilidad
 
+Las operaciones de Knowledge emiten métricas agregadas en memoria para diagnóstico inmediato y, cuando existe `idempotencyKey`, también persisten un evento idempotente en `knowledge_metric_events`. La persistencia incluye etapa, resultado, tenant, duración, reintentos, código de error y metadata agregada como `created`, `skipped` y `conflicts`. La escritura es best-effort: una indisponibilidad de la tabla métrica no interrumpe una importación, revisión o promoción.
+
+Para consultar métricas por periodo o tenant, usar la tabla `knowledge_metric_events` agrupando por `metric`, `companyId`, `projectId` y `createdAt`. No registrar valores de presupuestos completos ni payloads sensibles en `metadata`.
+
 - `ALTER TYPE` puede requerir una transacción compatible con la versión de PostgreSQL; probarlo en una copia de staging equivalente antes de producción.
 - `CREATE INDEX` usa la forma transaccional normal de Prisma; aplicarlo en baja actividad y vigilar locks/latencia.
 - `payload` conserva el batch reintentable completo; vigilar tamaño de filas y crecimiento de la tabla.

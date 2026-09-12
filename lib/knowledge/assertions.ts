@@ -3,6 +3,7 @@ import type { KnowledgeConfidence, KnowledgeScope, KnowledgeStatus } from "@pris
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { recordKnowledgeEvent } from "./events";
 import { logKnowledgeOperation } from "./observability";
+import { promoteImportAssertionToCatalog } from "./canonical-promotion";
 
 const DEFAULT_MIN_VERIFICATION_PROJECTS = 3;
 
@@ -32,24 +33,41 @@ export async function createKnowledgeAssertion(input: { idempotencyKey: string; 
   });
 }
 
-export async function transitionKnowledgeAssertion(input: { assertionId: string; nextStatus: KnowledgeStatus; actorUserId: string; companyId: string; projectId?: string; rejectionReason?: string; correlationId?: string; allowGlobalPromotion?: boolean; promotionScope?: "COMPANY" | "GLOBAL" }) {
+export async function transitionKnowledgeAssertion(input: { assertionId: string; nextStatus: KnowledgeStatus; actorUserId: string; companyId: string; projectId?: string; rejectionReason?: string; correlationId?: string; allowGlobalPromotion?: boolean; promotionScope?: "COMPANY" | "GLOBAL"; reviewDecisionId?: string }) {
   if (!input.actorUserId.trim()) throw new Error("actor is required");
   await assertWorkspaceMembership({ userId: input.actorUserId, companyId: input.companyId, minimumRole: "EDITOR" });
   const current = await prisma.knowledgeAssertion.findUnique({ where: { id: input.assertionId }, select: { id: true, status: true, scope: true, companyId: true, projectId: true, sourceId: true, evidenceId: true, subjectType: true, predicate: true, value: true } });
   if (!current || current.companyId !== input.companyId || (input.projectId !== undefined && current.projectId !== input.projectId)) throw new Error("Knowledge tenant access denied");
+  const currentValue = isRecord(current.value) ? current.value : {};
   assertAssertionTransition(current.status, input.nextStatus);
   if ((input.nextStatus === "REJECTED" || input.nextStatus === "DEPRECATED") && !input.rejectionReason?.trim()) throw new Error("reason/rejectionReason is required for this transition");
   if (["CONFIRMED", "VERIFIED", "CANONICAL"].includes(input.nextStatus) && (!current.sourceId || !current.evidenceId)) throw new Error("Assertion provenance is required for this transition");
   if (!input.correlationId?.trim()) throw new Error("correlationId is required for assertion transitions");
   const promotionScope = input.promotionScope ?? "GLOBAL";
   if (input.nextStatus === "CANONICAL" && promotionScope === "GLOBAL" && !input.allowGlobalPromotion) throw new Error("Explicit GLOBAL promotion authorization is required");
+  let confirmedReviewDecisionId: string | undefined;
+  let catalogReference: { catalogEntityType: "CanonicalItem" | "CanonicalResource"; catalogEntityId: string } | undefined;
+  if (input.nextStatus === "CANONICAL") {
+    if (!input.reviewDecisionId?.trim()) throw new Error("A confirmed review decision is required for promotion");
+    const decision = await prisma.findingDecision.findUnique({ where: { id: input.reviewDecisionId }, select: { id: true, companyId: true, projectId: true, resolution: true } });
+    if (!decision || decision.companyId !== input.companyId || decision.projectId !== current.projectId || !["CONFIRMED_ISSUE", "CORRECTED"].includes(decision.resolution)) throw new Error("A confirmed review decision is required for promotion");
+    confirmedReviewDecisionId = decision.id;
+    if (current.subjectType === "IMPORT_ITEM" || current.subjectType === "IMPORT_RESOURCE") {
+      if (!current.sourceId || !current.evidenceId || !isRecord(current.value)) throw new Error("Import catalog promotion requires a structured value and provenance");
+      catalogReference = await promoteImportAssertionToCatalog({ assertionId: current.id, subjectType: current.subjectType, value: currentValue, scope: promotionScope, companyId: input.companyId, sourceId: current.sourceId, evidenceId: current.evidenceId });
+    }
+  }
   if (input.nextStatus === "VERIFIED") await assertMinimumVerificationProjects(current, input.companyId);
   const promoted = input.nextStatus === "CANONICAL";
   const promotedGlobal = promoted && promotionScope === "GLOBAL";
-  const updated = await prisma.knowledgeAssertion.update({ where: { id: input.assertionId }, data: { status: input.nextStatus, updatedById: input.actorUserId, rejectionReason: input.rejectionReason, ...(promoted ? { scope: promotionScope, ...(promotedGlobal ? { companyId: null, projectId: null } : { companyId: input.companyId, projectId: null }) } : {}) } });
+  const updated = await prisma.knowledgeAssertion.update({ where: { id: input.assertionId }, data: { status: input.nextStatus, updatedById: input.actorUserId, rejectionReason: input.rejectionReason, ...(promoted ? { reviewDecisionId: confirmedReviewDecisionId, value: catalogReference ? { ...currentValue, canonicalEntity: catalogReference } : undefined, scope: promotionScope, ...(promotedGlobal ? { companyId: null, projectId: null } : { companyId: input.companyId, projectId: null }) } : {}) } });
   await recordKnowledgeEvent({ eventType: "KNOWLEDGE_ASSERTION_TRANSITION", scope: promoted ? promotionScope : current.scope, companyId: promotedGlobal ? undefined : input.companyId, projectId: promoted ? undefined : current.projectId ?? undefined, userId: input.actorUserId, entityType: "KnowledgeAssertion", entityId: current.id, sourceType: "KNOWLEDGE_ASSERTION_LIFECYCLE", sourceId: current.sourceId ?? undefined, evidenceId: current.evidenceId ?? undefined, previousValue: { status: current.status, scope: current.scope }, newValue: { status: input.nextStatus, scope: promoted ? promotionScope : current.scope }, metadata: { correlationId: input.correlationId, previousStatus: current.status, nextStatus: input.nextStatus, ...(promoted ? { promotionScope } : {}), ...(input.rejectionReason ? { reason: input.rejectionReason } : {}) }, idempotencyKey: `assertion-transition:${current.id}:${current.status}:${input.nextStatus}:${input.correlationId}` });
   if (promoted) logKnowledgeOperation({ stage: "promotion", outcome: "success", correlationId: input.correlationId, companyId: input.companyId, projectId: input.projectId, idempotencyKey: `assertion-transition:${current.id}:${current.status}:${input.nextStatus}:${input.correlationId}`, metadata: { assertionId: current.id, fromScope: current.scope, toScope: promotionScope } });
   return updated;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function assertMinimumVerificationProjects(current: { subjectType: string; predicate: string; projectId: string | null }, companyId: string) {

@@ -20,12 +20,16 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/s10/import-persistence", () => ({
   importS10SnapshotToMyc: vi.fn(),
 }));
+vi.mock("@/lib/knowledge/integrations", () => ({ recordImportKnowledgeEvent: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-runner", () => ({ recordImportLearningBestEffort: vi.fn() }));
+vi.mock("@/lib/knowledge/import-learning-extraction", () => ({ buildS10ImportLearningBatch: vi.fn(() => ({ sourceType: "DELPHIN_IMPORT" })) }));
 
 import { POST } from "@/app/api/imports/delphin/import/route";
 import { getAuthSession } from "@/lib/auth/session";
 import { assertWorkspaceMembership } from "@/lib/workspace/access";
 import { parseDelphinDprjToS10Snapshot } from "@/lib/delphin/dprj-import";
 import { importS10SnapshotToMyc } from "@/lib/s10/import-persistence";
+import { recordImportLearningBestEffort } from "@/lib/knowledge/import-learning-runner";
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -199,6 +203,7 @@ describe("POST /api/imports/delphin/import", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.projectId).toBe("project-1");
+    expect(recordImportLearningBestEffort).toHaveBeenCalledWith(expect.objectContaining({ sourceType: "DELPHIN_IMPORT" }));
     expect(body.generalBudgetId).toBe("budget-1");
   });
 });

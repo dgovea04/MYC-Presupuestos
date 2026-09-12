@@ -41,6 +41,29 @@ describe("knowledge API scope access", () => {
     expect(assertWorkspaceMembership).toHaveBeenCalledWith({ userId: "u1", companyId: "c1", minimumRole: "VIEWER" });
   });
 
+  it("denies every write operation for a VIEWER", async () => {
+    assertWorkspaceMembership.mockRejectedValueOnce(new Error("No tienes el rol necesario en este workspace"));
+
+    await expect(assertKnowledgeWriteAccess({
+      actorUserId: "u1",
+      companyId: "c1",
+      projectId: "p1",
+      scope: "PROJECT",
+    })).rejects.toThrow("No tienes el rol necesario");
+    expect(assertProjectInWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("denies an EDITOR attempting to access a project from another tenant", async () => {
+    assertProjectInWorkspace.mockRejectedValueOnce(new Error("El proyecto no pertenece a este workspace"));
+
+    await expect(assertKnowledgeWriteAccess({
+      actorUserId: "editor-1",
+      companyId: "company-a",
+      projectId: "project-b",
+      scope: "PROJECT",
+    })).rejects.toThrow("El proyecto no pertenece a este workspace");
+  });
+
   it("denies a project that belongs to another company before reading knowledge", async () => {
     assertProjectInWorkspace.mockRejectedValueOnce(new Error("El proyecto no pertenece a este workspace"));
 
@@ -85,6 +108,28 @@ describe("knowledge API scope access", () => {
       entityId: "global-item",
       capability: "knowledge.manage",
     })).resolves.toMatchObject({ scope: "GLOBAL", companyId: null });
+  });
+
+  it("allows a tenant to reference GLOBAL knowledge but never mutate it", async () => {
+    prismaMock.canonicalItem.findUnique.mockResolvedValue({ id: "global-item", companyId: null, scope: "GLOBAL" });
+
+    await expect(assertKnowledgeReadAccess({
+      actorUserId: "viewer-1",
+      companyId: "company-a",
+      scope: "COMPANY",
+      entityType: "CanonicalItem",
+      entityId: "global-item",
+      allowGlobalReference: true,
+    })).resolves.toMatchObject({ scope: "GLOBAL" });
+
+    await expect(assertKnowledgeWriteAccess({
+      actorUserId: "editor-1",
+      companyId: "company-a",
+      scope: "COMPANY",
+      entityType: "CanonicalItem",
+      entityId: "global-item",
+      allowGlobalReference: true,
+    })).rejects.toThrow("Knowledge tenant access denied");
   });
 
   it("uses the same denial for a missing entity and a cross-company entity", async () => {
