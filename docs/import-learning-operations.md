@@ -42,7 +42,7 @@ Una observación `OBSERVED` no debe presentarse como dato confirmado en consumer
 
 ## Rollback y dead letters
 
-Para detener el puente, retire el flag global y las listas piloto. Esto no modifica datos ya registrados ni presupuestos. Revise los jobs `RETRYABLE_FAILED` y `DEAD_LETTER` desde la bandeja; antes de reintentar corrija la causa y use la acción Retry. Los errores por fila se reportan como `skipped` o `conflicts` sin descartar filas independientes.
+Para detener el puente, retire el flag global y las listas piloto. Esto no modifica datos ya registrados ni presupuestos. Revise los jobs `RETRYABLE_FAILED` y `DEAD_LETTER` desde la bandeja; antes de reintentar corrija la causa y use la acción Retry. Los errores de datos por fila se reportan como `failed` y no descartan filas independientes; los conflictos de resolución continúan en `conflicts` y los casos omitidos en `skipped`. Los errores de infraestructura se propagan para que el job entre en `RETRYABLE_FAILED` o `DEAD_LETTER`.
 
 ## Aplicación segura en staging
 
@@ -151,7 +151,7 @@ Una reversión de aplicación suele ser segura porque las columnas nuevas son ad
 
 ### 5. Riesgos y observabilidad
 
-Las operaciones de Knowledge emiten métricas agregadas en memoria para diagnóstico inmediato y, cuando existe `idempotencyKey`, también persisten un evento idempotente en `knowledge_metric_events`. La persistencia incluye etapa, resultado, tenant, duración, reintentos, código de error y metadata agregada como `created`, `skipped` y `conflicts`. La escritura es best-effort: una indisponibilidad de la tabla métrica no interrumpe una importación, revisión o promoción.
+Las operaciones de Knowledge emiten métricas agregadas en memoria para diagnóstico inmediato y, cuando existe `idempotencyKey`, también persisten un evento idempotente en `knowledge_metric_events`. La persistencia incluye etapa, resultado, tenant, duración, reintentos, código de error y metadata agregada como `created`, `skipped`, `conflicts` y `failed`. La escritura es best-effort: una indisponibilidad de la tabla métrica no interrumpe una importación, revisión o promoción.
 
 Para consultar métricas por periodo o tenant, usar la tabla `knowledge_metric_events` agrupando por `metric`, `companyId`, `projectId` y `createdAt`. No registrar valores de presupuestos completos ni payloads sensibles en `metadata`.
 

@@ -77,6 +77,22 @@ describe("knowledge assertion lifecycle", () => {
     expect(assertion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: "c1", status: { in: ["CONFIRMED", "VERIFIED"] } }) }));
   });
 
+  it("rejects VERIFIED when fewer than three distinct projects corroborate the assertion", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "CONFIRMED", scope: "PROJECT", companyId: "c1", projectId: "p3", sourceId: "s1", evidenceId: "e1", subjectType: "IMPORT_ITEM", predicate: "import_item" });
+    assertion.findMany.mockResolvedValueOnce([{ projectId: "p1" }]);
+
+    await expect(transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "VERIFIED", actorUserId: "u1", companyId: "c1", projectId: "p3", correlationId: "corr-verified-insufficient" })).rejects.toThrow("3 distinct projects");
+    expect(assertion.update).not.toHaveBeenCalled();
+  });
+
+  it("allows VERIFIED when three distinct projects corroborate the assertion", async () => {
+    assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "CONFIRMED", scope: "PROJECT", companyId: "c1", projectId: "p3", sourceId: "s1", evidenceId: "e1", subjectType: "IMPORT_ITEM", predicate: "import_item" });
+    assertion.findMany.mockResolvedValueOnce([{ projectId: "p1" }, { projectId: "p2" }]);
+
+    await transitionKnowledgeAssertion({ assertionId: "a1", nextStatus: "VERIFIED", actorUserId: "u1", companyId: "c1", projectId: "p3", correlationId: "corr-verified-sufficient" });
+    expect(assertion.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "VERIFIED" }) }));
+  });
+
   it("supports explicit COMPANY promotion without requiring GLOBAL MFA authorization", async () => {
     assertion.findUnique.mockResolvedValueOnce({ id: "a1", status: "VERIFIED", scope: "PROJECT", companyId: "c1", projectId: "p1", sourceId: "s1", evidenceId: "e1" });
     findingDecision.findUnique.mockResolvedValueOnce({ id: "d1", companyId: "c1", projectId: "p1", resolution: "CONFIRMED_ISSUE" });

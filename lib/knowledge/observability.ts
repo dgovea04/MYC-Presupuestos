@@ -11,6 +11,7 @@ export function logKnowledgeOperation(entry: KnowledgeLog): void {
     incrementBy("knowledge.bridge.created", readCount(entry.metadata.created));
     incrementBy("knowledge.bridge.skipped", readCount(entry.metadata.skipped));
     incrementBy("knowledge.bridge.conflicts", readCount(entry.metadata.conflicts));
+    incrementBy("knowledge.bridge.failed", readCount(entry.metadata.failed));
   }
   const persistentMetrics = (prisma as unknown as { knowledgeMetricEvent?: { upsert: (args: unknown) => Promise<unknown> } }).knowledgeMetricEvent;
   if (entry.idempotencyKey && persistentMetrics) {

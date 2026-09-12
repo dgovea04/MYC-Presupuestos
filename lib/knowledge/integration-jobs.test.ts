@@ -22,7 +22,7 @@ describe("knowledge integration jobs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     processPersistedReviewLearning.mockResolvedValue({ status: "SKIPPED", observationIds: [], apuVersionIds: [], skipReasons: [] });
-    recordImportLearningBatch.mockResolvedValue({ sourceId: "source-1", observationIds: [], assertionIds: ["assertion-1"], created: 1, skipped: [], conflicts: [] });
+    recordImportLearningBatch.mockResolvedValue({ sourceId: "source-1", observationIds: [], assertionIds: ["assertion-1"], created: 1, skipped: [], conflicts: [], failed: [] });
   });
 
   it("creates or reuses a job by deterministic key", async () => {
@@ -36,6 +36,18 @@ describe("knowledge integration jobs", () => {
     const result = await processKnowledgeIntegrationJob("job-import", { now: new Date("2026-09-09T12:00:00Z") });
     expect(result.status).toBe("SUCCEEDED");
     expect(recordImportLearningBatch).toHaveBeenCalledWith(expect.objectContaining({ importId: "import-1", sourceType: "S10_IMPORT" }));
+  });
+
+  it("retries an IMPORT_LEARNING job when infrastructure persistence fails", async () => {
+    job.findFirst.mockResolvedValueOnce({ id: "job-infra", status: "PENDING", attemptCount: 0, jobType: "IMPORT_LEARNING", companyId: "c1", projectId: "p1", payload: { importId: "import-1", sourceType: "S10_IMPORT", sourceLabel: "obra.json", companyId: "c1", projectId: "p1", createdById: "u1", observations: [] } });
+    job.updateMany.mockResolvedValueOnce({ count: 1 });
+    recordImportLearningBatch.mockRejectedValueOnce(new Error("database connection unavailable"));
+    job.update.mockResolvedValueOnce({ id: "job-infra", status: "RETRYABLE_FAILED" });
+
+    const result = await processKnowledgeIntegrationJob("job-infra", { now: new Date("2026-09-09T12:00:00Z") });
+
+    expect(result.status).toBe("RETRYABLE_FAILED");
+    expect(job.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "RETRYABLE_FAILED", errorCode: "WORKER_ERROR" }) }));
   });
 
   it("moves malformed IMPORT_LEARNING payloads to retryable failure", async () => {

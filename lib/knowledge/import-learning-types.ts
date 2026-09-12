@@ -58,6 +58,7 @@ export type ImportLearningBatchResult = {
   created: number;
   skipped: Array<{ originalRecordId: string; domain: ImportLearningDomain; reason: string }>;
   conflicts: Array<{ originalRecordId: string; domain: ImportLearningDomain; reason: string }>;
+  failed: Array<{ originalRecordId: string; domain: ImportLearningDomain; reason: string }>;
 };
 
 export function confidenceFromScore(score: number): ImportLearningConfidence {

@@ -28,7 +28,7 @@ export async function recordImportLearningBatch(batch: ImportLearningBatch): Pro
     update: {},
   });
 
-  const result: ImportLearningBatchResult = { sourceId: source.id, observationIds: [], assertionIds: [], created: 0, skipped: [], conflicts: [] };
+  const result: ImportLearningBatchResult = { sourceId: source.id, observationIds: [], assertionIds: [], created: 0, skipped: [], conflicts: [], failed: [] };
   for (const observation of batch.observations) {
     try {
       const evidence = await prisma.knowledgeEvidence.upsert({
@@ -103,7 +103,8 @@ export async function recordImportLearningBatch(batch: ImportLearningBatch): Pro
       result.assertionIds.push(assertionId);
       result.created += 1;
     } catch (error) {
-      result.skipped.push({ originalRecordId: observation.originalRecordId, domain: observation.domain, reason: error instanceof Error ? error.message : "ROW_WRITE_FAILED" });
+      if (isInfrastructureError(error)) throw error;
+      result.failed.push({ originalRecordId: observation.originalRecordId, domain: observation.domain, reason: error instanceof Error ? error.message : "ROW_WRITE_FAILED" });
     }
   }
 
@@ -114,9 +115,16 @@ export async function recordImportLearningBatch(batch: ImportLearningBatch): Pro
     companyId: batch.companyId,
     projectId: batch.projectId,
     idempotencyKey: `import-learning:${batch.importId}`,
-    metadata: { sourceType: batch.sourceType, created: result.created, skipped: result.skipped.length, conflicts: result.conflicts.length },
+    metadata: { sourceType: batch.sourceType, created: result.created, skipped: result.skipped.length, conflicts: result.conflicts.length, failed: result.failed.length },
   });
   return result;
+}
+
+function isInfrastructureError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  return /^(P1000|P1001|P1002|P1008|P1010|P1011|P1013|P1016|P1017|P2024|P2034)$/.test(code)
+    || /(database|connection|timeout|timed out|deadlock|network|prisma)/i.test(error.message);
 }
 
 function sourceIdempotencyKey(batch: ImportLearningBatch) {

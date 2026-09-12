@@ -46,4 +46,36 @@ describe("import learning adapter", () => {
     expect(result).toMatchObject({ created: 1, conflicts: [{ reason: "MULTIPLE_CANONICAL_MATCHES" }] });
     expect(assertion.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ create: expect.objectContaining({ status: "REVIEW_REQUIRED", value: expect.objectContaining({ conflict: "MULTIPLE_CANONICAL_MATCHES" }) }) }));
   });
+
+  it("keeps independent rows processing when one row has a data error", async () => {
+    assertion.upsert.mockRejectedValueOnce(new Error("ROW_DATA_INVALID"));
+    const result = await recordImportLearningBatch({
+      importId: "import-partial",
+      sourceType: "S10_IMPORT",
+      sourceLabel: "obra.json",
+      companyId: "company-1",
+      projectId: "project-1",
+      createdById: "user-1",
+      observations: [
+        { domain: "ITEM", originalRecordId: "bad-row", name: "Fila inválida", value: { description: "Fila inválida" }, confidence: "LOW", evidence: { originalRecordId: "bad-row", fileName: "obra.json" } },
+        { domain: "ITEM", originalRecordId: "good-row", name: "Concreto", value: { description: "Concreto" }, confidence: "HIGH", evidence: { originalRecordId: "good-row", fileName: "obra.json" } },
+      ],
+    });
+
+    expect(result).toMatchObject({ created: 1, failed: [{ originalRecordId: "bad-row", reason: "ROW_DATA_INVALID" }] });
+    expect(result.assertionIds).toEqual(["assertion-1"]);
+  });
+
+  it("propagates infrastructure failures so the integration job can retry", async () => {
+    evidence.upsert.mockRejectedValueOnce(new Error("database connection unavailable"));
+    await expect(recordImportLearningBatch({
+      importId: "import-infra",
+      sourceType: "PDF_IMPORT",
+      sourceLabel: "scan.pdf",
+      companyId: "company-1",
+      projectId: "project-1",
+      createdById: "user-1",
+      observations: [{ domain: "ITEM", originalRecordId: "row-1", name: "Concreto", value: { description: "Concreto" }, confidence: "HIGH", evidence: { originalRecordId: "row-1", fileName: "scan.pdf" } }],
+    })).rejects.toThrow("database connection unavailable");
+  });
 });

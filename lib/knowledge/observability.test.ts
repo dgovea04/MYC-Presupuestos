@@ -12,14 +12,14 @@ describe("persistent Knowledge observability", () => {
   });
 
   it("persists an idempotent metric event and keeps aggregate counters", () => {
-    logKnowledgeOperation({ stage: "bridge", outcome: "success", correlationId: "corr-1", companyId: "c1", projectId: "p1", idempotencyKey: "metric-key-1", durationMs: 42, metadata: { created: 3, skipped: 1, conflicts: 2 } });
+    logKnowledgeOperation({ stage: "bridge", outcome: "success", correlationId: "corr-1", companyId: "c1", projectId: "p1", idempotencyKey: "metric-key-1", durationMs: 42, metadata: { created: 3, skipped: 1, conflicts: 2, failed: 1 } });
 
     expect(metricEvent.upsert).toHaveBeenCalledWith(expect.objectContaining({
       where: { idempotencyKey: "metric-key-1" },
-      create: expect.objectContaining({ metric: "knowledge.bridge.success", companyId: "c1", projectId: "p1", durationMs: 42, metadata: { created: 3, skipped: 1, conflicts: 2 } }),
+      create: expect.objectContaining({ metric: "knowledge.bridge.success", companyId: "c1", projectId: "p1", durationMs: 42, metadata: { created: 3, skipped: 1, conflicts: 2, failed: 1 } }),
       update: {},
     }));
-    expect(getKnowledgeMetrics()).toMatchObject({ "knowledge.bridge.success": 1, "knowledge.bridge.created": 3, "knowledge.bridge.skipped": 1, "knowledge.bridge.conflicts": 2 });
+    expect(getKnowledgeMetrics()).toMatchObject({ "knowledge.bridge.success": 1, "knowledge.bridge.created": 3, "knowledge.bridge.skipped": 1, "knowledge.bridge.conflicts": 2, "knowledge.bridge.failed": 1 });
   });
 
   it("does not fail the operation when metric persistence is unavailable", () => {
