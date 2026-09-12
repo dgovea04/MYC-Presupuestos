@@ -137,7 +137,7 @@ export default async function AdminPage({
         listBetaApplications(),
       ])
     : null;
-  const knowledgeDashboard = adminTab === "knowledge" ? await getKnowledgeAdminDashboard() : null;
+  const knowledgeDashboard = adminTab === "knowledge" && (session.user.activeCompanyId ?? session.user.companyId) ? await getKnowledgeAdminDashboard({ actorUserId: session.user.id, companyId: session.user.activeCompanyId ?? session.user.companyId! }) : null;
   const canManageBeta = hasAdminCapability(session.user, "beta.manage");
   const canExportBeta = hasAdminCapability(session.user, "beta.export");
   // Usuarios del filtro de IA: consumidores del periodo + usuarios de la página

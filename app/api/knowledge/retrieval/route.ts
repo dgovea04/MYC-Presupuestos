@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const confidenceValue = url.searchParams.get("confidence") ?? undefined;
     const regionId = url.searchParams.get("regionId") ?? undefined;
     const statuses = ["OBSERVED", "REVIEW_REQUIRED", "CONFIRMED", "VERIFIED", "CANONICAL", "REJECTED", "DEPRECATED"] as const;
-    const confidences = ["LOW", "MEDIUM", "HIGH"] as const;
+    const confidences = ["VERY_LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"] as const;
     const limitValue = Number(url.searchParams.get("limit") ?? "20");
     if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 100) return NextResponse.json({ error: "limit inválido" }, { status: 400 });
     if (statusValue && !statuses.includes(statusValue as typeof statuses[number])) return NextResponse.json({ error: "status inválido" }, { status: 400 });

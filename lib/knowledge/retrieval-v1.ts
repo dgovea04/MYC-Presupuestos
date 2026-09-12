@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getVisibleScopes } from "./scope";
 import { normalizeKnowledgeText } from "./normalization";
 
-export type RetrievalV1Input = { companyId: string; projectId?: string; query: string; limit?: number; status?: "OBSERVED" | "REVIEW_REQUIRED" | "CONFIRMED" | "VERIFIED" | "CANONICAL" | "REJECTED" | "DEPRECATED"; confidence?: "LOW" | "MEDIUM" | "HIGH"; regionId?: string; correlationId?: string };
+export type RetrievalV1Input = { companyId: string; projectId?: string; query: string; limit?: number; status?: "OBSERVED" | "REVIEW_REQUIRED" | "CONFIRMED" | "VERIFIED" | "CANONICAL" | "REJECTED" | "DEPRECATED"; confidence?: "VERY_LOW" | "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH"; regionId?: string; correlationId?: string };
 export type RetrievalV1Result = { items: Array<Record<string, unknown>>; resources: Array<Record<string, unknown>>; prices: Array<Record<string, unknown>>; yields: Array<Record<string, unknown>>; apuVersions: Array<Record<string, unknown>>; assertions: Array<Record<string, unknown>> };
 
 const scopeRank = (scope: string): number => scope === "PROJECT" ? 0 : scope === "COMPANY" ? 1 : 2;

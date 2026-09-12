@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db/prisma";
 import { getKnowledgeAdminQueue } from "@/lib/knowledge/admin-queue";
+import { listImportLearningReview } from "@/lib/knowledge/admin-learning";
 
 export type KnowledgeAdminDashboardFilters = {
+  actorUserId?: string;
   companyId?: string;
   projectId?: string;
   status?: string;
@@ -13,7 +15,10 @@ export async function getKnowledgeAdminDashboard(filters: KnowledgeAdminDashboar
     ...(filters.projectId ? { projectId: filters.projectId } : {}),
   };
   const companyTenant = filters.companyId ? { companyId: filters.companyId } : {};
-  const [counts, recentItems, recentResources, events, queue, evidence, conflicts] = await Promise.all([
+  const importLearning = filters.actorUserId && filters.companyId
+    ? listImportLearningReview({ actorUserId: filters.actorUserId, companyId: filters.companyId, projectId: filters.projectId, ...(filters.status && ["OBSERVED", "REVIEW_REQUIRED", "CONFIRMED", "VERIFIED", "CANONICAL", "REJECTED", "DEPRECATED"].includes(filters.status) ? { status: filters.status as "OBSERVED" | "REVIEW_REQUIRED" | "CONFIRMED" | "VERIFIED" | "CANONICAL" | "REJECTED" | "DEPRECATED" } : {}) })
+    : Promise.resolve(null);
+  const [counts, recentItems, recentResources, events, queue, evidence, conflicts, importReview] = await Promise.all([
     Promise.all([
       prisma.canonicalItem.count({ where: companyTenant }),
       prisma.canonicalResource.count({ where: companyTenant }),
@@ -26,6 +31,7 @@ export async function getKnowledgeAdminDashboard(filters: KnowledgeAdminDashboar
     getKnowledgeAdminQueue(filters),
     prisma.knowledgeEvidence.findMany({ where: tenant, orderBy: { createdAt: "desc" }, take: 50, select: { id: true, sourceId: true, documentId: true, fileName: true, page: true, sheet: true, cellRange: true, quote: true, companyId: true, projectId: true, createdById: true, createdAt: true } }),
     prisma.knowledgeAssertionConflict.findMany({ where: { assertion: tenant }, orderBy: { createdAt: "desc" }, take: 50, select: { id: true, assertionId: true, conflictingAssertionId: true, status: true, reason: true, resolvedById: true, resolvedAt: true, createdAt: true, assertion: { select: { companyId: true, projectId: true } } } }),
+    importLearning,
   ]);
 
   const [items, resources, priceCount, yieldCount] = counts;
@@ -44,6 +50,12 @@ export async function getKnowledgeAdminDashboard(filters: KnowledgeAdminDashboar
     events,
     evidence: serialEvidence,
     conflicts: serialConflicts,
+    importLearning: importReview ? {
+      ...importReview,
+      assertions: importReview.assertions.map((assertion) => ({ ...assertion, status: String(assertion.status), confidence: String(assertion.confidence), updatedAt: assertion.updatedAt.toISOString() })),
+      prices: importReview.prices.map((observation) => ({ ...observation, value: String(observation.value), status: String(observation.status), confidence: String(observation.confidence), scope: String(observation.scope), observedAt: observation.observedAt.toISOString() })),
+      yields: importReview.yields.map((observation) => ({ ...observation, value: String(observation.value), status: String(observation.status), confidence: String(observation.confidence), scope: String(observation.scope), observedAt: observation.observedAt.toISOString() })),
+    } : null,
     queue: { ...queue, assertions, pendingAssertions: assertions, recentPrices: prices, recentYields: yields, promotionCandidates, integrationErrors },
   };
 }
