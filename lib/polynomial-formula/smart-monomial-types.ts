@@ -4,7 +4,8 @@ import type { PolynomialIuFamily } from "./iu-family-classifier";
 
 export const POLYNOMIAL_FORMULA_DEFAULT_MIN_COEFFICIENT = new Decimal("0.050");
 export const POLYNOMIAL_FORMULA_DEFAULT_MIN_PRELIMINARY_MONOMIALS = 8;
-export const POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS = 10;
+export const POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS = 8;
+export const POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL = 3;
 export const POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS = 3;
 
 export type SmartMonomialBroadGroup =
@@ -85,6 +86,7 @@ export type SmartMonomialEngineOptions = {
   readonly minPreliminaryMonomials: number;
   readonly maxMonomials: number;
   readonly coefficientDecimals: number;
+  readonly deferGrouping?: boolean;
 };
 
 export type SmartMonomialDiagnosticSeverity = "INFO" | "WARNING" | "ERROR";
@@ -104,8 +106,17 @@ export type SmartMonomialBroadGroupSummary = {
   readonly sourceItemIds: readonly string[];
 };
 
+export type SmartMonomialIuSummary = {
+  readonly unifiedIndexCode?: string;
+  readonly unifiedIndexName?: string;
+  readonly iuFamily: PolynomialIuFamily;
+  readonly amount: Decimal;
+  readonly coefficient: Decimal;
+};
+
 export type SmartMonomialEngineResult = {
   readonly proposedMonomials: readonly SmartMonomialProposal[];
   readonly diagnostics: readonly SmartMonomialDiagnostic[];
   readonly initialBroadGroupSummary: readonly SmartMonomialBroadGroupSummary[];
+  readonly initialIuSummary: readonly SmartMonomialIuSummary[];
 };

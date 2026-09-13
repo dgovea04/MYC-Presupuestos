@@ -162,7 +162,7 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
 
     expect(result.canApply).toBe(true);
     expect(result.finalMonomials).toHaveLength(6);
-    expect(result.finalMonomials.map((item) => item.code)).toEqual(["MO", "CE", "LA", "BA", "MA", "GG"]);
+    expect(result.finalMonomials.map((item) => item.code)).toEqual(["MO", "GG", "BA", "LA", "CE", "MA"]);
     expect(result.finalMonomials.every((item) => Number(item.coefficient) >= 0.05)).toBe(true);
     expect(coefficientSum(result)).toBe("1.000");
     expect(result.mergePlan.length).toBeGreaterThan(0);
@@ -568,7 +568,7 @@ describe("createPolynomialFinalAdjustmentProposal", () => {
 
     expect(result.canApply).toBe(true);
     expect(result.finalMonomials).toHaveLength(6);
-    expect(result.finalMonomials.map((item) => item.id)).toEqual(input.map((item) => item.id));
+    expect(result.finalMonomials.map((item) => item.id)).toEqual(["mo", "gg", "cement", "steel", "wood", "finish"]);
     expect(result.mergePlan).toEqual([]);
     expect(result.finalMonomials.every((item) => Number(item.coefficient) >= 0.05)).toBe(true);
     expect(coefficientSum(result)).toBe("1.000");

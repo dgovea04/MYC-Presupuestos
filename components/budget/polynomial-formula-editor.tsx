@@ -792,7 +792,14 @@ export function PolynomialFormulaEditor({
                       targetId={section.budgetId}
                     />
                   ) : null}
-                  {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+                  {error ? (
+                    <div className="space-y-2 text-sm text-rose-600">
+                      <p>{error}</p>
+                      {error.includes("sin IU asignado") && section.budgetId ? (
+                        <a className="font-medium underline" href={`/budgets/${section.budgetId}`}>Ir al presupuesto para asignar IU y guardar</a>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               }
             />

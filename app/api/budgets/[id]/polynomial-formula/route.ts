@@ -43,6 +43,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const section = await getBudgetPolynomialFormulaSectionData(id, session.user.id, formulaReadOptions);
     return NextResponse.json(section);
   } catch (error) {
+    if (error instanceof Error && error.message.includes("insumo(s) sin IU asignado")) {
+      return NextResponse.json({ code: "MISSING_UNIFIED_INDICES", error: error.message }, { status: 422 });
+    }
     return NextResponse.json(
       {
         error:

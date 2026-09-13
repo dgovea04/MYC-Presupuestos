@@ -209,23 +209,74 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                     </section>
 
                     <section className="space-y-3">
-                      <h2 className="theme-strong-text text-sm font-semibold">Fusiones propuestas</h2>
+                      <div>
+                        <h2 className="theme-strong-text text-sm font-semibold">Fusión por Afinidad de Mercado</h2>
+                        <p className="theme-muted-text mt-1 text-sm">
+                          Resultado de absorber los monomios menores en el IU principal más afín, antes de conformar la fórmula final.
+                        </p>
+                      </div>
+                      {preview.mergePlan.length > 0 ? (
+                        <div className="overflow-x-auto rounded-2xl border">
+                          <table className="w-full min-w-[680px] text-left text-xs">
+                            <thead className="theme-muted-panel theme-muted-text border-b">
+                              <tr>
+                                <th className="px-3 py-2 font-semibold">IU absorbido</th>
+                                <th className="px-3 py-2 font-semibold">IU principal</th>
+                                <th className="px-3 py-2 text-right font-semibold">Incidencia absorbida</th>
+                                <th className="px-3 py-2 text-right font-semibold">Incidencia resultante</th>
+                                <th className="px-3 py-2 font-semibold">Criterio</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {buildAffinityRows(preview).map((row, index) => (
+                                <tr key={`${row.targetMonomialId}-${row.sourceMonomialId}-${index}`}>
+                                  <td className="px-3 py-2 font-medium">{row.sourceIu}</td>
+                                  <td className="px-3 py-2 font-medium">{row.targetIu}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums">{row.absorbedCoefficient}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums">{row.resultingCoefficient}</td>
+                                  <td className="px-3 py-2">{row.reason}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm">
+                          No se realizaron fusiones por afinidad de mercado.
+                        </p>
+                      )}
+                      {preview.mergePlan.length > 0 ? (
+                        <div className="space-y-2">
+                          <h3 className="theme-strong-text text-xs font-semibold">Resultado de las fusiones</h3>
+                          <div className="overflow-x-auto rounded-2xl border">
+                            <table className="w-full min-w-[420px] text-left text-xs">
+                              <thead className="theme-muted-panel theme-muted-text border-b">
+                                <tr>
+                                  <th className="px-3 py-2 font-semibold">IU principal resultante</th>
+                                  <th className="px-3 py-2 text-right font-semibold">Incidencia resultante</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y">
+                                {buildAffinityResultRows(preview).map((row) => (
+                                  <tr key={row.targetMonomialId}>
+                                    <td className="px-3 py-2 font-medium">{row.targetIu}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">{row.resultingCoefficient}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
                       {preview.mergePlan.length > 0 ? (
                         <ul className="space-y-2">
                           {preview.mergePlan.map((entry, index) => (
-                            <li
-                              key={`${entry.targetMonomialId}-${index}`}
-                              className="theme-muted-panel rounded-2xl border px-4 py-3 text-sm text-[var(--app-text)]"
-                            >
+                            <li key={`${entry.targetMonomialId}-${index}`} className="theme-muted-panel rounded-2xl border px-4 py-3 text-sm text-[var(--app-text)]">
                               {entry.explanation}
                             </li>
                           ))}
                         </ul>
-                      ) : (
-                        <p className="theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm">
-                          La propuesta no requiere fusiones adicionales.
-                        </p>
-                      )}
+                      ) : null}
                     </section>
 
                     <section className="space-y-3">
@@ -280,14 +331,94 @@ type GroupingRow = {
   reason: string;
 };
 
+type AffinityRow = {
+  targetMonomialId: string;
+  sourceMonomialId: string;
+  sourceIu: string;
+  targetIu: string;
+  absorbedCoefficient: string;
+  resultingCoefficient: string;
+  reason: string;
+};
+
+function buildAffinityRows(preview: FinalAdjustmentResult): AffinityRow[] {
+  const originalById = new Map(preview.originalMonomials.map((monomial) => [monomial.id, monomial]));
+  const totalAmount = preview.originalMonomials.reduce((sum, monomial) => sum.plus(monomial.amount), new Decimal(0));
+
+  return preview.mergePlan.filter((entry) => entry.phase === "AFFINITY").flatMap((entry) => {
+    const target = originalById.get(entry.targetMonomialId);
+    return entry.sourceMonomialIds.map((sourceId) => {
+      const source = originalById.get(sourceId);
+      const directAmount = new Decimal(target?.amount ?? 0).plus(source?.amount ?? 0);
+      return {
+        targetMonomialId: entry.targetMonomialId,
+        sourceMonomialId: sourceId,
+        sourceIu: formatIu(source),
+        targetIu: formatIu(target),
+        absorbedCoefficient: new Decimal(source?.coefficient ?? 0).toDecimalPlaces(3).toFixed(3),
+        resultingCoefficient: totalAmount.isZero()
+          ? "0.000"
+          : directAmount.dividedBy(totalAmount).toDecimalPlaces(3).toFixed(3),
+        reason: formatMergeReason(entry.reason),
+      };
+    });
+  });
+}
+
+function formatIu(monomial: PolynomialMonomialRecord | undefined): string {
+  const code = monomial?.baseIndexCode || monomial?.composition[0]?.unifiedIndexCode;
+  return code ? `IU ${code}` : "IU no identificado";
+}
+
+function buildAffinityResultRows(preview: FinalAdjustmentResult): Array<{
+  targetMonomialId: string;
+  targetIu: string;
+  resultingCoefficient: string;
+}> {
+  const originalById = new Map(preview.originalMonomials.map((monomial) => [monomial.id, monomial]));
+  const finalById = new Map(preview.finalMonomials.map((monomial) => [monomial.id, monomial]));
+  const affinityEntries = preview.mergePlan.filter((entry) => entry.phase === "AFFINITY");
+  const absorbedIds = new Set(affinityEntries.flatMap((entry) => entry.sourceMonomialIds));
+  const targetIds = [...new Set(affinityEntries.map((entry) => entry.targetMonomialId))]
+    .filter((targetMonomialId) => !absorbedIds.has(targetMonomialId));
+  const totalAmount = preview.originalMonomials.reduce((sum, monomial) => sum.plus(monomial.amount), new Decimal(0));
+
+  return targetIds.map((targetMonomialId) => {
+    const target = originalById.get(targetMonomialId);
+    const absorbedAmount = affinityEntries
+      .filter((entry) => entry.targetMonomialId === targetMonomialId)
+      .flatMap((entry) => entry.sourceMonomialIds)
+      .reduce((sum, sourceId) => sum.plus(originalById.get(sourceId)?.amount ?? 0), new Decimal(target?.amount ?? 0));
+    return {
+      targetMonomialId,
+      targetIu: formatIu(target),
+      resultingCoefficient: totalAmount.isZero() ? "0.000" : absorbedAmount.dividedBy(totalAmount)
+        .toDecimalPlaces(3)
+        .toFixed(3),
+    };
+  });
+}
+
 function buildGroupingRows(preview: FinalAdjustmentResult): GroupingRow[] {
   const originalById = new Map(preview.originalMonomials.map((monomial) => [monomial.id, monomial]));
 
   return preview.finalMonomials.map((finalMonomial) => {
     const sourceIds = preview.mergePlan
-      .filter((entry) => entry.targetMonomialId === finalMonomial.id)
+      .filter((entry) => entry.targetMonomialId === finalMonomial.id && entry.phase !== "AFFINITY")
       .flatMap((entry) => entry.sourceMonomialIds);
-    const groupedIds = [finalMonomial.id, ...sourceIds];
+    const finalIuCodes = new Set(
+      finalMonomial.composition
+        .map((row) => row.unifiedIndexCode)
+        .filter((code): code is string => Boolean(code)),
+    );
+    const visibleSourceIds = sourceIds.filter((sourceId) => {
+      const source = originalById.get(sourceId);
+      const sourceCode = source?.composition.find((row) => row.unifiedIndexCode)?.unifiedIndexCode ?? source?.baseIndexCode;
+      // Algunos registros históricos no tienen composición materializada;
+      // en ese caso mantenemos la explicación del agrupamiento.
+      return finalIuCodes.size === 0 || (sourceCode ? finalIuCodes.has(sourceCode) : false);
+    });
+    const groupedIds = [finalMonomial.id, ...visibleSourceIds];
     const groupedMonomials = groupedIds
       .map((monomialId) => originalById.get(monomialId))
       .filter((monomial): monomial is PolynomialMonomialRecord => Boolean(monomial));
@@ -297,15 +428,28 @@ function buildGroupingRows(preview: FinalAdjustmentResult): GroupingRow[] {
       .toFixed(3);
     const reasons = preview.mergePlan
       .filter((entry) => entry.targetMonomialId === finalMonomial.id)
+      .filter((entry) => entry.sourceMonomialIds.some((sourceId) => visibleSourceIds.includes(sourceId)))
       .map((entry) => entry.reason);
 
     return {
       finalMonomial,
       groupedMonomials,
       originalSum,
-      reason: reasons.length > 0 ? [...new Set(reasons)].join(", ") : "Se mantiene",
+      reason: reasons.length > 0 ? [...new Set(reasons)].map(formatMergeReason).join(", ") : "Se mantiene",
     };
   });
+}
+
+function formatMergeReason(reason: string): string {
+  const labels: Record<string, string> = {
+    SAME_IU_CODE: "Mismo IU",
+    SAME_IU_FAMILY: "Misma familia IU",
+    COMPATIBLE_FAMILY: "Familias compatibles",
+    SAME_BROAD_GROUP: "Mismo grupo de costo",
+    HIGHEST_INCIDENCE_FALLBACK: "Mayor incidencia disponible",
+    EXPERIENCE_HINT: "Afinidad basada en experiencia",
+  };
+  return labels[reason] ?? "Afinidad de mercado";
 }
 
 type FinalMonomialComplianceRow = {

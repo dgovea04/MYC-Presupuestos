@@ -9,6 +9,7 @@ import {
   POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS,
   POLYNOMIAL_FORMULA_DEFAULT_MIN_COEFFICIENT,
   POLYNOMIAL_FORMULA_DEFAULT_MIN_PRELIMINARY_MONOMIALS,
+  POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL,
   type SmartMonomialBroadGroup,
   type SmartMonomialBroadGroupSummary,
   type SmartMonomialCompositionRow,
@@ -16,6 +17,7 @@ import {
   type SmartMonomialEngineOptions,
   type SmartMonomialEngineResult,
   type SmartMonomialInputItem,
+  type SmartMonomialIuSummary,
   type SmartMonomialProposal,
   type SmartMonomialProposalReason,
   type SmartMonomialProposalStatus,
@@ -82,6 +84,7 @@ function normalizeOptions(options?: Partial<SmartMonomialEngineOptions>): Normal
     maxMonomials: options?.maxMonomials ?? POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS,
     coefficientDecimals:
       options?.coefficientDecimals ?? POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS,
+    deferGrouping: options?.deferGrouping ?? false,
   };
 }
 
@@ -220,35 +223,19 @@ function buildInitialDrafts(items: readonly SmartMonomialInputItem[]): DraftMono
   }
 
   const equipmentItems = byBroadGroup.get("EQUIPMENT") ?? [];
-  if (equipmentItems.length > 0) {
-    drafts.push(
-      makeDraft({
-        key: "EQUIPMENT",
-        label: broadGroupLabels.EQUIPMENT,
-        broadGroup: "EQUIPMENT",
-        items: equipmentItems,
-        locked: false,
-        statuses: ["ACCEPTED"],
-        reasons: ["ACCEPTED"],
-      }),
-    );
+  const equipmentGroups = groupByMaterialIuPreservingOrder(equipmentItems);
+  if (equipmentGroups.length > 0) {
+    for (const [group, groupItems] of equipmentGroups) {
+      drafts.push(makeDraft({ key: `EQUIPMENT:${group.key}`, label: group.label, broadGroup: "EQUIPMENT", items: groupItems, locked: false, statuses: ["ACCEPTED"], reasons: ["ACCEPTED"] }));
+    }
   }
-
   const otherItems = byBroadGroup.get("OTHERS") ?? [];
-  if (otherItems.length > 0) {
-    drafts.push(
-      makeDraft({
-        key: "OTHERS",
-        label: broadGroupLabels.OTHERS,
-        broadGroup: "OTHERS",
-        items: otherItems,
-        locked: false,
-        statuses: ["ACCEPTED"],
-        reasons: ["ACCEPTED"],
-      }),
-    );
+  const otherGroups = groupByMaterialIuPreservingOrder(otherItems);
+  if (otherGroups.length > 0) {
+    for (const [group, groupItems] of otherGroups) {
+      drafts.push(makeDraft({ key: `OTHERS:${group.key}`, label: group.label, broadGroup: "OTHERS", items: groupItems, locked: false, statuses: ["ACCEPTED"], reasons: ["ACCEPTED"] }));
+    }
   }
-
   const generalItems = byBroadGroup.get("GENERAL_EXPENSES_PROFIT") ?? [];
   if (generalItems.length > 0) {
     drafts.push(
@@ -300,7 +287,13 @@ function mergeDrafts(
   options?: {
     preserveTargetLabel?: boolean;
   },
-): void {
+): boolean {
+  const iuCodes = new Set(
+    [...target.items, ...source.items]
+      .map((item) => normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode))
+      .filter((code): code is string => Boolean(code)),
+  );
+  if (iuCodes.size > POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL) return false;
   target.amount = target.amount.plus(source.amount);
   target.items = [...target.items, ...source.items];
   target.sourceItemIds = uniqueValues([...target.sourceItemIds, ...source.sourceItemIds]);
@@ -330,6 +323,7 @@ function mergeDrafts(
       sourceItemIds: source.sourceItemIds,
     }),
   );
+  return true;
 }
 
 function selectSameUnifiedIndexTarget(group: readonly DraftMonomial[]): DraftMonomial {
@@ -377,8 +371,9 @@ function consolidateDraftsByUnifiedIndex(
     const sources = group.filter((draft) => draft !== target);
 
     for (const source of sources) {
-      mergeDrafts(target, source, diagnostics, { preserveTargetLabel: true });
-      remaining.splice(remaining.indexOf(source), 1);
+      if (mergeDrafts(target, source, diagnostics, { preserveTargetLabel: true })) {
+        remaining.splice(remaining.indexOf(source), 1);
+      }
     }
   }
 
@@ -459,8 +454,9 @@ function mergeBelowMinimumDrafts(
     const target = chooseMergeTarget(draft, remaining);
     if (!target) continue;
 
-    mergeDrafts(target, draft, diagnostics);
-    remaining.splice(remaining.indexOf(draft), 1);
+    if (mergeDrafts(target, draft, diagnostics)) {
+      remaining.splice(remaining.indexOf(draft), 1);
+    }
   }
 
   return remaining;
@@ -484,8 +480,11 @@ function mergeToMaxMonomials(
       return left.key.localeCompare(right.key);
     });
 
-    mergeDrafts(target, source, diagnostics);
-    remaining.splice(remaining.indexOf(source), 1);
+    if (mergeDrafts(target, source, diagnostics)) {
+      remaining.splice(remaining.indexOf(source), 1);
+    } else {
+      break;
+    }
   }
 
   return remaining;
@@ -593,6 +592,27 @@ function buildBroadGroupSummary(
   }));
 }
 
+function buildIuSummary(items: readonly SmartMonomialInputItem[], totalAmount: Decimal): SmartMonomialIuSummary[] {
+  const grouped = new Map<string, SmartMonomialInputItem[]>();
+  for (const item of positiveItems(items)) {
+    const code = normalizeUnifiedIndexCodeForPolynomialFormula(item.unifiedIndexCode) ?? `FAMILY:${item.iuFamily}`;
+    grouped.set(code, [...(grouped.get(code) ?? []), item]);
+  }
+  return [...grouped.values()]
+    .map((group) => ({
+      unifiedIndexCode: normalizeUnifiedIndexCodeForPolynomialFormula(group[0]?.unifiedIndexCode),
+      unifiedIndexName: group[0]?.unifiedIndexName,
+      iuFamily: group[0]?.iuFamily ?? "OTHERS",
+      amount: amountOf(group),
+      coefficient: totalAmount.equals(ZERO) ? ZERO : amountOf(group).dividedBy(totalAmount),
+    }))
+    .sort((left, right) => {
+      if (left.iuFamily === "LABOR" && right.iuFamily !== "LABOR") return -1;
+      if (right.iuFamily === "LABOR" && left.iuFamily !== "LABOR") return 1;
+      return right.amount.comparedTo(left.amount);
+    });
+}
+
 export function allocateRoundedCoefficients(
   amounts: readonly Decimal[],
   coefficientDecimals = POLYNOMIAL_FORMULA_DEFAULT_COEFFICIENT_DECIMALS,
@@ -659,7 +679,9 @@ export function createSmartPolynomialMonomialProposal(
   const diagnostics = buildZeroAmountDiagnostics(inputItems);
   const initialBroadGroupSummary = buildBroadGroupSummary(inputItems);
   const initialDrafts = consolidateDraftsByUnifiedIndex(buildInitialDrafts(inputItems), diagnostics);
-  const draftsAfterMinimumMerge = mergeBelowMinimumDrafts(
+  const draftsAfterMinimumMerge = normalizedOptions.deferGrouping
+    ? initialDrafts
+    : mergeBelowMinimumDrafts(
     initialDrafts,
     diagnostics,
     totalAmount,
@@ -667,11 +689,9 @@ export function createSmartPolynomialMonomialProposal(
     Math.min(normalizedOptions.minPreliminaryMonomials, normalizedOptions.maxMonomials),
     normalizedOptions.maxMonomials,
   );
-  const draftsAfterMaxMerge = mergeToMaxMonomials(
-    draftsAfterMinimumMerge,
-    diagnostics,
-    normalizedOptions.maxMonomials,
-  );
+  const draftsAfterMaxMerge = normalizedOptions.deferGrouping
+    ? draftsAfterMinimumMerge
+    : mergeToMaxMonomials(draftsAfterMinimumMerge, diagnostics, normalizedOptions.maxMonomials);
 
   return {
     proposedMonomials: finalizeDrafts(
@@ -681,5 +701,6 @@ export function createSmartPolynomialMonomialProposal(
     ),
     diagnostics,
     initialBroadGroupSummary,
+    initialIuSummary: buildIuSummary(inputItems, totalAmount),
   };
 }

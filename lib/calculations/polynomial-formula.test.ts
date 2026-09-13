@@ -297,9 +297,9 @@ describe("polynomial formula engine", () => {
     expect(result.isCoefficientSumValid).toBe(false);
   });
 
-  it("allows ten monomials", () => {
+  it("allows eight monomials", () => {
     const result = validatePolynomialFormula(
-      Array.from({ length: 10 }, (_, index) => ({
+      Array.from({ length: 8 }, (_, index) => ({
         coefficient: "0.100",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
@@ -310,9 +310,9 @@ describe("polynomial formula engine", () => {
     expect(result.hasMaximumTermsValid).toBe(true);
   });
 
-  it("rejects formulas with more than ten monomials", () => {
+  it("rejects formulas with more than eight monomials", () => {
     const result = validatePolynomialFormula(
-      Array.from({ length: 11 }, (_, index) => ({
+      Array.from({ length: 9 }, (_, index) => ({
         coefficient: index < 10 ? "0.100" : "0.000",
         baseIndexValue: "100",
         adjustmentIndexValue: "100",
@@ -491,7 +491,7 @@ describe("polynomial formula engine", () => {
       },
     ]);
 
-    expect(result.kRaw).toBe("1.1165");
+    expect(result.kRaw).toBe("1.1170");
     expect(result.kRounded).toBe("1.117");
   });
 
@@ -518,12 +518,34 @@ describe("polynomial formula engine", () => {
     ]);
 
     expect(result.terms.map((term) => term.partial)).toEqual([
-      "0.3334",
-      "0.3334",
-      "0.3334",
+      "0.333",
+      "0.333",
+      "0.333",
     ]);
-    expect(result.kRaw).toBe("1.0001");
-    expect(result.kRounded).toBe("1.000");
+    expect(result.kRaw).toBe("0.9990");
+    expect(result.kRounded).toBe("0.999");
+  });
+
+  it("rounds each K partial to the thousandth before summing", () => {
+    const result = calculateCoefficientK([
+      { coefficient: "0.500", baseIndexValue: "100", adjustmentIndexValue: "100.14", name: "A" },
+      { coefficient: "0.500", baseIndexValue: "100", adjustmentIndexValue: "100.14", name: "B" },
+    ]);
+
+    expect(result.terms.map((term) => term.partial)).toEqual(["0.501", "0.501"]);
+    expect(result.kRaw).toBe("1.0020");
+    expect(result.kRounded).toBe("1.002");
+  });
+
+  it("rejects manual grouping that would contain more than three IU", () => {
+    expect(() => mergePolynomialMonomials({
+      monomials: [
+        createMergeMonomial({ id: "a", costGroupKey: "MATERIALS", amount: "3", composition: [{ id: "a1", monomialId: "a", amount: "1", unifiedIndexCode: "30" }, { id: "a2", monomialId: "a", amount: "1", unifiedIndexCode: "53" }, { id: "a3", monomialId: "a", amount: "1", unifiedIndexCode: "21" }] }),
+        createMergeMonomial({ id: "b", costGroupKey: "MATERIALS", amount: "1", composition: [{ id: "b1", monomialId: "b", amount: "1", unifiedIndexCode: "39" }] }),
+      ],
+      targetMonomialId: "a",
+      sourceMonomialIds: ["b"],
+    })).toThrow("mas de 3 IU");
   });
 
   it("requires positive adjustment indices for coefficient K", () => {
@@ -790,21 +812,21 @@ describe("polynomial formula validation schemas", () => {
     ).toThrow();
   });
 
-  it("accepts ten monomials in save payloads", () => {
-    expect(
+  it("rejects more than eight monomials in save payloads", () => {
+    expect(() =>
       polynomialFormulaSaveSchema.parse({
         name: "FP Vivienda",
         baseMonth: 1,
         baseYear: 2026,
-        monomials: Array.from({ length: 10 }, (_, index) => ({
+        monomials: Array.from({ length: 9 }, (_, index) => ({
           ...monomial,
           id: `m${index + 1}`,
           code: `M${index + 1}`,
           name: `Monomio ${index + 1}`,
           sortOrder: index,
         })),
-      }).monomials,
-    ).toHaveLength(10);
+      }),
+    ).toThrow();
   });
 
   it("allows empty adjustment index values while saving the base formula", () => {
@@ -851,17 +873,17 @@ describe("polynomial formula validation schemas", () => {
     ).toThrow();
   });
 
-  it("accepts ten monomials in K calculation payloads", () => {
-    expect(
+  it("rejects more than eight monomials in K calculation payloads", () => {
+    expect(() =>
       polynomialKCalculationSchema.parse({
-        monomials: Array.from({ length: 10 }, (_, index) => ({
+        monomials: Array.from({ length: 9 }, (_, index) => ({
           coefficient: "0.100",
           baseIndexValue: "100.000",
           adjustmentIndexValue: "108.000",
           name: `M${index + 1}`,
         })),
-      }).monomials,
-    ).toHaveLength(10);
+      }),
+    ).toThrow();
   });
 
   it("accepts a valuation amount with two-decimal money format", () => {

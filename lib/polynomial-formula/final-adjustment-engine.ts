@@ -10,6 +10,7 @@ import {
   type FinalAdjustmentOptions,
   type FinalAdjustmentResult,
 } from "@/lib/polynomial-formula/final-adjustment-types";
+import { POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL } from "@/lib/polynomial-formula/smart-monomial-types";
 import { normalizeUnifiedIndexCodeForPolynomialFormula } from "@/lib/polynomial-formula/iu-family-classifier";
 import type {
   PolynomialMonomialCompositionRecord,
@@ -91,8 +92,24 @@ function primaryUnifiedIndexCode(monomial: PolynomialMonomialRecord): string | u
   return normalized || undefined;
 }
 
+function displayIu(monomial: PolynomialMonomialRecord): string {
+  return `IU ${primaryUnifiedIndexCode(monomial) ?? monomial.baseIndexCode}`;
+}
+
 function isLocked(monomial: PolynomialMonomialRecord): boolean {
   return monomial.costGroupKey === "LABOR" || monomial.costGroupKey === "GENERAL_EXPENSES_PROFIT";
+}
+
+function isPureGeneralExpensesIndex(monomial: PolynomialMonomialRecord): boolean {
+  return primaryUnifiedIndexCode(monomial) === "39" && monomial.costGroupKey === "GENERAL_EXPENSES_PROFIT";
+}
+
+function iuKeys(monomial: PolynomialMonomialRecord): Set<string> {
+  return new Set(
+    monomial.composition
+      .map((row) => normalizeUnifiedIndexCodeForPolynomialFormula(row.unifiedIndexCode) ?? row.iuFamily?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
 }
 
 function compatibleFamilyCluster(
@@ -221,9 +238,15 @@ function chooseTarget(
   source: MutableMonomial,
   candidates: readonly MutableMonomial[],
   hints: readonly FinalAdjustmentExperienceHint[],
+  allowAffinityAbsorption = false,
 ) : { target: MutableMonomial; reason: FinalAdjustmentMergeReason } | null {
   const ranked = candidates
-    .filter((candidate) => candidate.id !== source.id && !isLocked(candidate))
+    .filter((candidate) => {
+      if (candidate.id === source.id || isLocked(candidate)) return false;
+      if (isPureGeneralExpensesIndex(candidate) || isPureGeneralExpensesIndex(source)) return false;
+      const combined = new Set([...iuKeys(source), ...iuKeys(candidate)]);
+      return allowAffinityAbsorption || combined.size <= POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL;
+    })
     .map((candidate) => {
       const affinity = affinityScore(source, candidate, hints);
 
@@ -269,17 +292,17 @@ function createMergeExplanation(
 ): string {
   switch (reason) {
     case "SAME_IU_CODE":
-      return `${source.code} se agrupa en ${target.code} por compartir codigo IU.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} por compartir codigo IU.`;
     case "SAME_IU_FAMILY":
-      return `${source.code} se agrupa en ${target.code} por compartir familia IU.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} por compartir familia IU.`;
     case "COMPATIBLE_FAMILY":
-      return `${source.code} se agrupa en ${target.code} por afinidad de familias compatibles.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} por afinidad de familias compatibles.`;
     case "SAME_BROAD_GROUP":
-      return `${source.code} se agrupa en ${target.code} por pertenecer al mismo grupo amplio de costo.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} por pertenecer al mismo grupo amplio de costo.`;
     case "HIGHEST_INCIDENCE_FALLBACK":
-      return `${source.code} se agrupa en ${target.code} por mayor incidencia disponible.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} por mayor incidencia disponible.`;
     case "EXPERIENCE_HINT":
-      return `${source.code} se agrupa en ${target.code} usando aprendizaje previo de experiencia.`;
+      return `${displayIu(source)} se agrupa en ${displayIu(target)} usando aprendizaje previo de experiencia.`;
   }
 }
 
@@ -288,23 +311,31 @@ function mergeIntoTarget(
   source: MutableMonomial,
   reason: FinalAdjustmentMergeReason,
   mergePlan: FinalAdjustmentMergePlanEntry[],
-): void {
+  allowAffinityAbsorption = false,
+): boolean {
+  const iuCodes = new Set(
+    [...target.composition, ...source.composition]
+      .map((row) => normalizeUnifiedIndexCodeForPolynomialFormula(row.unifiedIndexCode) ?? row.iuFamily?.trim())
+      .filter((code): code is string => Boolean(code)),
+  );
+  if (iuCodes.size > POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL && !allowAffinityAbsorption) return false;
   target.amountDecimal = target.amountDecimal.plus(source.amountDecimal);
   target.amount = formatFixed(target.amountDecimal, AMOUNT_DECIMALS);
-  target.composition = [
-    ...target.composition,
-    ...source.composition.map((row) => ({
-      ...row,
-      monomialId: target.id,
-    })),
-  ];
+  if (allowAffinityAbsorption || iuCodes.size > POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL) {
+    const anchor = target.composition[0];
+    if (anchor) anchor.amount = formatFixed(toDecimal(anchor.amount).plus(source.amount), COMPOSITION_DECIMALS);
+  } else {
+    target.composition = [...target.composition, ...source.composition.map((row) => ({ ...row, monomialId: target.id }))];
+  }
 
   mergePlan.push({
     targetMonomialId: target.id,
     sourceMonomialIds: [source.id],
     reason,
     explanation: createMergeExplanation(source, target, reason),
+    phase: allowAffinityAbsorption ? "AFFINITY" : "GROUPING",
   });
+  return true;
 }
 
 function selectSameUnifiedIndexTarget(group: readonly MutableMonomial[]): MutableMonomial {
@@ -352,11 +383,9 @@ function consolidateSameUnifiedIndexMonomials(
       });
 
     for (const source of sources) {
-      mergeIntoTarget(target, source, "SAME_IU_CODE", mergePlan);
-      working.splice(
-        working.findIndex((item) => item.id === source.id),
-        1,
-      );
+      if (mergeIntoTarget(target, source, "SAME_IU_CODE", mergePlan)) {
+        working.splice(working.findIndex((item) => item.id === source.id), 1);
+      }
     }
   }
 }
@@ -425,7 +454,7 @@ function addMergeDiagnostics(
   diagnostics.push({
     code: "LOW_COEFFICIENT_MERGED",
     severity: "INFO",
-    message: `${source.code} se agrupo porque estaba por debajo de ${minCoefficient}.`,
+    message: `${displayIu(source)} se agrupo porque estaba por debajo de ${minCoefficient}.`,
     monomialIds: [source.id, target.id],
   });
 
@@ -433,7 +462,7 @@ function addMergeDiagnostics(
     diagnostics.push({
       code: "EXPERIENCE_HINT_USED",
       severity: "INFO",
-      message: `${source.code} uso experiencia previa para elegir ${target.code}.`,
+      message: `${displayIu(source)} uso experiencia previa para elegir ${displayIu(target)}.`,
       monomialIds: [source.id, target.id],
     });
   }
@@ -442,7 +471,7 @@ function addMergeDiagnostics(
     diagnostics.push({
       code: "CROSS_AFFINITY_FALLBACK",
       severity: "WARNING",
-      message: `${source.code} se agrupo por mayor incidencia al no encontrar afinidad mejor.`,
+      message: `${displayIu(source)} se agrupo por mayor incidencia al no encontrar afinidad mejor.`,
       monomialIds: [source.id, target.id],
     });
   }
@@ -486,17 +515,23 @@ export function createPolynomialFinalAdjustmentProposal(
       break;
     }
 
+    // Primero se intenta resolver el IU menor mediante agrupamiento normativo
+    // (sin superar 3 IU). La absorción por afinidad, que permite reducir IU
+    // aun cuando el monomio ya tiene 3 componentes, queda como último recurso
+    // y solo se usa cuando todavía se supera el máximo de monomios.
+    const affinityAbsorption = working.length > resolvedOptions.maxMonomials + 1;
     const selection = chooseTarget(
       low,
       working.filter((candidate) => candidate.id !== low.id),
       resolvedOptions.experienceHints ?? [],
+      affinityAbsorption,
     );
     if (!selection) {
       break;
     }
     const { target, reason } = selection;
 
-    mergeIntoTarget(target, low, reason, mergePlan);
+    if (!mergeIntoTarget(target, low, reason, mergePlan, affinityAbsorption)) break;
     addMergeDiagnostics(diagnostics, low, target, reason, resolvedOptions.minCoefficient);
     working.splice(
       working.findIndex((item) => item.id === low.id),
@@ -520,14 +555,16 @@ export function createPolynomialFinalAdjustmentProposal(
     if (!selection) break;
     const { target, reason } = selection;
 
-    mergeIntoTarget(target, source, reason, mergePlan);
-    working.splice(
-      working.findIndex((item) => item.id === source.id),
-      1,
-    );
+    if (!mergeIntoTarget(target, source, reason, mergePlan)) break;
+    working.splice(working.findIndex((item) => item.id === source.id), 1);
   }
 
-  const finalMonomials = normalizeCoefficients(working, resolvedOptions.coefficientDecimals);
+  const finalMonomials = normalizeCoefficients(working, resolvedOptions.coefficientDecimals).sort((left, right) => {
+    const leftLabor = left.costGroupKey === "LABOR" ? 1 : 0;
+    const rightLabor = right.costGroupKey === "LABOR" ? 1 : 0;
+    if (leftLabor !== rightLabor) return rightLabor - leftLabor;
+    return Number(right.coefficient) - Number(left.coefficient);
+  }).map((monomial, index) => ({ ...monomial, sortOrder: index }));
   const unresolvedLow = finalMonomials.filter((monomial) => toDecimal(monomial.coefficient).lessThan(minCoefficient));
 
   if (finalMonomials.length < resolvedOptions.minMonomials) {

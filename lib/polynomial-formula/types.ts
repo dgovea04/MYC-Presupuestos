@@ -49,6 +49,13 @@ export type CoefficientKCalculationInput = {
   baseIndexValue: DecimalString;
   adjustmentIndexValue: DecimalString;
   name: string;
+  indexComponents?: readonly PolynomialIndexComponent[];
+};
+
+export type PolynomialIndexComponent = {
+  baseIndexValue: DecimalString;
+  adjustmentIndexValue: DecimalString;
+  weight: DecimalString;
 };
 
 export type CoefficientKCalculationTerm = CoefficientKCalculationInput & {

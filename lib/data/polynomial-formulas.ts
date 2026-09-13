@@ -176,6 +176,14 @@ type ComposeBudgetPolynomialFormulaBudgetInput = {
   items: FormulaBudgetItemInput[];
 };
 
+export type MissingPolynomialFormulaIuResource = {
+  resourceId: string;
+  description: string;
+  code: string;
+  category: string;
+  amount: string;
+};
+
 type MonomialComponentDraft = {
   budgetItemId?: string;
   apuResourceId?: string;
@@ -235,6 +243,7 @@ type ComposedBudgetPolynomialFormulaInput = {
   monomials: PolynomialMonomialInput[];
   componentsByGroup: Map<GeneratedCostGroupKey, MonomialComponentDraft[]>;
   componentsByMonomialKey: Map<string, MonomialComponentDraft[]>;
+  initialIuSummary: Array<{ unifiedIndexCode?: string; unifiedIndexName?: string; iuFamily: string; amount: string; coefficient: string }>;
 };
 
 type SavePolynomialFormulaInput = {
@@ -679,11 +688,20 @@ export function composeBudgetPolynomialFormulaInput(
     });
   }
 
-  const smartProposal = createSmartPolynomialMonomialProposal(smartInputItems);
+  const smartProposal = createSmartPolynomialMonomialProposal(smartInputItems, { deferGrouping: true });
   const totalBaseAmount = toDecimal(groupedAmounts.totalBaseAmount);
   const componentsByMonomialKey = new Map<string, MonomialComponentDraft[]>();
+  const usedMonomialCodes = new Set<string>();
   const monomials = smartProposal.proposedMonomials.map((proposal, index) => {
     const metadata = resolveSmartProposalMetadata(proposal);
+    const baseCode = metadata.code.trim() || `MON-${index + 1}`;
+    let code = baseCode;
+    let suffix = 2;
+    while (usedMonomialCodes.has(code)) {
+      code = `${baseCode}-${suffix}`;
+      suffix += 1;
+    }
+    usedMonomialCodes.add(code);
     const costGroupKey = resolveSmartProposalCostGroupKey(proposal);
     const id = createMonomialId(budget.id, proposal.key);
     const components = buildComponentsForProposal({
@@ -697,7 +715,7 @@ export function composeBudgetPolynomialFormulaInput(
 
     return {
       id,
-      code: metadata.code,
+      code,
       name: metadata.name,
       costGroupKey,
       amount: formatFixed(proposal.amount, 4),
@@ -715,6 +733,13 @@ export function composeBudgetPolynomialFormulaInput(
     monomials,
     componentsByGroup,
     componentsByMonomialKey,
+    initialIuSummary: smartProposal.initialIuSummary.map((row) => ({
+      unifiedIndexCode: row.unifiedIndexCode,
+      unifiedIndexName: row.unifiedIndexName,
+      iuFamily: row.iuFamily,
+      amount: row.amount.toFixed(4),
+      coefficient: row.coefficient.toFixed(3),
+    })),
   };
 }
 
@@ -1071,6 +1096,23 @@ export async function generatePolynomialFormulaFromBudget(
   options?: PolynomialFormulaReadOptions,
 ): Promise<PolynomialFormulaRecord> {
   const budget = await loadBudgetForFormulaGeneration(budgetId, userId);
+  const missingIuResources = budget.items.flatMap((item) =>
+    (item.apu?.resources ?? []).flatMap((resource) => {
+      const code = resolveResourceUnifiedIndexCode(resource.resource);
+      if (normalizeUnifiedIndexCodeForPolynomialFormula(code)) return [];
+      return [{
+        resourceId: resource.id,
+        description: resource.resource?.description ?? "Insumo sin descripcion",
+        code: resource.id,
+        category: resource.resource?.category ?? "OTROS",
+        amount: formatFixed(toDecimal(item.quantity).times(resource.subtotal), 4),
+      } satisfies MissingPolynomialFormulaIuResource];
+    }),
+  );
+  if (missingIuResources.length > 0) {
+    const detail = missingIuResources.map((resource) => `${resource.code} - ${resource.description}`).join("; ");
+    throw new Error(`No se puede generar la formula: ${missingIuResources.length} insumo(s) sin IU asignado. Asigna un IU y guarda primero: ${detail}`);
+  }
   const composed = composeBudgetPolynomialFormulaInput({
     id: budget.id,
     projectId: budget.projectId,
@@ -1163,7 +1205,10 @@ export async function generatePolynomialFormulaFromBudget(
     return persisted;
   });
 
-  return serializePolynomialFormula(savedFormula);
+  return {
+    ...serializePolynomialFormula(savedFormula),
+    initialIuSummary: composed.initialIuSummary,
+  };
 }
 
 export async function savePolynomialFormula(

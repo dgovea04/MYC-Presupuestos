@@ -61,6 +61,8 @@ export type GeneralBudgetResourceSummary = {
   totalCost: number;
   usageCount: number;
   budgetNames: string[];
+  iu?: string | null;
+  iu2026?: string | null;
 };
 
 export type GeneralBudgetResourceSummaryResult = {

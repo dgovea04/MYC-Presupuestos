@@ -87,7 +87,16 @@ export const polynomialFormulaSaveSchema = z.object({
   monomials: z
     .array(polynomialMonomialInputSchema)
     .min(1)
-    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS),
+    .max(POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS)
+    .superRefine((monomials, context) => {
+      const codes = new Set<string>();
+      monomials.forEach((monomial, index) => {
+        if (codes.has(monomial.code)) {
+          context.addIssue({ code: "custom", path: [index, "code"], message: "El codigo del monomio no puede repetirse" });
+        }
+        codes.add(monomial.code);
+      });
+    }),
 });
 
 const polynomialKCalculationMonomialSchema = z.object({
@@ -95,6 +104,11 @@ const polynomialKCalculationMonomialSchema = z.object({
   baseIndexValue: positiveDecimalStringSchema("El indice base"),
   adjustmentIndexValue: positiveDecimalStringSchema("El indice de reajuste"),
   name: nonEmptyStringSchema,
+  indexComponents: z.array(z.object({
+    baseIndexValue: positiveDecimalStringSchema("El indice base del componente"),
+    adjustmentIndexValue: positiveDecimalStringSchema("El indice de reajuste del componente"),
+    weight: positiveDecimalStringSchema("La ponderacion del componente"),
+  })).min(1).max(3).optional(),
 });
 
 export const polynomialKCalculationSchema = z.object({

@@ -223,7 +223,7 @@ $env:MC_KNOWLEDGE_BACKFILL="true"
 npm.cmd test -- scripts/backfill-knowledge.integration.test.ts
 ```
 
-La prueba crea un usuario, empresa, proyecto, presupuesto, recursos y registros Knowledge con IDs aleatorios y los elimina en `afterEach`, incluso cuando una aserción falla. Si Vitest se interrumpe antes de la limpieza, toma los IDs de la ejecución interrumpida y ejecuta el mismo orden de `cleanupFixture` en `scripts/backfill-knowledge.integration.test.ts`: APU versions, price observations, canonical items/resources, sources, recursos globales de fixture y finalmente el usuario. No se debe limpiar por prefijos globales ni borrar datos de otros tenants.
+La prueba crea un usuario, empresa, proyecto, presupuesto, recursos y registros Knowledge con IDs aleatorios y los elimina en `afterEach`, incluso cuando una aserción falla. Si Vitest se interrumpe antes de su limpieza, vuelve a ejecutar exactamente el mismo archivo contra la misma base: su `afterEach` limpia los fixtures de esa ejecución; no se debe limpiar por prefijos globales ni borrar datos de otros tenants.
 
 Para ejecutar el backfill manualmente, mantén el flag habilitado y limita siempre el alcance. El `--dry-run` lee y reporta candidatos, conflictos y errores, pero no persiste fuentes, evidencia ni entidades Knowledge.
 

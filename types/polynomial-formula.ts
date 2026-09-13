@@ -70,6 +70,7 @@ export type PolynomialFormulaRecord = {
   monomials: PolynomialMonomialRecord[];
   createdAt?: string;
   updatedAt?: string;
+  initialIuSummary?: Array<{ unifiedIndexCode?: string; unifiedIndexName?: string; iuFamily: string; amount: string; coefficient: string }>;
 };
 
 export type UnifiedIndexRecord = {

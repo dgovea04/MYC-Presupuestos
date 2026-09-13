@@ -361,6 +361,8 @@ export async function getGeneralBudgetResourceSummary(budgetId: string, userId: 
                       description: true,
                       unit: true,
                       category: true,
+                      iu: true,
+                      iuCurrent: true,
                     },
                   },
                 },

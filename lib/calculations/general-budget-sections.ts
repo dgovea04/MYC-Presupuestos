@@ -26,6 +26,8 @@ type AggregationBudget = {
           description: string;
           unit: string;
           category: ResourceCategory;
+      iu?: string | null;
+      iuCurrent?: string | null;
         } | null;
       }>;
     } | null;
@@ -46,6 +48,8 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
       totalCost: number;
       usageCount: number;
       budgetNames: Set<string>;
+      iu?: string | null;
+      iu2026?: string | null;
     }
   >();
   let unresolvedCount = 0;
@@ -64,6 +68,8 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
           description: resource.resource.description,
           unit: resource.resource.unit,
           category: resource.resource.category,
+          iu: resource.resource.iu,
+          iu2026: resource.resource.iuCurrent,
           unitPrice: resource.unitPrice,
           totalQuantity: 0,
           totalCost: 0,
@@ -95,6 +101,8 @@ export function aggregateGeneralBudgetResources(budgets: AggregationBudget[]): G
       totalCost: resource.totalCost,
       usageCount: resource.usageCount,
       budgetNames: [...resource.budgetNames].sort(),
+      iu: resource.iu,
+      iu2026: resource.iu2026,
     }))
     .sort((left, right) => {
       const categoryCompare = RESOURCE_CATEGORY_ORDER.indexOf(left.category) - RESOURCE_CATEGORY_ORDER.indexOf(right.category);

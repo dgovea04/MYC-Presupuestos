@@ -172,8 +172,8 @@ describe("createSmartPolynomialMonomialProposal", () => {
 
     expect(below.proposedMonomials.map((monomial) => monomial.key)).not.toContain("EQUIPMENT");
     expect(below.proposedMonomials[0].sourceItemIds).toEqual(["mat-1", "eq-small"]);
-    expect(above.proposedMonomials.map((monomial) => monomial.key)).toContain("EQUIPMENT");
-    expect(coefficientByKey(above.proposedMonomials).EQUIPMENT).toBe("0.060");
+    expect(above.proposedMonomials.map((monomial) => monomial.key)).toContain("EQUIPMENT:FAMILY:EQUIPMENT");
+    expect(coefficientByKey(above.proposedMonomials)["EQUIPMENT:FAMILY:EQUIPMENT"]).toBe("0.060");
   });
 
   it("falls back to a locked target when below-threshold equipment has no non-locked merge target", () => {
@@ -263,7 +263,6 @@ describe("createSmartPolynomialMonomialProposal", () => {
       "FINISHES",
       "SANITARY_INSTALLATIONS",
       "ELECTRICAL_INSTALLATIONS",
-      "EQUIPMENT",
       "OTHERS",
       "GENERAL_EXPENSES",
     ];
@@ -278,7 +277,7 @@ describe("createSmartPolynomialMonomialProposal", () => {
       ),
     );
 
-    expect(result.proposedMonomials).toHaveLength(10);
+    expect(result.proposedMonomials).toHaveLength(8);
     expect(result.proposedMonomials.some((monomial) => monomial.sourceItemIds.length > 1)).toBe(true);
     expect(result.proposedMonomials.some((monomial) => monomial.statuses.includes("USER_MERGE_CANDIDATE"))).toBe(
       true,
@@ -361,7 +360,7 @@ describe("createSmartPolynomialMonomialProposal", () => {
       }),
     ]);
 
-    expect(result.proposedMonomials).toHaveLength(9);
+    expect(result.proposedMonomials).toHaveLength(8);
     expect(result.proposedMonomials.map((monomial) => monomial.key)).toEqual([
       "LABOR",
       "MATERIALS:IU:3",
@@ -370,12 +369,11 @@ describe("createSmartPolynomialMonomialProposal", () => {
       "MATERIALS:IU:4",
       "MATERIALS:IU:5",
       "MATERIALS:IU:43",
-      "EQUIPMENT",
       "GENERAL_EXPENSES_PROFIT",
     ]);
     expect(
       result.proposedMonomials.find((monomial) => monomial.key === "MATERIALS:IU:3")?.sourceItemIds,
-    ).toEqual(["steel-1"]);
+    ).toEqual(["steel-1", "equipment-1"]);
     expect(
       result.proposedMonomials
         .filter((monomial) => monomial.coefficient.lessThan(new Decimal("0.050")))

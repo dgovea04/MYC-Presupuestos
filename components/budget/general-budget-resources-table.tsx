@@ -162,37 +162,41 @@ export function GeneralBudgetResourcesTable({
         ) : null}
 
         <StaticTableFrame>
-          <Table>
+          <Table className="min-w-[1450px] table-fixed">
             <THead>
               <TR className="bg-slate-50 hover:bg-slate-50">
-                <TH>Codigo</TH>
-                <TH>Descripcion</TH>
-                <TH>Categoria</TH>
-                <TH className="text-center">Unidad</TH>
-                <TH className="text-right">Cantidad</TH>
-                <TH className="text-right">P. unitario</TH>
-                <TH className="text-right">Costo total</TH>
-                <TH className="text-right">Usos</TH>
-                <TH>Sub Presupuestos</TH>
+                <TH className="w-[120px] whitespace-nowrap">Codigo</TH>
+                <TH className="w-[280px]">Descripcion</TH>
+                <TH className="w-[120px] whitespace-nowrap">Categoria</TH>
+                <TH className="w-[210px] overflow-hidden whitespace-nowrap text-ellipsis">IU (Base Julio 1992=100)</TH>
+                <TH className="w-[100px] whitespace-nowrap">IU 2026</TH>
+                <TH className="w-[80px] whitespace-nowrap text-center">Unidad</TH>
+                <TH className="w-[120px] whitespace-nowrap text-right">Cantidad</TH>
+                <TH className="w-[130px] whitespace-nowrap text-right">P. unitario</TH>
+                <TH className="w-[130px] whitespace-nowrap text-right">Costo total</TH>
+                <TH className="w-[70px] whitespace-nowrap text-right">Usos</TH>
+                <TH className="w-[260px]">Sub Presupuestos</TH>
               </TR>
             </THead>
             <TBody>
               {filteredResources.map((resource) => (
                 <TR key={resource.resourceId}>
-                  <TD className="font-medium text-slate-900">{resource.code}</TD>
+                  <TD className="whitespace-nowrap font-medium text-slate-900">{resource.code}</TD>
                   <TD>{resource.description}</TD>
                   <TD>{getCategoryLabel(resource.category)}</TD>
-                  <TD className="text-center">{resource.unit}</TD>
-                  <TD className="text-right tabular-nums">{formatNumber(resource.totalQuantity, 4)}</TD>
-                  <TD className="text-right tabular-nums">{formatCurrency(resource.unitPrice, currency, currencyDecimals)}</TD>
-                  <TD className="text-right tabular-nums">{formatCurrency(resource.totalCost, currency, currencyDecimals)}</TD>
-                  <TD className="text-right tabular-nums">{resource.usageCount}</TD>
+                  <TD className="max-w-[210px] overflow-hidden whitespace-nowrap text-ellipsis font-medium" title={resource.iu ?? "-"}>{resource.iu ?? "-"}</TD>
+                  <TD className="max-w-[100px] overflow-hidden whitespace-nowrap text-ellipsis font-medium" title={resource.iu2026 ?? "-"}>{resource.iu2026 ?? "-"}</TD>
+                  <TD className="whitespace-nowrap text-center">{resource.unit}</TD>
+                  <TD className="whitespace-nowrap text-right tabular-nums">{formatNumber(resource.totalQuantity, 4)}</TD>
+                  <TD className="whitespace-nowrap text-right tabular-nums">{formatCurrency(resource.unitPrice, currency, currencyDecimals)}</TD>
+                  <TD className="whitespace-nowrap text-right tabular-nums">{formatCurrency(resource.totalCost, currency, currencyDecimals)}</TD>
+                  <TD className="whitespace-nowrap text-right tabular-nums">{resource.usageCount}</TD>
                   <TD className="text-sm text-slate-600">{resource.budgetNames.join(", ")}</TD>
                 </TR>
               ))}
               {filteredResources.length === 0 ? (
                 <TR>
-                  <TD colSpan={9} className="p-4">
+                    <TD colSpan={11} className="p-4">
                     <EmptyStatePanel message="No hay insumos que coincidan con los filtros actuales." className="py-5 text-center" />
                   </TD>
                 </TR>

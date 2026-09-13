@@ -64,6 +64,21 @@ function getCoefficientStatus(value: string) {
   };
 }
 
+function getCostGroupLabel(group: PolynomialMonomialRecord["costGroupKey"]): string {
+  const labels: Record<PolynomialMonomialRecord["costGroupKey"], string> = {
+    LABOR: "Mano de obra",
+    MATERIALS: "Materiales",
+    EQUIPMENT: "Equipos",
+    OTHERS: "Varios",
+    GENERAL_EXPENSES_PROFIT: "Gastos generales + utilidad",
+    STEEL: "Acero",
+    CEMENT: "Cemento",
+    MASONRY: "Albañilería",
+    INSTALLATIONS: "Instalaciones",
+  };
+  return labels[group];
+}
+
 function formatBaseIndexOptionLabel(option: BaseIndexOption) {
   const displayCode = formatPolynomialIuCodeForDisplay(option.code) || option.code;
   return `${displayCode} - ${option.name}${option.geographicArea ? ` (${option.geographicArea})` : ""}`;
@@ -107,7 +122,15 @@ export function PolynomialMonomialsTable({
     [sourceMonomialIds, targetMonomialId, validMonomialIds],
   );
   const visibleMonomials = useMemo(
-    () => (showAllMonomials ? monomials : monomials.slice(0, DEFAULT_VISIBLE_MONOMIALS)),
+    () => {
+      const ordered = [...monomials].sort((left, right) => {
+        const leftLabor = left.costGroupKey === "LABOR" ? 1 : 0;
+        const rightLabor = right.costGroupKey === "LABOR" ? 1 : 0;
+        if (leftLabor !== rightLabor) return rightLabor - leftLabor;
+        return Number(right.coefficient) - Number(left.coefficient);
+      });
+      return showAllMonomials ? ordered : ordered.slice(0, DEFAULT_VISIBLE_MONOMIALS);
+    },
     [monomials, showAllMonomials],
   );
   const hiddenMonomialCount = Math.max(monomials.length - visibleMonomials.length, 0);
@@ -288,8 +311,8 @@ export function PolynomialMonomialsTable({
                     />
                   </TD>
                   <TD className="theme-muted-text align-top text-xs">
-                    <span className="block truncate pt-2" title={monomial.costGroupKey}>
-                      {monomial.costGroupKey}
+                    <span className="block truncate pt-2" title={getCostGroupLabel(monomial.costGroupKey)}>
+                      {getCostGroupLabel(monomial.costGroupKey)}
                     </span>
                   </TD>
                   <TD className="align-top text-right">

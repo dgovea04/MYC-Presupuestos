@@ -32,6 +32,7 @@ export type FinalAdjustmentMergePlanEntry = {
   readonly sourceMonomialIds: readonly string[];
   readonly reason: FinalAdjustmentMergeReason;
   readonly explanation: string;
+  readonly phase?: "AFFINITY" | "GROUPING";
 };
 
 export type FinalAdjustmentExperienceHint = {

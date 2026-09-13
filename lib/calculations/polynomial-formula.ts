@@ -11,6 +11,7 @@ import type {
   PolynomialValidationMonomialInput,
 } from "@/lib/polynomial-formula/types";
 import { POLYNOMIAL_FORMULA_DEFAULT_MAX_MONOMIALS } from "@/lib/polynomial-formula/smart-monomial-types";
+import { POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL } from "@/lib/polynomial-formula/smart-monomial-types";
 import type {
   PolynomialCompositionDiagnostic,
   PolynomialFormulaValidationResult,
@@ -22,6 +23,7 @@ const K_VALUE_DECIMALS = 3;
 const CURRENCY_DECIMALS = 2;
 const GROUP_AMOUNT_DECIMALS = 4;
 const K_RAW_DECIMALS = 4;
+const K_PARTIAL_DECIMALS = 3;
 const COEFFICIENT_SCALE = new Decimal(10).pow(COEFFICIENT_DECIMALS);
 const COEFFICIENT_SUM_TARGET = new Decimal(1);
 const COEFFICIENT_SUM_TOLERANCE = new Decimal("0.001");
@@ -227,6 +229,16 @@ export function mergePolynomialMonomials({
 
     return source;
   });
+  const iuCodes = new Set(
+    [target, ...sources].flatMap((monomial) =>
+      monomial.composition
+        .map((row) => row.unifiedIndexCode?.trim() || row.iuFamily?.trim())
+        .filter((code): code is string => Boolean(code)),
+    ),
+  );
+  if (iuCodes.size > POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL) {
+    throw new Error("Un monomio no puede agrupar mas de 3 IU.");
+  }
   const mergedAmount = [target, ...sources].reduce(
     (total, monomial) => total.plus(monomial.amount),
     ZERO,
@@ -413,16 +425,23 @@ export function calculateCoefficientK(
       monomial.name,
     );
 
-    const ratio = toDecimal(monomial.adjustmentIndexValue).dividedBy(
-      monomial.baseIndexValue,
-    );
-    const partial = toDecimal(monomial.coefficient).times(ratio);
+    const ratio = monomial.indexComponents?.length
+      ? monomial.indexComponents.reduce(
+          (total, component) => total.plus(
+            toDecimal(component.weight).times(
+              toDecimal(component.adjustmentIndexValue).dividedBy(component.baseIndexValue),
+            ),
+          ),
+          ZERO,
+        )
+      : toDecimal(monomial.adjustmentIndexValue).dividedBy(monomial.baseIndexValue);
+    const partial = toDecimal(monomial.coefficient).times(ratio).toDecimalPlaces(K_PARTIAL_DECIMALS);
     kRaw = kRaw.plus(partial);
 
     return {
       ...monomial,
       ratio: formatFixed(ratio, K_RAW_DECIMALS),
-      partial: formatFixed(partial, K_RAW_DECIMALS),
+      partial: formatFixed(partial, K_PARTIAL_DECIMALS),
     };
   });
 

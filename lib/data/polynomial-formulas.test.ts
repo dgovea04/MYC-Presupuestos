@@ -112,12 +112,14 @@ describe("composeBudgetPolynomialFormulaInput", () => {
       Object.fromEntries(result.monomials.map((monomial) => [monomial.costGroupKey, monomial.amount])),
     ).toEqual({
       LABOR: "200.0000",
-      STEEL: "330.0000",
+      STEEL: "300.0000",
+      EQUIPMENT: "20.0000",
+      OTHERS: "10.0000",
       CEMENT: "250.0000",
       MASONRY: "150.0000",
       GENERAL_EXPENSES_PROFIT: "100.0000",
     });
-    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual(["0.194", "0.320", "0.243", "0.146", "0.097"]);
+    expect(result.monomials.map((monomial) => monomial.coefficient)).toEqual(["0.194", "0.291", "0.243", "0.146", "0.019", "0.010", "0.097"]);
     expect(Object.fromEntries(result.monomials.map((monomial) => [monomial.baseIndexCode, monomial.code]))).toMatchObject({
       "3": "AC",
       "21": "CE",
@@ -132,7 +134,7 @@ describe("composeBudgetPolynomialFormulaInput", () => {
       "39": "IU 39 : INDICE GENERAL DE PRECIOS AL CONSUMIDOR",
       "47": "IU 47 : MANO DE OBRA (INCLUYE LEYES SOCIALES)",
     });
-    expect(result.monomials.map((monomial) => monomial.costGroupKey)).not.toEqual(
+    expect(result.monomials.map((monomial) => monomial.costGroupKey)).toEqual(
       expect.arrayContaining(["EQUIPMENT", "OTHERS"]),
     );
     expect(
@@ -160,22 +162,8 @@ describe("composeBudgetPolynomialFormulaInput", () => {
         unifiedIndexCode: "3",
         unifiedIndexName: "ACERO CORRUGADO",
         iuFamily: "STEEL",
-        participationPercentage: "0.909091",
+        participationPercentage: "1.000000",
         coefficientContribution: "0.291262",
-      }),
-      expect.objectContaining({
-        apuResourceId: "apu-resource-5",
-        amount: "20.0000",
-        iuFamily: "EQUIPMENT",
-        participationPercentage: "0.060606",
-        coefficientContribution: "0.019417",
-      }),
-      expect.objectContaining({
-        apuResourceId: "apu-resource-6",
-        amount: "10.0000",
-        iuFamily: "OTHERS",
-        participationPercentage: "0.030303",
-        coefficientContribution: "0.009709",
       }),
     ]));
   });
