@@ -9,6 +9,8 @@ import {
   type FinalAdjustmentMergeReason,
   type FinalAdjustmentOptions,
   type FinalAdjustmentResult,
+  type AffinityIteration,
+  type InitialGroupingEntry,
 } from "@/lib/polynomial-formula/final-adjustment-types";
 import { POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL } from "@/lib/polynomial-formula/smart-monomial-types";
 import { normalizeUnifiedIndexCodeForPolynomialFormula } from "@/lib/polynomial-formula/iu-family-classifier";
@@ -102,6 +104,219 @@ function isLocked(monomial: PolynomialMonomialRecord): boolean {
 
 function isPureGeneralExpensesIndex(monomial: PolynomialMonomialRecord): boolean {
   return primaryUnifiedIndexCode(monomial) === "39" && monomial.costGroupKey === "GENERAL_EXPENSES_PROFIT";
+}
+
+function isLaborIu(monomial: PolynomialMonomialRecord): boolean {
+  return primaryUnifiedIndexCode(monomial) === "47" || monomial.costGroupKey === "LABOR";
+}
+
+function createInitialGrouping(
+  monomials: readonly PolynomialMonomialRecord[],
+): { entries: InitialGroupingEntry[]; orphans: PolynomialMonomialRecord[] } {
+  const ordered = [...monomials].sort((left, right) => {
+    const laborComparison = Number(isLaborIu(right)) - Number(isLaborIu(left));
+    if (laborComparison !== 0) return laborComparison;
+    const coefficientComparison = toDecimal(right.coefficient).comparedTo(toDecimal(left.coefficient));
+    return coefficientComparison !== 0 ? coefficientComparison : left.sortOrder - right.sortOrder;
+  });
+  const reserved = ordered.filter((monomial) => isLaborIu(monomial) || isPureGeneralExpensesIndex(monomial));
+  const reservedIds = new Set(reserved.map((monomial) => monomial.id));
+  const selectable = ordered.filter((monomial) => !reservedIds.has(monomial.id));
+  const principals = [...reserved, ...selectable].slice(0, 8);
+  const principalIds = new Set(principals.map((monomial) => monomial.id));
+  const groups = principals.map((principal) => ({
+    principalMonomialId: principal.id,
+    principal,
+    groupedMonomials: [principal],
+  }));
+  const candidates = ordered.filter((monomial) => !principalIds.has(monomial.id));
+  const orphans: PolynomialMonomialRecord[] = [];
+
+  for (const candidate of candidates) {
+    const target = groups.find((group) =>
+      !isLaborIu(group.principal) && !isPureGeneralExpensesIndex(group.principal) && group.groupedMonomials.length < 3,
+    );
+    if (!target) {
+      orphans.push(candidate);
+      continue;
+    }
+    target.groupedMonomials = [...target.groupedMonomials, candidate];
+  }
+
+  // Segunda fase del agrupamiento: compactar los grupos incompletos.
+  // Esto conserva la identidad de cada IU, pero evita monomios de 1 o 2 IU
+  // cuando existe capacidad disponible en otro grupo.
+  let compacted = true;
+  while (compacted) {
+    compacted = false;
+    const source = groups
+      .filter((group) => !isLaborIu(group.principal) && !isPureGeneralExpensesIndex(group.principal))
+      .filter((group) => group.groupedMonomials.length < POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL)
+      .sort((left, right) => {
+        const countComparison = left.groupedMonomials.length - right.groupedMonomials.length;
+        if (countComparison !== 0) return countComparison;
+        return groupedIncidenceDecimal(left.groupedMonomials).comparedTo(groupedIncidenceDecimal(right.groupedMonomials));
+      })[0];
+    if (!source) break;
+
+    const target = groups
+      .filter((group) => group.principal.id !== source.principal.id)
+      .filter((group) => !isLaborIu(group.principal) && !isPureGeneralExpensesIndex(group.principal))
+      .filter((group) => group.groupedMonomials.length + source.groupedMonomials.length <= POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL)
+      .sort((left, right) => {
+        const leftAffinity = affinityScore(source.principal, left.principal, []).score;
+        const rightAffinity = affinityScore(source.principal, right.principal, []).score;
+        if (rightAffinity !== leftAffinity) return rightAffinity - leftAffinity;
+        return groupedIncidenceDecimal(right.groupedMonomials).comparedTo(groupedIncidenceDecimal(left.groupedMonomials));
+      })[0];
+    if (!target) break;
+
+    target.groupedMonomials = [...target.groupedMonomials, ...source.groupedMonomials];
+    groups.splice(groups.findIndex((group) => group.principal.id === source.principal.id), 1);
+    compacted = true;
+  }
+
+  return { entries: groups, orphans };
+}
+
+function createAffinityIterations(
+  monomials: readonly PolynomialMonomialRecord[],
+  initialGrouping: { entries: InitialGroupingEntry[]; orphans: PolynomialMonomialRecord[] },
+): { iterations: AffinityIteration[]; finalGrouping: InitialGroupingEntry[]; finalOrphans: PolynomialMonomialRecord[] } {
+  const ordered = [...monomials].sort((left, right) => {
+    const laborComparison = Number(isLaborIu(right)) - Number(isLaborIu(left));
+    if (laborComparison !== 0) return laborComparison;
+    return toDecimal(right.coefficient).comparedTo(toDecimal(left.coefficient)) || left.sortOrder - right.sortOrder;
+  });
+  let groups = initialGrouping.entries.map((entry) => ({
+    ...entry,
+    groupedMonomials: [...entry.groupedMonomials],
+  }));
+  let groupAmounts = new Map(groups.map((group) => [
+    group.principal.id,
+    groupedIncidenceDecimal(group.groupedMonomials),
+  ]));
+  const available = new Map(monomials.map((monomial) => [monomial.id, cloneMonomial(monomial)]));
+  const orphanIds = new Set(initialGrouping.orphans.map((monomial) => monomial.id));
+  const shouldRun = initialGrouping.orphans.length > 0 || groups.some((group) => {
+    const incidence = groupAmounts.get(group.principal.id) ?? ZERO;
+    return group.groupedMonomials.length > POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL || incidence.lessThan("0.050");
+  });
+  if (!shouldRun) return { iterations: [], finalGrouping: initialGrouping.entries, finalOrphans: initialGrouping.orphans };
+
+  const iterations: AffinityIteration[] = [];
+  const processed = new Set<string>();
+  const absorbed = new Set<string>();
+  let iteration = 0;
+  while (true) {
+    const failingGroups = groups.filter((group) =>
+      (groupAmounts.get(group.principal.id) ?? ZERO).lessThan("0.050"),
+    );
+    const candidate = [...ordered].reverse().find((monomial) => {
+      if (processed.has(monomial.id) || isLaborIu(monomial) || isPureGeneralExpensesIndex(monomial)) return false;
+      return orphanIds.has(monomial.id) || failingGroups.some((group) => group.groupedMonomials.some((item) => item.id === monomial.id));
+    });
+    if (!candidate) break;
+
+    const targetCandidates = groups
+      .map((group) => group.principal)
+      .filter((principal) => principal.id !== candidate.id && !isLaborIu(principal) && !isPureGeneralExpensesIndex(principal));
+    const selection = chooseTarget(
+      cloneMonomial(candidate),
+      targetCandidates.map(cloneMonomial),
+      [],
+      true,
+    );
+    if (!selection) break;
+    const target = selection.target;
+    const groupingBefore = snapshotGrouping(groups);
+    const availableTarget = available.get(target.id);
+    if (!availableTarget) break;
+    available.delete(candidate.id);
+    availableTarget.coefficient = formatFixed(toDecimal(availableTarget.coefficient).plus(candidate.coefficient), 3);
+    availableTarget.amount = formatFixed(toDecimal(availableTarget.amount).plus(candidate.amount), AMOUNT_DECIMALS);
+    const sourceGroup = groups.find((group) => group.groupedMonomials.some((item) => item.id === candidate.id));
+    const targetGroup = groups.find((group) => group.principal.id === target.id);
+    const sourceWasPrincipal = sourceGroup?.principal.id === candidate.id;
+    if (sourceGroup && !sourceWasPrincipal) {
+      sourceGroup.groupedMonomials = sourceGroup.groupedMonomials.filter((item) => item.id !== candidate.id);
+    }
+    if (targetGroup && sourceGroup?.principal.id !== targetGroup.principal.id) {
+      targetGroup.groupedMonomials = targetGroup.groupedMonomials.filter((item) => item.id !== candidate.id);
+    }
+    const candidateAmount = toDecimal(candidate.coefficient);
+    if (sourceGroup) groupAmounts.set(sourceGroup.principal.id, (groupAmounts.get(sourceGroup.principal.id) ?? ZERO).minus(candidateAmount));
+    if (targetGroup) groupAmounts.set(targetGroup.principal.id, (groupAmounts.get(targetGroup.principal.id) ?? ZERO).plus(candidateAmount));
+    if (targetGroup) {
+      const updatedPrincipal = {
+        ...targetGroup.principal,
+        coefficient: formatFixed(toDecimal(targetGroup.principal.coefficient).plus(candidateAmount), 3),
+      };
+      targetGroup.principal = updatedPrincipal;
+      targetGroup.groupedMonomials = targetGroup.groupedMonomials.map((item) =>
+        item.id === updatedPrincipal.id ? updatedPrincipal : item,
+      );
+    }
+    if (sourceWasPrincipal && sourceGroup && sourceGroup.principal.id !== targetGroup?.principal.id) {
+      const sourceGroupIndex = groups.findIndex((group) => group.principal.id === sourceGroup.principal.id);
+      if (sourceGroupIndex >= 0) groups.splice(sourceGroupIndex, 1);
+    }
+    orphanIds.delete(candidate.id);
+    processed.add(candidate.id);
+    absorbed.add(candidate.id);
+
+    // La fusión reduce el universo de IU. El agrupamiento siguiente siempre
+    // se reconstruye desde cero con las IU que permanecen disponibles.
+    const availableMonomials = [...available.values()];
+    const regrouped = createInitialGrouping(availableMonomials);
+    groups = regrouped.entries.map((entry) => ({
+      ...entry,
+      groupedMonomials: [...entry.groupedMonomials],
+    }));
+    orphanIds.clear();
+    regrouped.orphans.forEach((monomial) => orphanIds.add(monomial.id));
+    groupAmounts = new Map(groups.map((group) => [
+      group.principal.id,
+      groupedIncidenceDecimal(group.groupedMonomials),
+    ]));
+    iteration += 1;
+    const passing = groups.filter((group) =>
+      group.groupedMonomials.length <= POLYNOMIAL_FORMULA_MAX_IU_PER_MONOMIAL &&
+      (groupAmounts.get(group.principal.id) ?? ZERO).greaterThanOrEqualTo("0.050"),
+    ).length;
+    iterations.push({
+      iteration,
+      source: candidate,
+      target,
+      reason: selection.reason,
+      sourceIncidence: formatFixed(toDecimal(candidate.coefficient), 3),
+      groupsPassingRules: passing,
+      groupsChecked: groups.length,
+      completed: passing === groups.length && orphanIds.size === 0,
+      grouping: snapshotGrouping(groups),
+      groupingBefore,
+      orphans: ordered.filter((monomial) => orphanIds.has(monomial.id) && !absorbed.has(monomial.id)),
+    });
+    if (passing === groups.length && orphanIds.size === 0) break;
+  }
+  const remainingOrphanIds = new Set(orphanIds);
+  return {
+    iterations,
+    finalGrouping: groups,
+    finalOrphans: ordered.filter((monomial) => remainingOrphanIds.has(monomial.id) && !absorbed.has(monomial.id)),
+  };
+}
+
+function groupedIncidenceDecimal(monomials: readonly PolynomialMonomialRecord[]): Decimal {
+  return monomials.reduce((sum, monomial) => sum.plus(monomial.coefficient), ZERO);
+}
+
+function snapshotGrouping(groups: readonly InitialGroupingEntry[]): InitialGroupingEntry[] {
+  return groups.map((group) => ({
+    ...group,
+    principal: { ...group.principal },
+    groupedMonomials: group.groupedMonomials.map((item) => ({ ...item })),
+  }));
 }
 
 function iuKeys(monomial: PolynomialMonomialRecord): Set<string> {
@@ -490,6 +705,8 @@ export function createPolynomialFinalAdjustmentProposal(
   const working = monomials.map(cloneMonomial);
   const mergePlan: FinalAdjustmentMergePlanEntry[] = [];
   const diagnostics: FinalAdjustmentDiagnostic[] = [];
+  const initialGrouping = createInitialGrouping(monomials);
+  const affinityResult = createAffinityIterations(monomials, initialGrouping);
 
   consolidateSameUnifiedIndexMonomials(working, mergePlan);
 
@@ -602,6 +819,11 @@ export function createPolynomialFinalAdjustmentProposal(
     originalMonomials: cloneMonomials(monomials),
     finalMonomials,
     mergePlan,
+    initialGrouping: initialGrouping.entries,
+    orphanMonomials: initialGrouping.orphans,
+    affinityIterations: affinityResult.iterations,
+    affinityFinalGrouping: affinityResult.finalGrouping,
+    affinityFinalOrphans: affinityResult.finalOrphans,
     diagnostics,
     canApply: !diagnostics.some((diagnostic) => diagnostic.severity === "ERROR"),
   };

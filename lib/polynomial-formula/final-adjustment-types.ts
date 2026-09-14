@@ -35,6 +35,26 @@ export type FinalAdjustmentMergePlanEntry = {
   readonly phase?: "AFFINITY" | "GROUPING";
 };
 
+export type InitialGroupingEntry = {
+  readonly principalMonomialId: string;
+  readonly principal: PolynomialMonomialRecord;
+  readonly groupedMonomials: readonly PolynomialMonomialRecord[];
+};
+
+export type AffinityIteration = {
+  readonly iteration: number;
+  readonly source: PolynomialMonomialRecord;
+  readonly target: PolynomialMonomialRecord;
+  readonly reason: FinalAdjustmentMergeReason;
+  readonly sourceIncidence: string;
+  readonly groupsPassingRules: number;
+  readonly groupsChecked: number;
+  readonly completed: boolean;
+  readonly grouping: readonly InitialGroupingEntry[];
+  readonly groupingBefore: readonly InitialGroupingEntry[];
+  readonly orphans: readonly PolynomialMonomialRecord[];
+};
+
 export type FinalAdjustmentExperienceHint = {
   readonly sourceIuFamily?: string;
   readonly sourceUnifiedIndexCode?: string;
@@ -59,6 +79,11 @@ export type FinalAdjustmentResult = {
   readonly originalMonomials: readonly PolynomialMonomialRecord[];
   readonly finalMonomials: readonly PolynomialMonomialRecord[];
   readonly mergePlan: readonly FinalAdjustmentMergePlanEntry[];
+  readonly initialGrouping: readonly InitialGroupingEntry[];
+  readonly orphanMonomials: readonly PolynomialMonomialRecord[];
+  readonly affinityIterations: readonly AffinityIteration[];
+  readonly affinityFinalGrouping: readonly InitialGroupingEntry[];
+  readonly affinityFinalOrphans: readonly PolynomialMonomialRecord[];
   readonly diagnostics: readonly FinalAdjustmentDiagnostic[];
   readonly canApply: boolean;
 };

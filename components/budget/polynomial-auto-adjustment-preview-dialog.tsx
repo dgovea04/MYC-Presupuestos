@@ -3,8 +3,11 @@
 import { memo, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import Decimal from "decimal.js";
+import { ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { useOptionalAppViewMode } from "@/components/view-mode/app-view-mode-provider";
 import type { FinalAdjustmentResult } from "@/lib/polynomial-formula/final-adjustment-types";
 import type { PolynomialMonomialRecord } from "@/types/polynomial-formula";
 
@@ -21,10 +24,31 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
   onApply,
   onClose,
 }: PolynomialAutoAdjustmentPreviewDialogProps) {
+  const viewMode = useOptionalAppViewMode();
+  const isExcelMode = viewMode?.isExcelMode ?? false;
   const [groupingDetailsOpen, setGroupingDetailsOpen] = useState(false);
-  const groupingRows = useMemo(() => (preview ? buildGroupingRows(preview) : []), [preview]);
+  const [affinityDetailsOpen, setAffinityDetailsOpen] = useState(false);
+  const groupingRows = useMemo(() => (preview ? buildProposedGroupingRows(preview) : []), [preview]);
+  const displayedFinalMonomials = useMemo(
+    () => groupingRows.map((row) => row.finalMonomial),
+    [groupingRows],
+  );
   const finalMonomialComplianceRows = useMemo(
-    () => (preview ? buildFinalMonomialComplianceRows(preview.finalMonomials) : []),
+    () => buildFinalMonomialComplianceRows(displayedFinalMonomials),
+    [displayedFinalMonomials],
+  );
+  const initialGroupingRows = useMemo(
+    () =>
+      preview
+        ? [...preview.initialGrouping].sort((left, right) => {
+            const incidenceComparison = new Decimal(groupedIncidence(right.groupedMonomials)).comparedTo(
+              new Decimal(groupedIncidence(left.groupedMonomials)),
+            );
+            return incidenceComparison !== 0
+              ? incidenceComparison
+              : left.principal.sortOrder - right.principal.sortOrder;
+          })
+        : [],
     [preview],
   );
   const groupedSourceCount = useMemo(
@@ -36,10 +60,12 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
   );
   const handleClose = () => {
     setGroupingDetailsOpen(false);
+    setAffinityDetailsOpen(false);
     onClose();
   };
   const handleApply = () => {
     setGroupingDetailsOpen(false);
+    setAffinityDetailsOpen(false);
     onApply();
   };
 
@@ -71,7 +97,7 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                 <>
                   <div
                     data-testid="polynomial-auto-adjustment-scroll-area"
-                    className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-4 pr-4"
+                    className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-4 pr-4 flex flex-col"
                   >
                     <div className="grid gap-3 md:grid-cols-2">
                       <section className="theme-muted-panel rounded-2xl border p-4">
@@ -80,11 +106,11 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                       </section>
                       <section className="theme-status-info rounded-2xl border p-4">
                         <p className="theme-status-info-strong text-xs uppercase tracking-[0.18em]">Despues</p>
-                        <p className="theme-strong-text mt-2 text-lg font-semibold">{preview.finalMonomials.length} propuestos</p>
+                        <p className="theme-strong-text mt-2 text-lg font-semibold">{displayedFinalMonomials.length} propuestos</p>
                       </section>
                     </div>
 
-                    <section className="space-y-3">
+                    <section className="order-1 space-y-3">
                       <h2 className="theme-strong-text text-sm font-semibold">Monomios finales</h2>
                       <div className="overflow-hidden rounded-2xl border border-[var(--table-border-strong)]">
                         <table className="w-full border-collapse text-sm">
@@ -97,7 +123,7 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                             </tr>
                           </thead>
                           <tbody>
-                            {preview.finalMonomials.map((monomial, index) => {
+                            {displayedFinalMonomials.map((monomial, index) => {
                               const compliance = finalMonomialComplianceRows[index];
 
                               return (
@@ -124,7 +150,110 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                       </div>
                     </section>
 
-                    <section className="space-y-3">
+                    <section className={`order-4 border ${isExcelMode ? "rounded-md border-[var(--app-border)] bg-[var(--app-surface)] shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]" : "rounded-2xl border-[var(--app-border-soft)] bg-[var(--app-surface)] shadow-[0_10px_30px_-24px_rgba(15,23,42,0.28)]"}`}>
+                      <div className={`border-b border-[var(--app-border)] ${isExcelMode ? "px-4 py-3" : "px-5 py-4"}`}>
+                        <button type="button" className="theme-strong-text flex w-full items-center justify-between gap-3 text-left text-sm font-semibold" aria-expanded={affinityDetailsOpen} onClick={() => setAffinityDetailsOpen((current) => !current)}>
+                          <span>Fusión por Afinidad de Mercado</span>
+                          <ChevronDown className={`theme-muted-text h-4 w-4 shrink-0 transition-transform ${affinityDetailsOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                        </button>
+                        <p className="theme-muted-text mt-1 text-sm">
+                          Orden de incidencia, selección de 8 principales y agrupación estándar con un máximo de 3 IU por monomio.
+                          IU47 (mano de obra) e IU39 (índice general) se mantienen solos.
+                        </p>
+                      </div>
+                      {affinityDetailsOpen ? <div className={`space-y-5 ${isExcelMode ? "px-4 py-4" : "px-6 pb-6 pt-5"}`}>
+                      <h3 className="theme-strong-text text-sm font-semibold">Agrupamiento inicial</h3>
+                      <p className="theme-muted-text mt-1 text-sm">Orden de incidencia, selección de 8 principales y agrupación estándar con un máximo de 3 IU por monomio. IU47 (mano de obra) e IU39 (índice general) se mantienen solos.</p>
+                      <div className="overflow-hidden">
+                        <Table className="w-full table-fixed text-xs [&_th]:px-3 [&_th]:py-3 [&_td]:break-words [&_td]:px-3 [&_td]:py-3 [&_th:first-child]:w-12 [&_td:first-child]:w-12 [&_th:nth-child(2)]:w-[30%] [&_td:nth-child(2)]:w-[30%] [&_th:nth-child(4)]:w-[14%] [&_td:nth-child(4)]:w-[14%] [&_th:nth-child(5)]:w-[8%] [&_td:nth-child(5)]:w-[8%] [&_th:nth-child(6)]:w-[20%] [&_td:nth-child(6)]:w-[20%]">
+                          <THead><TR className="theme-muted-panel hover:theme-muted-panel">
+                            <TH className="text-right">N.º</TH><TH>Monomio principal</TH><TH>IU agrupadas</TH><TH className="text-right">Incidencia agrupada</TH><TH className="text-right">Cantidad</TH><TH>Reglas FP</TH>
+                          </TR></THead>
+                          <TBody>
+                            {initialGroupingRows.map((group, index) => (
+                              <TR key={group.principalMonomialId} className="align-top">
+                                <TD className="text-right tabular-nums">{index + 1}</TD>
+                                <TD className="font-medium">{formatIu(group.principal)} - {group.principal.name}</TD>
+                                <TD>{group.groupedMonomials.map((monomial) => formatIu(monomial)).join(", ")}</TD>
+                                <TD className="text-right tabular-nums">{groupedIncidence(group.groupedMonomials)}</TD>
+                                <TD className="text-right tabular-nums">{group.groupedMonomials.length}</TD>
+                                <TD><InitialGroupingRules group={group} /></TD>
+                              </TR>
+                            ))}
+                          </TBody>
+                        </Table>
+                      </div>
+                      <div className="theme-muted-panel rounded-xl border px-4 py-3 text-sm">
+                        <span className="theme-strong-text font-semibold">IU huérfanas ({preview.orphanMonomials.length}): </span>
+                        {preview.orphanMonomials.length > 0
+                          ? preview.orphanMonomials.map((monomial) => `${formatIu(monomial)} - ${monomial.name}`).join(", ")
+                          : "Ninguna"}
+                      </div>
+                      </div> : null}
+                      {affinityDetailsOpen && preview.affinityIterations.length > 0 ? (
+                        <div className="space-y-2 px-4 py-4">
+                          <h3 className="theme-strong-text text-sm font-semibold">Iteraciones de Fusión por Afinidad</h3>
+                          <div className="overflow-hidden">
+                            <Table className="w-full table-fixed text-xs [&_th]:px-3 [&_th]:py-3 [&_td]:break-words [&_td]:px-3 [&_td]:py-3 [&_th:first-child]:w-[7%] [&_td:first-child]:w-[7%] [&_th:nth-child(2)]:w-[25%] [&_td:nth-child(2)]:w-[25%] [&_th:nth-child(3)]:w-[25%] [&_td:nth-child(3)]:w-[25%] [&_th:nth-child(4)]:w-[10%] [&_td:nth-child(4)]:w-[10%] [&_th:nth-child(5)]:w-[10%] [&_td:nth-child(5)]:w-[10%] [&_th:nth-child(6)]:w-[9%] [&_td:nth-child(6)]:w-[9%] [&_th:nth-child(7)]:w-[14%] [&_td:nth-child(7)]:w-[14%]">
+                              <THead><TR className="theme-muted-panel hover:theme-muted-panel">
+                                <TH className="text-right">N.º</TH><TH>IU fusionada</TH><TH>IU receptora</TH><TH className="text-right">Incidencia IU</TH><TH>Razón</TH><TH className="text-right">Grupos conformes</TH><TH>Estado</TH>
+                              </TR></THead>
+                              <TBody>
+                                {preview.affinityIterations.map((step) => (
+                                  <TR key={step.iteration}>
+                                    <TD className="text-right tabular-nums">{step.iteration}</TD>
+                                    <TD className="font-medium">{formatIu(step.source)} - {step.source.name}</TD>
+                                    <TD className="font-medium">{formatIu(step.target)} - {step.target.name}</TD>
+                                    <TD className="text-right tabular-nums">{step.sourceIncidence}</TD>
+                                    <TD>{formatMergeReason(step.reason)}</TD>
+                                    <TD className="text-right tabular-nums">{step.groupsPassingRules}/{step.groupsChecked}</TD>
+                                    <TD>{step.completed ? "Concluido" : "Continua"}</TD>
+                                  </TR>
+                                ))}
+                              </TBody>
+                            </Table>
+                          </div>
+                          <div className="space-y-3 pt-2">
+                            {preview.affinityIterations.map((step) => (
+                              <section key={`iteration-grouping-${step.iteration}`} className="space-y-2">
+                                <h3 className="theme-strong-text text-sm font-semibold">Cuadro de la iteración {step.iteration} — IU fusionada: {formatIu(step.source)} · IU receptora: {formatIu(step.target)}</h3>
+                                <AffinityGroupingTable groupingBefore={step.groupingBefore} grouping={step.grouping} />
+                              </section>
+                            ))}
+                          </div>
+                          <h3 className="theme-strong-text pt-2 text-sm font-semibold">Cuadro de la última iteración</h3>
+                          <div className="overflow-hidden">
+                            <Table className="w-full table-fixed text-xs [&_th]:px-3 [&_th]:py-3 [&_td]:break-words [&_td]:px-3 [&_td]:py-3 [&_th:first-child]:w-12 [&_td:first-child]:w-12 [&_th:nth-child(2)]:w-[30%] [&_td:nth-child(2)]:w-[30%] [&_th:nth-child(4)]:w-[14%] [&_td:nth-child(4)]:w-[14%] [&_th:nth-child(5)]:w-[8%] [&_td:nth-child(5)]:w-[8%] [&_th:nth-child(6)]:w-[20%] [&_td:nth-child(6)]:w-[20%]">
+                              <THead><TR className="theme-muted-panel hover:theme-muted-panel">
+                                <TH className="text-right">N.º</TH><TH>Monomio principal</TH><TH>IU agrupadas</TH><TH className="text-right">Incidencia agrupada</TH><TH className="text-right">Cantidad</TH><TH>Reglas FP</TH>
+                              </TR></THead>
+                              <TBody>
+                                {[...preview.affinityFinalGrouping]
+                                  .sort((left, right) => new Decimal(groupedIncidence(right.groupedMonomials)).comparedTo(new Decimal(groupedIncidence(left.groupedMonomials))))
+                                  .map((group, index) => (
+                                    <TR key={group.principalMonomialId} className="align-top">
+                                      <TD className="text-right tabular-nums">{index + 1}</TD>
+                                      <TD className="font-medium">{formatIu(group.principal)} - {group.principal.name}</TD>
+                                      <TD>{group.groupedMonomials.map((monomial) => formatIu(monomial)).join(", ")}</TD>
+                                      <TD className="text-right tabular-nums">{groupedIncidence(group.groupedMonomials)}</TD>
+                                      <TD className="text-right tabular-nums">{group.groupedMonomials.length}</TD>
+                                      <TD><InitialGroupingRules group={group} /></TD>
+                                    </TR>
+                                  ))}
+                              </TBody>
+                            </Table>
+                          </div>
+                          <div className="theme-muted-panel rounded-xl border px-4 py-3 text-sm">
+                            <span className="theme-strong-text font-semibold">IU huérfanas restantes ({preview.affinityFinalOrphans.length}): </span>
+                            {preview.affinityFinalOrphans.length > 0
+                              ? preview.affinityFinalOrphans.map((monomial) => `${formatIu(monomial)} - ${monomial.name}`).join(", ")
+                              : "Ninguna"}
+                          </div>
+                        </div>
+                      ) : null}
+                    </section>
+
+                    <section className="order-2 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <h2 className="theme-strong-text text-sm font-semibold">Agrupamiento propuesto</h2>
@@ -208,7 +337,7 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                       </div>
                     </section>
 
-                    <section className="space-y-3">
+                    <section className="hidden space-y-3" aria-hidden="true">
                       <div>
                         <h2 className="theme-strong-text text-sm font-semibold">Fusión por Afinidad de Mercado</h2>
                         <p className="theme-muted-text mt-1 text-sm">
@@ -216,29 +345,17 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                         </p>
                       </div>
                       {preview.mergePlan.length > 0 ? (
-                        <div className="overflow-x-auto rounded-2xl border">
-                          <table className="w-full min-w-[680px] text-left text-xs">
-                            <thead className="theme-muted-panel theme-muted-text border-b">
-                              <tr>
-                                <th className="px-3 py-2 font-semibold">IU absorbido</th>
-                                <th className="px-3 py-2 font-semibold">IU principal</th>
-                                <th className="px-3 py-2 text-right font-semibold">Incidencia absorbida</th>
-                                <th className="px-3 py-2 text-right font-semibold">Incidencia resultante</th>
-                                <th className="px-3 py-2 font-semibold">Criterio</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y">
+                        <div className="overflow-x-auto rounded-xl border border-[var(--app-border)]">
+                          <Table className={`min-w-[680px] table-fixed text-xs ${isExcelMode ? "[&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_tr]:h-7" : ""}`}>
+                            <THead><TR className="theme-muted-panel hover:theme-muted-panel">
+                              <TH>IU absorbido</TH><TH>IU principal</TH><TH className="text-right">Incidencia absorbida</TH><TH className="text-right">Incidencia resultante</TH><TH>Criterio</TH>
+                            </TR></THead>
+                            <TBody>
                               {buildAffinityRows(preview).map((row, index) => (
-                                <tr key={`${row.targetMonomialId}-${row.sourceMonomialId}-${index}`}>
-                                  <td className="px-3 py-2 font-medium">{row.sourceIu}</td>
-                                  <td className="px-3 py-2 font-medium">{row.targetIu}</td>
-                                  <td className="px-3 py-2 text-right tabular-nums">{row.absorbedCoefficient}</td>
-                                  <td className="px-3 py-2 text-right tabular-nums">{row.resultingCoefficient}</td>
-                                  <td className="px-3 py-2">{row.reason}</td>
-                                </tr>
+                                <TR key={`${row.targetMonomialId}-${row.sourceMonomialId}-${index}`}><TD className="font-medium">{row.sourceIu}</TD><TD className="font-medium">{row.targetIu}</TD><TD className="text-right tabular-nums">{row.absorbedCoefficient}</TD><TD className="text-right tabular-nums">{row.resultingCoefficient}</TD><TD>{row.reason}</TD></TR>
                               ))}
-                            </tbody>
-                          </table>
+                            </TBody>
+                          </Table>
                         </div>
                       ) : (
                         <p className="theme-muted-panel theme-muted-text rounded-2xl border px-4 py-3 text-sm">
@@ -248,38 +365,21 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                       {preview.mergePlan.length > 0 ? (
                         <div className="space-y-2">
                           <h3 className="theme-strong-text text-xs font-semibold">Resultado de las fusiones</h3>
-                          <div className="overflow-x-auto rounded-2xl border">
-                            <table className="w-full min-w-[420px] text-left text-xs">
-                              <thead className="theme-muted-panel theme-muted-text border-b">
-                                <tr>
-                                  <th className="px-3 py-2 font-semibold">IU principal resultante</th>
-                                  <th className="px-3 py-2 text-right font-semibold">Incidencia resultante</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y">
+                          <div className="overflow-x-auto rounded-xl border border-[var(--app-border)]">
+                            <Table className={`min-w-[420px] table-fixed text-xs ${isExcelMode ? "[&_th]:px-2 [&_th]:py-1 [&_td]:px-2 [&_td]:py-1 [&_tr]:h-7" : ""}`}>
+                              <THead><TR className="theme-muted-panel hover:theme-muted-panel"><TH>IU principal resultante</TH><TH className="text-right">Incidencia resultante</TH></TR></THead>
+                              <TBody>
                                 {buildAffinityResultRows(preview).map((row) => (
-                                  <tr key={row.targetMonomialId}>
-                                    <td className="px-3 py-2 font-medium">{row.targetIu}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums">{row.resultingCoefficient}</td>
-                                  </tr>
+                                  <TR key={row.targetMonomialId}><TD className="font-medium">{row.targetIu}</TD><TD className="text-right tabular-nums">{row.resultingCoefficient}</TD></TR>
                                 ))}
-                              </tbody>
-                            </table>
+                              </TBody>
+                            </Table>
                           </div>
                         </div>
                       ) : null}
-                      {preview.mergePlan.length > 0 ? (
-                        <ul className="space-y-2">
-                          {preview.mergePlan.map((entry, index) => (
-                            <li key={`${entry.targetMonomialId}-${index}`} className="theme-muted-panel rounded-2xl border px-4 py-3 text-sm text-[var(--app-text)]">
-                              {entry.explanation}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
                     </section>
 
-                    <section className="space-y-3">
+                    <section className="order-5 space-y-3">
                       <h2 className="theme-strong-text text-sm font-semibold">Diagnosticos</h2>
                       {preview.diagnostics.length > 0 ? (
                         <ul className="space-y-2">
@@ -370,6 +470,47 @@ function formatIu(monomial: PolynomialMonomialRecord | undefined): string {
   return code ? `IU ${code}` : "IU no identificado";
 }
 
+function groupedIncidence(monomials: readonly PolynomialMonomialRecord[]): string {
+  return monomials
+    .reduce((sum, monomial) => sum.plus(monomial.coefficient), new Decimal(0))
+    .toDecimalPlaces(3)
+    .toFixed(3);
+}
+
+function InitialGroupingRules({ group }: { group: { groupedMonomials: readonly PolynomialMonomialRecord[] } }) {
+  const incidence = new Decimal(groupedIncidence(group.groupedMonomials));
+  const maxIuCompliant = group.groupedMonomials.length <= 3;
+  const incidenceCompliant = incidence.greaterThanOrEqualTo("0.050");
+  const isCompliant = maxIuCompliant && incidenceCompliant;
+  const reason = !maxIuCompliant ? "Más de 3 IU" : !incidenceCompliant ? "Incidencia < 0.050" : "";
+
+  return (
+    <span
+      title={reason || "Máximo 3 IU e incidencia agrupada no menor de 0.050"}
+      className={
+        isCompliant
+          ? "inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
+          : "inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+      }
+    >
+      {isCompliant ? "Cumple" : `Revisar${reason ? `: ${reason}` : ""}`}
+    </span>
+  );
+}
+
+function AffinityGroupingTable({ groupingBefore, grouping }: { groupingBefore: readonly { principalMonomialId: string; principal: PolynomialMonomialRecord; groupedMonomials: readonly PolynomialMonomialRecord[] }[]; grouping: readonly { principalMonomialId: string; principal: PolynomialMonomialRecord; groupedMonomials: readonly PolynomialMonomialRecord[] }[] }) {
+  const beforeById = new Map(groupingBefore.map((group) => [group.principalMonomialId, group]));
+  const rows = [...grouping].sort((left, right) => new Decimal(groupedIncidence(right.groupedMonomials)).comparedTo(new Decimal(groupedIncidence(left.groupedMonomials))));
+  return (
+    <div className="overflow-hidden">
+      <Table className="w-full table-fixed text-xs [&_th]:px-3 [&_th]:py-3 [&_td]:break-words [&_td]:px-3 [&_td]:py-3 [&_th:first-child]:w-[7%] [&_td:first-child]:w-[7%] [&_th:nth-child(2)]:w-[22%] [&_td:nth-child(2)]:w-[22%] [&_th:nth-child(3)]:w-[18%] [&_td:nth-child(3)]:w-[18%] [&_th:nth-child(4)]:w-[8%] [&_td:nth-child(4)]:w-[8%] [&_th:nth-child(5)]:w-[8%] [&_td:nth-child(5)]:w-[8%] [&_th:nth-child(6)]:w-[10%] [&_td:nth-child(6)]:w-[10%] [&_th:nth-child(7)]:w-[7%] [&_td:nth-child(7)]:w-[7%] [&_th:nth-child(8)]:w-[20%] [&_td:nth-child(8)]:w-[20%]">
+        <THead><TR className="theme-muted-panel hover:theme-muted-panel"><TH className="text-right">N.º</TH><TH>Monomio principal</TH><TH>IU agrupadas</TH><TH className="text-right">Incidencia agrupada inicial</TH><TH className="text-right">Incidencia agrupada</TH><TH className="text-right">Diferencia</TH><TH className="text-right">Cantidad</TH><TH>Reglas FP</TH></TR></THead>
+        <TBody>{rows.map((group, index) => { const before = beforeById.get(group.principalMonomialId); const initial = new Decimal(before ? groupedIncidence(before.groupedMonomials) : "0"); const final = new Decimal(groupedIncidence(group.groupedMonomials)); return <TR key={group.principalMonomialId} className="align-top"><TD className="text-right tabular-nums">{index + 1}</TD><TD className="font-medium">{formatIu(group.principal)} - {group.principal.name}</TD><TD>{group.groupedMonomials.map((monomial) => formatIu(monomial)).join(", ")}</TD><TD className="text-right tabular-nums">{initial.toFixed(3)}</TD><TD className="text-right tabular-nums">{final.toFixed(3)}</TD><TD className="text-right tabular-nums">{final.minus(initial).toFixed(3)}</TD><TD className="text-right tabular-nums">{group.groupedMonomials.length}</TD><TD><InitialGroupingRules group={group} /></TD></TR>; })}</TBody>
+      </Table>
+    </div>
+  );
+}
+
 function buildAffinityResultRows(preview: FinalAdjustmentResult): Array<{
   targetMonomialId: string;
   targetIu: string;
@@ -395,6 +536,19 @@ function buildAffinityResultRows(preview: FinalAdjustmentResult): Array<{
       resultingCoefficient: totalAmount.isZero() ? "0.000" : absorbedAmount.dividedBy(totalAmount)
         .toDecimalPlaces(3)
         .toFixed(3),
+    };
+  });
+}
+
+function buildProposedGroupingRows(preview: FinalAdjustmentResult): GroupingRow[] {
+  const grouping = preview.affinityIterations.at(-1)?.grouping ?? preview.initialGrouping;
+  return grouping.map((group) => {
+    const groupedCoefficient = groupedIncidence(group.groupedMonomials);
+    return {
+    finalMonomial: { ...group.principal, coefficient: groupedCoefficient },
+    groupedMonomials: [...group.groupedMonomials],
+    originalSum: groupedCoefficient,
+    reason: preview.affinityIterations.length > 0 ? "Agrupamiento posterior a la última iteración" : "Agrupamiento inicial",
     };
   });
 }

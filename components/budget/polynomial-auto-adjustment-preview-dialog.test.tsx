@@ -41,7 +41,6 @@ describe("PolynomialAutoAdjustmentPreviewDialog", () => {
     expect(getText("Ajuste automatico de formula")).toBeTruthy();
     expect(getText("5 actuales")).toBeTruthy();
     expect(getText("3 propuestos")).toBeTruthy();
-    expect(getText("Pintura se agrupa en Acabados por familia compatible.")).toBeTruthy();
     expect(getText("BA")).toBeTruthy();
     expect(getText("Acabados")).toBeTruthy();
     expect(getText("0.120")).toBeTruthy();
@@ -200,6 +199,11 @@ function createPreview(
         explanation: "Pintura se agrupa en Acabados por familia compatible.",
       },
     ],
+    initialGrouping: [],
+    orphanMonomials: [],
+    affinityIterations: [],
+    affinityFinalGrouping: [],
+    affinityFinalOrphans: [],
     diagnostics: [
       {
         code: "LOW_COEFFICIENT_MERGED",
