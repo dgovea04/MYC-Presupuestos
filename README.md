@@ -213,26 +213,6 @@ npm.cmd run prisma:generate
 npm.cmd run prisma:migrate
 ```
 
-### Verificar replay PostgreSQL del backfill Knowledge
-
-La integración usa PostgreSQL real y no usa sustitutos en memoria. La suite normal no la descubre si `DATABASE_URL` no está exportada en la shell; para ejecutarla explícitamente contra una base local ya migrada:
-
-```powershell
-$env:DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/myc_presupuestos?schema=public"
-$env:MC_KNOWLEDGE_BACKFILL="true"
-npm.cmd test -- scripts/backfill-knowledge.integration.test.ts
-```
-
-La prueba crea un usuario, empresa, proyecto, presupuesto, recursos y registros Knowledge con IDs aleatorios y los elimina en `afterEach`, incluso cuando una aserción falla. Si Vitest se interrumpe antes de su limpieza, vuelve a ejecutar exactamente el mismo archivo contra la misma base: su `afterEach` limpia los fixtures de esa ejecución; no se debe limpiar por prefijos globales ni borrar datos de otros tenants.
-
-Para ejecutar el backfill manualmente, mantén el flag habilitado y limita siempre el alcance. El `--dry-run` lee y reporta candidatos, conflictos y errores, pero no persiste fuentes, evidencia ni entidades Knowledge.
-
-```powershell
-$env:DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/myc_presupuestos?schema=public"
-$env:MC_KNOWLEDGE_BACKFILL="true"
-node ./node_modules/tsx/dist/cli.mjs scripts/backfill-knowledge.ts --company=<companyId> --project=<projectId> --correlation-id=<correlationId> --dry-run
-```
-
 ### 5. Cargar datos demo
 
 ```powershell
