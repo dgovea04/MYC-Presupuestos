@@ -16,6 +16,7 @@ type PolynomialAutoAdjustmentPreviewDialogProps = {
   preview: FinalAdjustmentResult | null;
   onApply: () => void;
   onClose: () => void;
+  readOnly?: boolean;
 };
 
 function PolynomialAutoAdjustmentPreviewDialogComponent({
@@ -23,6 +24,7 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
   preview,
   onApply,
   onClose,
+  readOnly = false,
 }: PolynomialAutoAdjustmentPreviewDialogProps) {
   const viewMode = useOptionalAppViewMode();
   const isExcelMode = viewMode?.isExcelMode ?? false;
@@ -404,14 +406,16 @@ function PolynomialAutoAdjustmentPreviewDialogComponent({
                     </section>
                   </div>
 
-                  <div className="theme-border-top flex shrink-0 justify-end gap-2 border-t px-5 py-4">
-                    <Button type="button" variant="outline" onClick={handleClose}>
-                      Cancelar
-                    </Button>
-                    <Button type="button" onClick={handleApply} disabled={!preview.canApply}>
-                      Aplicar propuesta
-                    </Button>
-                  </div>
+                  {!readOnly ? (
+                    <div className="theme-border-top flex shrink-0 justify-end gap-2 border-t px-5 py-4">
+                      <Button type="button" variant="outline" onClick={handleClose}>
+                        Cancelar
+                      </Button>
+                      <Button type="button" onClick={handleApply} disabled={!preview.canApply}>
+                        Aplicar propuesta
+                      </Button>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </div>

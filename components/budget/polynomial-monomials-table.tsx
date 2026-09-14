@@ -92,6 +92,7 @@ export function PolynomialMonomialsTable({
   onChangeMonomial,
   onMergeMonomials,
   onAutoAdjustMonomials,
+  autoAdjustLabel = "Aplicar ajuste automatico",
 }: {
   monomials: PolynomialMonomialRecord[];
   baseIndexOptions: UnifiedIndexRecord[];
@@ -100,6 +101,7 @@ export function PolynomialMonomialsTable({
   onChangeMonomial: (monomial: PolynomialMonomialRecord) => void;
   onMergeMonomials?: (targetMonomialId: string, sourceMonomialIds: string[]) => void;
   onAutoAdjustMonomials?: () => void;
+  autoAdjustLabel?: string;
 }) {
   const { isExcelMode } = useAppViewMode();
   const [targetMonomialId, setTargetMonomialId] = useState("");
@@ -206,7 +208,7 @@ export function PolynomialMonomialsTable({
               {onAutoAdjustMonomials ? (
                 <Button type="button" size="sm" variant="outline" onClick={onAutoAdjustMonomials}>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Aplicar ajuste automatico
+                  {autoAdjustLabel}
                 </Button>
               ) : null}
             </div>

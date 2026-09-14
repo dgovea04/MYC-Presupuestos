@@ -71,6 +71,7 @@ type CachedPolynomialFormulaEditorState = {
   historyLoaded: boolean;
   historyOpen: boolean;
   compositionDetailOpen: boolean;
+  lastAutoAdjustmentPreview: FinalAdjustmentResult | null;
 };
 
 const PLACEHOLDER_INDEX_NAME = "Pendiente de asignar";
@@ -208,6 +209,10 @@ function buildPolynomialFormulaEditorCacheKey(section: PolynomialFormulaSectionD
   return `${section.budgetId ?? "without-budget"}:${section.title}`;
 }
 
+function buildAutoAdjustmentStorageKey(cacheKey: string) {
+  return `mc-polynomial-auto-adjustment:${cacheKey}`;
+}
+
 function loadUnifiedIndices(month: number, year: number) {
   const cacheKey = buildUnifiedIndicesCacheKey(month, year);
   const cachedRequest = unifiedIndicesRequestCache.get(cacheKey);
@@ -285,6 +290,19 @@ export function PolynomialFormulaEditor({
   const [feedback, setFeedback] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [autoAdjustmentPreview, setAutoAdjustmentPreview] = useState<FinalAdjustmentResult | null>(null);
+  const [lastAutoAdjustmentPreview, setLastAutoAdjustmentPreview] = useState<FinalAdjustmentResult | null>(
+    () => {
+      if (cachedUiState?.lastAutoAdjustmentPreview) return cachedUiState.lastAutoAdjustmentPreview;
+      if (typeof window === "undefined") return null;
+      try {
+        const stored = window.sessionStorage.getItem(buildAutoAdjustmentStorageKey(cacheKey));
+        return stored ? (JSON.parse(stored) as FinalAdjustmentResult) : null;
+      } catch {
+        return null;
+      }
+    },
+  );
+  const [isViewingAutoAdjustment, setIsViewingAutoAdjustment] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplyingAdjustment, setIsApplyingAdjustment] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -432,11 +450,13 @@ export function PolynomialFormulaEditor({
       historyLoaded,
       historyOpen,
       compositionDetailOpen,
+      lastAutoAdjustmentPreview,
     });
   }, [
     baseIndexOptions,
     cacheKey,
     compositionDetailOpen,
+    lastAutoAdjustmentPreview,
     formula,
     generateMonth,
     generateYear,
@@ -450,6 +470,16 @@ export function PolynomialFormulaEditor({
     previewYear,
     summary,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = buildAutoAdjustmentStorageKey(cacheKey);
+    if (lastAutoAdjustmentPreview) {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(lastAutoAdjustmentPreview));
+    } else {
+      window.sessionStorage.removeItem(storageKey);
+    }
+  }, [cacheKey, lastAutoAdjustmentPreview]);
 
   useEffect(() => {
     if (!formula) return;
@@ -502,6 +532,9 @@ export function PolynomialFormulaEditor({
 
       const nextFormula = (await response.json()) as PolynomialFormulaRecord;
       setBaseIndicesLoading(true);
+      setAutoAdjustmentPreview(null);
+      setLastAutoAdjustmentPreview(null);
+      setIsViewingAutoAdjustment(false);
       setFormula(cloneFormula(nextFormula));
       setSummary(createFormulaSummary(nextFormula));
       setKPreview(null);
@@ -740,16 +773,22 @@ export function PolynomialFormulaEditor({
     if (!formula) return;
 
     setError("");
-    setAutoAdjustmentPreview(createPolynomialFinalAdjustmentProposal(formula.monomials));
-  }, [formula]);
+    setIsViewingAutoAdjustment(Boolean(lastAutoAdjustmentPreview));
+    setAutoAdjustmentPreview(
+      lastAutoAdjustmentPreview ?? createPolynomialFinalAdjustmentProposal(formula.monomials),
+    );
+  }, [formula, lastAutoAdjustmentPreview]);
 
   const closeAutoAdjustmentPreview = useCallback(() => {
     setAutoAdjustmentPreview(null);
+    setIsViewingAutoAdjustment(false);
   }, []);
 
   const applyAutoAdjustmentPreview = useCallback(() => {
     if (!autoAdjustmentPreview?.canApply) return;
 
+    setLastAutoAdjustmentPreview(autoAdjustmentPreview);
+    setIsViewingAutoAdjustment(false);
     setFormula((current) => {
       if (!current) return current;
 
@@ -962,12 +1001,14 @@ export function PolynomialFormulaEditor({
             onChangeMonomial={updateMonomial}
             onMergeMonomials={mergeMonomials}
             onAutoAdjustMonomials={openAutoAdjustmentPreview}
+            autoAdjustLabel={lastAutoAdjustmentPreview ? "Ver ajuste automatico" : "Aplicar ajuste automatico"}
           />
           <PolynomialAutoAdjustmentPreviewDialog
             open={autoAdjustmentPreview !== null}
             preview={autoAdjustmentPreview}
             onApply={applyAutoAdjustmentPreview}
             onClose={closeAutoAdjustmentPreview}
+            readOnly={isViewingAutoAdjustment}
           />
           {showCompositionDetail && DynamicPolynomialCompositionDetail ? (
             <Card className={cn("theme-surface-card", isExcelMode ? "rounded-md border-[var(--app-border-strong)] shadow-none" : "rounded-2xl border theme-soft-shadow")}>
